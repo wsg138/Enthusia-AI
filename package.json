@@ -20,7 +20,7 @@
     "install": "echo 'enthusia-ai: dependencies are managed by npm workspaces (npm install / npm ci). No extra install step.'",
     "lint": "eslint .",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "npm run build --workspaces --if-present && tsc --noEmit -p tsconfig.json"
   },
   "type": "module",
   "version": "0.1.0",
