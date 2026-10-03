@@ -2,11 +2,27 @@
   "name": "@enthusia/memory",
   "version": "0.1.0",
   "private": true,
-  "description": "Current memory + history service (W01 skeleton \u2014 W07)",
+  "description": "Current memory + historical revisions service (W05)",
   "type": "module",
   "license": "UNLICENSED",
-  "main": "./src/index.ts",
+  "main": "./dist/index.js",
   "exports": {
-    ".": "./src/index.ts"
-  }
+    ".": {
+      "default": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "dependencies": {
+    "@enthusia/contracts": "0.1.0",
+    "better-sqlite3": "^13.0.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "typescript": "^5.7.2"
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "types": "./dist/index.d.ts"
 }
