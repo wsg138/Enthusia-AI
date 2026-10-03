@@ -110,7 +110,7 @@ describe('register — acceptance: changed file produces new CURRENT, old stays 
     } as const;
 
     const a1 = registry.register({ ...base, version: 'version-a' });
-    const b = registry.register({ ...base, version: 'version-b' });
+    registry.register({ ...base, version: 'version-b' });
     const a2 = registry.register({ ...base, version: 'version-a' });
 
     expect(a2.outcome).toBe('SUPERSEDED');
@@ -200,7 +200,11 @@ describe('register — acceptance: changed file produces new CURRENT, old stays 
     // artifact id would use, so the INSERT inside the supersession
     // transaction fails after the old row was already marked SUPERSEDED.
     const nextVersion = 'b'.repeat(40);
-    const collidingId = deriveArtifactId(input.sourceLocator, nextVersion);
+    const collidingId = deriveArtifactId(
+      input.sourceLocator,
+      nextVersion,
+      v1.artifact.artifactId,
+    );
     store.db
       .prepare(
         `INSERT INTO source_artifacts (
