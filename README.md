@@ -9,6 +9,8 @@ The project is intentionally broader than a Discord support bot. The target syst
 **Read this before implementing anything:**
 
 - [Master Specification](docs/MASTER-SPECIFICATION.md)
+- [Memory, Knowledge, and Fact Verification Contract](docs/MEMORY-KNOWLEDGE-VERIFICATION-SPEC.md)
+- [Training and Evaluation Specification](docs/TRAINING-AND-EVALUATION-SPEC.md)
 - [Worker Execution Plan](docs/WORKER-EXECUTION-PLAN.md)
 
 The master specification is the source of truth for product behavior, architecture, memory semantics, knowledge verification, tool access, training, deployment, security, evaluation, and rollout.
