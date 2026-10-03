@@ -1,0 +1,76 @@
+# Enthusia AI — continuous integration
+#
+# Spec §75: lint, typecheck, unit tests, contract tests, secret scan,
+# configuration validation. Model-heavy tests run separately (not here).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: lint · typecheck · build · test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (LTS)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Unit and contract tests
+        run: npm run test
+
+      - name: Validate configuration
+        run: npm run config:validate
+
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  env-example-check:
+    name: .env.example contains no secrets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fail on real-looking secrets in .env.example
+        run: |
+          # Placeholder values only: reject anything that looks like an
+          # assigned real credential in the example file.
+          if grep -Ei '^[A-Z_]+=(sk-|ghp_|gho_|xox[bap]-|-----BEGIN [A-Z ]+ PRIVATE KEY-----)' .env.example; then
+            echo "::error::.env.example appears to contain a real secret"
+            exit 1
+          fi
+          echo ".env.example check passed"

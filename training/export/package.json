@@ -1,0 +1,12 @@
+{
+  "name": "@enthusia/training-export",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Model export and artifact management (W01 skeleton \u2014 W16)",
+  "type": "module",
+  "license": "UNLICENSED",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

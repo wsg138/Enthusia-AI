@@ -32,3 +32,59 @@ If implementation and the specification disagree, implementation should be treat
 ## License
 
 This project is proprietary. See [LICENSE](LICENSE).
+
+## Repository scaffold (W01)
+
+TypeScript monorepo (npm workspaces, Node.js >= 22 LTS) implementing the
+layout from §8 of the master specification:
+
+- `apps/` — discord-bot, ai-gateway
+- `services/` — agent-core, knowledge-indexer, memory, tool-gateway, openai-gateway, moderation-adapter
+- `packages/` — **contracts** (full implementation), auth, logging, config, source-provenance
+- `integrations/` — ticket-bot, github, sftp, databases, minecraft
+- `training/` — datasets, generation, preprocessing, finetune, evaluation, export
+- `deploy/` — bloom, local
+- `tests/` — integration, regression, golden
+
+### Shared contracts (`packages/contracts`)
+
+The critical W01 deliverable — typed contracts all other workstreams consume:
+
+- `Visibility` enum (§17): PUBLIC, PLAYER_SELF, STAFF, MANAGEMENT, SYSTEM_INTERNAL, SECRET_DENY,
+  with ceiling/disclosure helpers (`canDisclose`)
+- `SourceStatus` enum (W01): CURRENT, SUPERSEDED, INVALID, CONFLICTED, STALE
+- `SourceType` enum (§12.1): GITHUB, SFTP_FILE, DOCUMENT, CONFIG, DATABASE_SCHEMA,
+  DATABASE_LIVE, DISCORD, TICKET, STAFF, DEPLOYMENT, GENERATED
+- `SourceArtifact` (§50), `ToolResult` envelope (§16.2), `ChatRequest`/`AgentResponse` (§48),
+  `MemoryKey`/`MemoryRevision`/`MemoryEvidence` (§49 + verification spec),
+  health contracts (§36: `/health/live`, `/health/ready`)
+- Typed errors: ValidationError, AuthorizationError, NotFoundError, ToolTimeoutError,
+  VisibilityDeniedError, StaleSourceError, ConflictError, RateLimitError, ExternalServiceError
+- Trace IDs: UUID v4 generation, `x-enthusia-trace-id` propagation
+
+Zod schemas accompany the main interfaces for runtime validation.
+
+### Supporting packages
+
+- `packages/logging` — structured JSON logger (pino) with trace ID support
+- `packages/config` — Zod-validated, env-based config with defaults; no secrets in code
+- `packages/auth`, `packages/source-provenance` — skeletons for W02/W04
+
+### Getting started
+
+```sh
+npm install     # install all workspaces
+npm run build   # compile implemented packages
+npm run test    # unit + contract tests (vitest)
+npm run lint    # eslint
+npm run typecheck  # tsc --noEmit across the repo
+npm run config:validate  # validate env config (CI)
+```
+
+No production secret is required for any of the above. Copy `.env.example`
+to `.env` for local development — it contains placeholders only.
+
+### CI
+
+`.github/workflows/ci.yml` runs: lint, typecheck, unit tests, contract tests,
+secret scan (gitleaks), and configuration validation.
