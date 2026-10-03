@@ -359,12 +359,48 @@ describe('queries', () => {
 describe('store', () => {
   it('runs versioned migrations and reports the schema version', () => {
     const store = new SourceProvenanceStore({ path: ':memory:' });
-    expect(store.schemaVersion).toBeGreaterThan(0);
+    expect(store.schemaVersion).toBeGreaterThanOrEqual(2);
     const applied = store.db
       .prepare('SELECT version, name FROM schema_migrations ORDER BY version')
       .all() as Array<{ version: number; name: string }>;
-    expect(applied.length).toBeGreaterThan(0);
+    expect(applied.length).toBeGreaterThanOrEqual(2);
     expect(applied[0]?.name).toMatch(/initial/);
+    store.close();
+  });
+
+  it('enforces one latest artifact per source locator at the database level', () => {
+    const { registry, store } = makeRegistry();
+    const first = registry.register(githubInput());
+
+    expect(() =>
+      store.db
+        .prepare(
+          `INSERT INTO source_artifacts (
+             artifact_id, source_type, source_locator, component, visibility,
+             authority, version, observed_time, indexed_time, status, is_current,
+             created_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          'art_competing_head',
+          first.artifact.sourceType,
+          first.artifact.sourceLocator,
+          first.artifact.component,
+          first.artifact.visibility,
+          first.artifact.authority,
+          'competing-version',
+          new Date().toISOString(),
+          new Date().toISOString(),
+          SourceStatus.CURRENT,
+          1,
+          new Date().toISOString(),
+          new Date().toISOString(),
+        ),
+    ).toThrow();
+
+    expect(registry.getCurrent(first.artifact.sourceLocator)?.artifactId).toBe(
+      first.artifact.artifactId,
+    );
     store.close();
   });
 });
