@@ -78,6 +78,18 @@ describe('register — CRUD', () => {
     expect(second.artifact.artifactId).toBe(first.artifact.artifactId);
   });
 
+  it('re-observing a STALE artifact with the same version revalidates the current head', () => {
+    const first = registry.register(githubInput());
+    registry.markStale(first.artifact.artifactId);
+    expect(registry.listCurrent()).toHaveLength(0);
+
+    const observedAgain = registry.register(githubInput());
+    expect(observedAgain.outcome).toBe('UNCHANGED');
+    expect(observedAgain.artifact.artifactId).toBe(first.artifact.artifactId);
+    expect(observedAgain.artifact.status).toBe(SourceStatus.CURRENT);
+    expect(registry.listCurrent()).toHaveLength(1);
+  });
+
   it('derives deterministic artifact ids from (locator, version)', () => {
     const locator = buildLocator(SourceType.CONFIG, 'smp', 'server.properties');
     const first = registry.register(githubInput({ sourceLocator: locator, sourceType: SourceType.CONFIG }));
@@ -86,6 +98,52 @@ describe('register — CRUD', () => {
 });
 
 describe('register — acceptance: changed file produces new CURRENT, old stays historical', () => {
+  it('supports A -> B -> A without reviving the old historical A revision', () => {
+    const { registry } = makeRegistry();
+    const locator = buildLocator(SourceType.CONFIG, 'smp', 'plugins/example/config.yml');
+    const base = {
+      sourceType: SourceType.CONFIG,
+      sourceLocator: locator,
+      component: 'config-indexer',
+      authority: 'sftp:smp',
+      visibility: Visibility.STAFF,
+    } as const;
+
+    const a1 = registry.register({ ...base, version: 'version-a' });
+    const b = registry.register({ ...base, version: 'version-b' });
+    const a2 = registry.register({ ...base, version: 'version-a' });
+
+    expect(a2.outcome).toBe('SUPERSEDED');
+    expect(a2.artifact.artifactId).not.toBe(a1.artifact.artifactId);
+    expect(registry.getCurrent(locator)?.artifactId).toBe(a2.artifact.artifactId);
+
+    const history = registry.history(locator);
+    expect(history).toHaveLength(3);
+    expect(history.map((item) => item.version)).toEqual([
+      'version-a',
+      'version-b',
+      'version-a',
+    ]);
+    expect(history.map((item) => item.status)).toEqual([
+      SourceStatus.CURRENT,
+      SourceStatus.SUPERSEDED,
+      SourceStatus.SUPERSEDED,
+    ]);
+  });
+
+  it('restores identical content after an INVALID observation as a new revision', () => {
+    const { registry } = makeRegistry();
+    const first = registry.register(githubInput());
+    registry.markInvalid(first.artifact.artifactId);
+
+    const restored = registry.register(githubInput());
+    expect(restored.outcome).toBe('CREATED');
+    expect(restored.artifact.artifactId).not.toBe(first.artifact.artifactId);
+    expect(restored.artifact.status).toBe(SourceStatus.CURRENT);
+    expect(registry.getById(first.artifact.artifactId).status).toBe(SourceStatus.INVALID);
+    expect(registry.history(first.artifact.sourceLocator)).toHaveLength(2);
+  });
+
   it('a new content hash supersedes atomically; the previous artifact remains SUPERSEDED', () => {
     const { registry } = makeRegistry();
     const locator = buildLocator(SourceType.SFTP_FILE, 'smp', '/plugins/EnthusiaStaff/config.yml');
