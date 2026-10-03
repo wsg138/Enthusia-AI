@@ -101,13 +101,22 @@ export interface UpdateMetadataInput {
 }
 
 /**
- * Deterministic artifact identity: the same (locator, normalized version)
- * always maps to the same artifact id, which makes re-registration of an
- * unchanged source idempotent.
+ * Deterministic artifact-revision identity.
+ *
+ * The first observation uses (locator, normalized version). Later version
+ * occurrences additionally include their predecessor artifact ID. That keeps
+ * repeated indexing of the current head idempotent while allowing legitimate
+ * history such as A -> B -> A or INVALID(A) -> restored A without rewriting
+ * the original historical artifact.
  */
-export function deriveArtifactId(sourceLocator: string, version: string): string {
+export function deriveArtifactId(
+  sourceLocator: string,
+  version: string,
+  predecessorArtifactId?: string,
+): string {
+  const lineage = predecessorArtifactId === undefined ? '' : `\n${predecessorArtifactId}`;
   const digest = createHash('sha256')
-    .update(`${sourceLocator}\n${normalizeVersion(version)}`, 'utf8')
+    .update(`${sourceLocator}\n${normalizeVersion(version)}${lineage}`, 'utf8')
     .digest('hex')
     .slice(0, 24);
   return `art_${digest}`;
@@ -148,7 +157,33 @@ export class SourceRegistry {
     }
 
     const observedTime = input.observedTime ?? nowIso();
-    const artifactId = deriveArtifactId(input.sourceLocator, input.version);
+    const previous = this.getCurrent(input.sourceLocator);
+
+    // The latest observation already has this exact version.
+    if (previous !== undefined && !isVersionChanged(previous.version, input.version)) {
+      // A fresh observation of a STALE head proves that the same fingerprint
+      // still exists, so restore it to CURRENT. A CONFLICTED head is not
+      // silently resolved because the conflict may involve independent
+      // evidence rather than source freshness.
+      if (previous.status === SourceStatus.STALE) {
+        return {
+          artifact: this.revalidate(previous.artifactId, observedTime),
+          outcome: 'UNCHANGED',
+        };
+      }
+      return { artifact: previous, outcome: 'UNCHANGED' };
+    }
+
+    // If there is no latest head (for example because the source was marked
+    // INVALID), keep the last historical revision as lineage. Including the
+    // predecessor in the ID lets the same byte-for-byte version legitimately
+    // return later without colliding with or reviving the old historical row.
+    const predecessor = previous ?? this.getLatestHistorical(input.sourceLocator);
+    const artifactId = deriveArtifactId(
+      input.sourceLocator,
+      input.version,
+      predecessor?.artifactId,
+    );
     const base: SourceArtifact = {
       artifactId,
       sourceType: input.sourceType,
@@ -164,25 +199,24 @@ export class SourceRegistry {
     if (input.contentMetadata !== undefined) base.contentMetadata = input.contentMetadata;
     if (input.parserVersion !== undefined) base.parserVersion = input.parserVersion;
     if (input.embeddingVersion !== undefined) base.embeddingVersion = input.embeddingVersion;
-    // Validate against the contract schema before touching the store.
     sourceArtifactSchema.parse(base);
 
-    // Idempotency: this exact (locator, version) was already registered.
-    // The locator check matters: artifactId is derived from (locator,
-    // version), so a row with the same id but a different locator can only
-    // exist via out-of-band writes and must not short-circuit registration.
-    const identical = this.getByIdOrUndefined(artifactId);
-    if (identical !== undefined && identical.sourceLocator === input.sourceLocator) {
-      return { artifact: identical, outcome: 'UNCHANGED' };
-    }
-
-    const previous = this.getCurrent(input.sourceLocator);
-    if (previous === undefined || !isVersionChanged(previous.version, input.version)) {
-      // No previous artifact, or same normalized version under a different
-      // artifact id (should not happen given deterministic ids, but be
-      // safe): insert without superseding.
-      const artifact = this.insertArtifact(base, SourceStatus.CURRENT, undefined);
-      return { artifact, outcome: 'CREATED' };
+    if (previous === undefined) {
+      try {
+        const artifact = this.insertArtifact(base, SourceStatus.CURRENT, undefined);
+        return { artifact, outcome: 'CREATED' };
+      } catch (error) {
+        // Another registry process may have installed the same current
+        // observation after our read. Treat that as idempotent success.
+        const concurrent = this.getCurrent(input.sourceLocator);
+        if (
+          concurrent !== undefined &&
+          !isVersionChanged(concurrent.version, input.version)
+        ) {
+          return { artifact: concurrent, outcome: 'UNCHANGED' };
+        }
+        throw error;
+      }
     }
 
     // Atomic supersession: exactly one latest artifact per locator at all
@@ -196,6 +230,15 @@ export class SourceRegistry {
     try {
       artifact = supersede();
     } catch (error) {
+      // A concurrent registrar may already have installed this same next
+      // version. If so, the desired state exists and this call is idempotent.
+      const concurrent = this.getCurrent(input.sourceLocator);
+      if (
+        concurrent !== undefined &&
+        !isVersionChanged(concurrent.version, input.version)
+      ) {
+        return { artifact: concurrent, outcome: 'UNCHANGED' };
+      }
       throw new SourceRegistryError(
         'SUPERSESSION_FAILED',
         `atomic supersession failed for locator ${input.sourceLocator}: old artifact ${previous.artifactId} left untouched`,
@@ -384,6 +427,15 @@ export class SourceRegistry {
     const row = this.store.db
       .prepare('SELECT * FROM source_artifacts WHERE artifact_id = ?')
       .get(artifactId) as ArtifactRow | undefined;
+    return row === undefined ? undefined : rowToArtifact(row);
+  }
+
+  private getLatestHistorical(sourceLocator: string): StoredSourceArtifact | undefined {
+    const row = this.store.db
+      .prepare(
+        'SELECT * FROM source_artifacts WHERE source_locator = ? ORDER BY rowid DESC LIMIT 1',
+      )
+      .get(sourceLocator) as ArtifactRow | undefined;
     return row === undefined ? undefined : rowToArtifact(row);
   }
 
