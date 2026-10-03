@@ -1,1 +1,1 @@
-{"exclude":["**/node_modules","**/dist"],"extends":"./tsconfig.base.json","include":["apps/*/src/**/*","integrations/*/src/**/*","packages/*/src/**/*","packages/*/test/**/*","services/*/src/**/*", "services/*/test/**/*","training/*/src/**/*"]}
+{"exclude":["**/node_modules","**/dist"],"extends":"./tsconfig.base.json","include":["apps/*/src/**/*","apps/*/test/**/*","integrations/*/src/**/*","integrations/*/test/**/*","packages/*/src/**/*","packages/*/test/**/*","services/*/src/**/*","services/*/test/**/*","training/*/src/**/*","training/*/test/**/*"]}
