@@ -648,6 +648,10 @@ describe('KnowledgeRetrievalEngine — indexing and persistence', () => {
       ]),
     ).rejects.toThrow(/embedding unavailable/);
 
+    // Restore the provider so the verification searches can embed their
+    // queries; only the failed re-index operation is under test here.
+    failEmbedding = false;
+
     const oldResult = await engine.search('old searchable phrase', PUBLIC_SEARCH);
     expect(oldResult.results[0]?.chunk.text).toBe('old searchable phrase');
     const newResult = await engine.search('replacement text', PUBLIC_SEARCH);
