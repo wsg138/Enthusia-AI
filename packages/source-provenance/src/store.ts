@@ -81,6 +81,15 @@ const MIGRATIONS: Migration[] = [
         ON source_artifacts(indexed_time);
     `,
   },
+  {
+    version: 2,
+    name: 'enforce one latest artifact per source locator',
+    up: `
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_artifacts_locator_latest
+        ON source_artifacts(source_locator)
+        WHERE is_current = 1;
+    `,
+  },
 ];
 
 /** Latest schema version this code understands. */
