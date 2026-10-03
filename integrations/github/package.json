@@ -1,0 +1,12 @@
+{
+  "name": "@enthusia/integration-github",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GitHub source integration (W01 skeleton \u2014 W04)",
+  "type": "module",
+  "license": "UNLICENSED",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

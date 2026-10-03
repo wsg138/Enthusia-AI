@@ -1,0 +1,34 @@
+{
+  "description": "Enthusia AI — server-wide intelligence platform for the Enthusia Minecraft network (monorepo root)",
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "eslint": "^9.17.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.19.1",
+    "vitest": "^3.0.5"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "UNLICENSED",
+  "name": "enthusia-ai",
+  "packageManager": "npm@10.9.4",
+  "private": true,
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "config:validate": "npm run validate -w @enthusia/config",
+    "install": "echo 'enthusia-ai: dependencies are managed by npm workspaces (npm install / npm ci). No extra install step.'",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "type": "module",
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/*",
+    "services/*",
+    "apps/*",
+    "integrations/*",
+    "training/*"
+  ]
+}

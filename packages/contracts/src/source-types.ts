@@ -1,0 +1,18 @@
+/**
+ * Source types for the knowledge/indexing service.
+ *
+ * Spec: MASTER-SPECIFICATION.md §12.1, WORKER-EXECUTION-PLAN.md W04.
+ */
+export enum SourceType {
+  GITHUB = 'GITHUB',
+  SFTP_FILE = 'SFTP_FILE',
+  DOCUMENT = 'DOCUMENT',
+  CONFIG = 'CONFIG',
+  DATABASE_SCHEMA = 'DATABASE_SCHEMA',
+  DATABASE_LIVE = 'DATABASE_LIVE',
+  DISCORD = 'DISCORD',
+  TICKET = 'TICKET',
+  STAFF = 'STAFF',
+  DEPLOYMENT = 'DEPLOYMENT',
+  GENERATED = 'GENERATED',
+}

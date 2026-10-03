@@ -1,0 +1,1 @@
+{"description":"Authentication and authorization for Enthusia AI services (W01 skeleton — full implementation in W02)","exports":{".":"./src/index.ts"},"license":"UNLICENSED","main":"./src/index.ts","name":"@enthusia/auth","private":true,"type":"module","version":"0.1.0"}

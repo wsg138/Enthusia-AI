@@ -1,0 +1,12 @@
+{
+  "name": "@enthusia/tool-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tool execution gateway with budgets and provenance (W01 skeleton \u2014 W08)",
+  "type": "module",
+  "license": "UNLICENSED",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

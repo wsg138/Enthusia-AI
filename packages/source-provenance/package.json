@@ -1,0 +1,1 @@
+{"description":"Source provenance helpers for knowledge artifacts and tool results (W01 skeleton — full implementation in W04)","exports":{".":"./src/index.ts"},"license":"UNLICENSED","main":"./src/index.ts","name":"@enthusia/source-provenance","private":true,"type":"module","version":"0.1.0"}
