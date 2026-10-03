@@ -77,6 +77,54 @@ Changes to shared contract files require coordination.
 
 Do not casually edit a shared schema to make one local implementation easier.
 
+## 2.6 Stacked PR safety
+
+When a workstream depends on an unmerged upstream workstream:
+
+- branch from the required upstream branch;
+- target the upstream branch temporarily so CI tests the real dependency stack;
+- keep the downstream PR in **draft** while the upstream PR is open;
+- never merge a downstream PR into an upstream workstream branch;
+- after the upstream PR merges, rebase/update the downstream branch onto current `main`;
+- change the downstream PR base to `main`;
+- rerun the full required CI;
+- only then mark the downstream PR ready for review.
+
+This prevents a downstream merge from contaminating an upstream foundation PR and keeps dependency order explicit.
+
+## 2.7 TypeScript workspace dependency rule
+
+Any TypeScript workspace that imports another internal `@enthusia/*` package must work from a clean checkout in CI.
+
+The monorepo must define one shared resolution/build strategy. Workers must not independently work around missing internal packages.
+
+The chosen strategy must ensure:
+
+- typecheck can resolve internal package types before consumer validation;
+- tests can resolve internal packages from a clean checkout;
+- production runtime imports resolve to built JavaScript;
+- shared dependencies build before consumers when build artifacts are required;
+- cross-workspace packages do not silently switch from `dist/` exports to source-only runtime exports without an explicit repository-wide decision.
+
+W01 owns the initial monorepo solution. Later changes to this rule require coordination.
+
+A representative consumer of shared contracts should be tested before declaring a scaffold/package-resolution change complete.
+
+## 2.8 Cross-language CI
+
+A green repository CI result must actually execute the tests for every language introduced by the PR.
+
+For Python training/data workstreams:
+
+- use a pinned/supported Python version in CI;
+- install the relevant package/test extras;
+- execute pytest;
+- fail the PR when Python tests fail.
+
+Node/Vitest success alone does not validate Python work.
+
+Future additional languages require equivalent CI coverage.
+
 ---
 
 # 3. Dependency graph
