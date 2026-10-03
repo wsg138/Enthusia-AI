@@ -1,12 +1,27 @@
 {
-  "name": "@enthusia/ai-gateway",
-  "version": "0.1.0",
-  "private": true,
-  "description": "Stable API boundary for Discord/Minecraft/Ticket surfaces (W01 skeleton \u2014 implementation in W02)",
-  "type": "module",
-  "license": "UNLICENSED",
-  "main": "./src/index.ts",
+  "dependencies": {
+    "@enthusia/config": "0.1.0",
+    "@enthusia/contracts": "0.1.0",
+    "@enthusia/logging": "0.1.0",
+    "zod": "^4.0.0"
+  },
+  "description": "AI Gateway \u2014 stable API boundary for Discord/Minecraft/Ticket surfaces (W02)",
   "exports": {
-    ".": "./src/index.ts"
-  }
+    ".": {
+      "default": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "name": "@enthusia/ai-gateway",
+  "private": true,
+  "scripts": {
+    "build": "npm run build -w @enthusia/contracts -w @enthusia/logging -w @enthusia/config && tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "typecheck": "npm run build -w @enthusia/contracts -w @enthusia/logging -w @enthusia/config && tsc --noEmit -p tsconfig.typecheck.json"
+  },
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "version": "0.1.0"
 }
