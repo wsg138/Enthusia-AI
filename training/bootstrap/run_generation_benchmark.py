@@ -23,6 +23,12 @@ ALLOWED_EXPECTED_ACTIONS = {
     "escalate:openai",
 }
 
+STOPWORDS = {
+    "a","an","and","are","as","at","be","by","can","do","for","from","has","have",
+    "how","i","if","in","is","it","of","on","or","that","the","their","this","to",
+    "use","using","was","what","when","where","which","who","will","with","you","your",
+}
+
 SECRET_PATTERNS = [
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
     re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"),
@@ -41,6 +47,57 @@ def strip_code_fence(text: str) -> str:
         if text.rstrip().endswith(fence):
             text = text.rstrip()[:-3]
     return text.strip()
+
+def content_tokens(text: str) -> set[str]:
+    tokens = {
+        token.lower()
+        for token in re.findall(r"[A-Za-z0-9_./:+-]+", text)
+        if len(token) >= 3
+    }
+    return {token for token in tokens if token not in STOPWORDS}
+
+
+def unsupported_assistant_sentences(parsed: dict, job: dict) -> list[str]:
+    assistant = parsed.get("assistant")
+    facts = parsed.get("facts")
+    if not isinstance(assistant, str) or not isinstance(facts, list):
+        return []
+    support_parts: list[str] = []
+    for fact in facts:
+        if not isinstance(fact, dict):
+            continue
+        claim = fact.get("claim")
+        if isinstance(claim, str):
+            support_parts.append(claim)
+        ids = fact.get("evidence_ids")
+        if isinstance(ids, list):
+            for evidence_id in ids:
+                line = job.get("evidence_map", {}).get(evidence_id)
+                if isinstance(line, str):
+                    support_parts.append(line)
+    support = "\n".join(support_parts)
+    support_tokens = content_tokens(support)
+    unsupported: list[str] = []
+    for sentence in re.split(r"(?<=[.!?])\s+", assistant.strip()):
+        tokens = content_tokens(sentence)
+        if len(tokens) < 4:
+            continue
+        overlap = len(tokens & support_tokens) / len(tokens)
+        if overlap < 0.28:
+            unsupported.append(sentence)
+            continue
+        # Commands, versions/numbers, URLs/domains, and permission-like nodes
+        # are high-risk details: require a literal anchor in the selected facts.
+        risky = []
+        risky.extend(re.findall(r"/[A-Za-z][A-Za-z0-9_-]*", sentence))
+        risky.extend(re.findall(r"\b\d+(?:\.\d+)+(?:[-+][A-Za-z0-9.]+)?\b", sentence))
+        risky.extend(re.findall(r"https?://\S+|\b[A-Za-z0-9.-]+\.(?:com|net|org|gg|io)\b", sentence))
+        risky.extend(re.findall(r"\b[a-z][a-z0-9_-]+(?:\.[a-z0-9_-]+){1,}\b", sentence))
+        support_lower = support.lower()
+        if any(item.lower().rstrip(".,)") not in support_lower for item in risky):
+            unsupported.append(sentence)
+    return unsupported
+
 
 def validate_output(job: dict, parsed: dict) -> list[str]:
     problems = []
@@ -73,11 +130,34 @@ def validate_output(job: dict, parsed: dict) -> list[str]:
         claim = fact.get("claim")
         if not isinstance(claim, str) or not claim.strip():
             problems.append(f"fact_{i}_claim_missing")
-        evidence = fact.get("evidence")
-        if not isinstance(evidence, str) or not evidence.strip():
-            problems.append(f"fact_{i}_evidence_missing")
-        elif evidence not in job["excerpt"]:
-            problems.append(f"fact_{i}_evidence_not_verbatim")
+        elif len(claim.split()) > 24:
+            problems.append(f"fact_{i}_claim_too_long")
+        evidence_ids = fact.get("evidence_ids")
+        if (
+            not isinstance(evidence_ids, list)
+            or not (1 <= len(evidence_ids) <= 2)
+            or any(
+                not isinstance(evidence_id, str)
+                or evidence_id not in job.get("evidence_map", {})
+                for evidence_id in (evidence_ids if isinstance(evidence_ids, list) else [])
+            )
+        ):
+            problems.append(f"fact_{i}_bad_evidence_ids")
+    if isinstance(facts, list) and len(facts) > 2:
+        problems.append("too_many_facts")
+    if isinstance(parsed.get("scenario"), str) and len(parsed["scenario"].split()) > 18:
+        problems.append("scenario_too_long")
+    if isinstance(parsed.get("user"), str) and len(parsed["user"].split()) > 30:
+        problems.append("user_too_long")
+    if isinstance(parsed.get("assistant"), str) and len(parsed["assistant"].split()) > 80:
+        problems.append("assistant_too_long")
+    tags = parsed.get("tags")
+    if not isinstance(tags, list) or len(tags) > 4 or any(not isinstance(tag, str) for tag in (tags if isinstance(tags, list) else [])):
+        problems.append("bad_tags")
+    unsupported = unsupported_assistant_sentences(parsed, job)
+    if unsupported:
+        problems.append("assistant_not_fully_fact_grounded")
+
     serialized = json.dumps(parsed, ensure_ascii=False)
     if any(pattern.search(serialized) for pattern in SECRET_PATTERNS):
         problems.append("secret_pattern_in_output")
@@ -190,6 +270,11 @@ def main() -> int:
                         # Provenance is deterministic input metadata; do not waste
                         # model tokens asking it to repeat source IDs and SHAs.
                         for fact in parsed.get("facts", []):
+                            evidence_ids = list(fact.get("evidence_ids", []))
+                            fact["evidence"] = "\n".join(
+                                job["evidence_map"][evidence_id]
+                                for evidence_id in evidence_ids
+                            )
                             fact["source"] = job["source_id"]
                             fact["source_version"] = job["source_version"]
                     result["parsed"] = parsed
