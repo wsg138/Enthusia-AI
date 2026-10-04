@@ -1,12 +1,1 @@
-{
-  "name": "@enthusia/integration-databases",
-  "version": "0.1.0",
-  "private": true,
-  "description": "Database schema/live-view source integration (W01 skeleton \u2014 W04)",
-  "type": "module",
-  "license": "UNLICENSED",
-  "main": "./src/index.ts",
-  "exports": {
-    ".": "./src/index.ts"
-  }
-}
+{"dependencies":{"@enthusia/contracts":"^0.1.0","zod":"^4.0.0"},"description":"Read-only database safe tools for Enthusia AI: purpose-built live fact queries with provenance, timeouts, and row limits (W10)","exports":{".":"./src/index.ts"},"license":"UNLICENSED","main":"./src/index.ts","name":"@enthusia/integration-databases","private":true,"type":"module","version":"0.1.0"}
