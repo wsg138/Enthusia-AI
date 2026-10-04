@@ -50,7 +50,12 @@ def is_nonproduction_snapshot(record: dict) -> bool:
     p = record.get("path", "").replace("\\", "/")
     return p.startswith("network-snapshot/test/") or p.startswith("network-snapshot/test2/")
 
-def synthetic_allowed(record: dict) -> tuple[bool, str]:
+def synthetic_allowed(record: dict, policy: dict | None = None) -> tuple[bool, str]:
+    if policy is not None and (
+        not policy.get("include", False)
+        or not policy.get("use_for_synthetic_grounding", False)
+    ):
+        return False, "repository_policy"
     text = record.get("content", "")
     if not text.strip():
         return False, "empty"
@@ -64,7 +69,12 @@ def synthetic_allowed(record: dict) -> tuple[bool, str]:
         return False, "secret_pattern"
     return True, "accepted"
 
-def rag_allowed(record: dict) -> tuple[bool, str]:
+def rag_allowed(record: dict, policy: dict | None = None) -> tuple[bool, str]:
+    if policy is not None and (
+        not policy.get("include", False)
+        or not policy.get("use_for_rag", False)
+    ):
+        return False, "repository_policy"
     text = record.get("content", "")
     if not text.strip():
         return False, "empty"
@@ -119,7 +129,13 @@ def main() -> int:
     ap.add_argument("--rag-output", required=True)
     ap.add_argument("--synthetic-output", required=True)
     ap.add_argument("--report", required=True)
+    ap.add_argument("--repository-manifest", required=False)
     args = ap.parse_args()
+
+    policies = {}
+    if args.repository_manifest:
+        manifest = json.loads(Path(args.repository_manifest).read_text(encoding="utf-8"))
+        policies = {entry["name"]: entry for entry in manifest["repositories"]}
 
     rag_candidates = []
     synthetic_candidates = []
@@ -131,12 +147,23 @@ def main() -> int:
         for line in fh:
             input_count += 1
             record = json.loads(line)
-            ok, reason = rag_allowed(record)
+            policy = policies.get(record.get("repository"))
+            if policy is not None:
+                record = dict(record)
+                record["role"] = policy.get("role", record.get("role"))
+                record["production_authority"] = policy.get(
+                    "production_authority", record.get("production_authority")
+                )
+                record["use_for_rag"] = policy.get("use_for_rag", False)
+                record["use_for_synthetic_grounding"] = policy.get(
+                    "use_for_synthetic_grounding", False
+                )
+            ok, reason = rag_allowed(record, policy)
             if ok:
                 rag_candidates.append(record)
             else:
                 rejected_rag[reason] += 1
-            ok, reason = synthetic_allowed(record)
+            ok, reason = synthetic_allowed(record, policy)
             if ok:
                 synthetic_candidates.append(record)
             else:
@@ -182,6 +209,7 @@ def main() -> int:
             "synthetic_excludes_test_and_test2_server_snapshots": True,
             "third_party_bundled_assets_excluded": True,
             "direct_sft_from_source_corpus": False,
+            "current_repository_manifest_applied": bool(args.repository_manifest),
         },
     }
     Path(args.report).write_text(json.dumps(report, indent=2), encoding="utf-8")
