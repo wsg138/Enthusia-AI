@@ -8,4 +8,4 @@ python training\bootstrap\run_generation_benchmark.py ^
   --endpoint http://127.0.0.1:8091 ^
   --limit 30 ^
   --timeout 300 ^
-  --max-tokens 900
+  --max-tokens 450
