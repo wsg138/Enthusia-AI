@@ -112,8 +112,8 @@ Otherwise output exactly one JSON object with these keys:
 - visibility: "public", "private", or "staff"
 - scenario: at most 18 words describing the support situation
 - user: a natural user/player/staff question, at most 30 words
-- evidence_groups: array of 1-2 objects, each with ONLY:
-    evidence_ids: array of 1-2 IDs such as ["L012"] or ["L012","L013"]
+- evidence_groups: array containing EXACTLY one object with ONLY:
+    evidence_ids: array containing EXACTLY one ID such as ["L012"]
 - tags: at most 4 short useful labels
 
 The harness will construct the factual assistant answer directly from the selected source
@@ -122,10 +122,10 @@ SHAs, tool calls, or expected actions.
 
 Rules:
 1. If the excerpt is mainly repository-development/build/CI detail and does not help player support, staff operations, live troubleshooting, or product behavior, return skip.
-2. Select only source lines that directly answer the user question.
+2. The user question must be completely answerable by ONE source line. Select exactly that one line. If no single line is sufficient, return skip.
 3. Use visibility "private" for player-self/account-specific context.
 4. Every evidence_ids value must be an ID that appears in SOURCE_EXCERPT. Never invent an ID.
-5. Prefer the smallest 1-2 short source lines that completely support the answer.
+5. Select one short source line that completely supports the answer; do not add contextual lines that are merely related.
 6. Never select a line containing an actual password, API key, token, private key, database credential, SFTP credential, or secret value.
 7. Do not teach Git main == production. If an excerpt only shows source/config and deployment state matters, ask a question whose answer does not claim it is deployed.
 8. Do not include chain-of-thought or hidden reasoning.
