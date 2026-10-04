@@ -46,7 +46,7 @@ def validate_output(job: dict, parsed: dict) -> list[str]:
             problems.append(f"missing:{key}")
     if parsed.get("category") not in CATEGORIES:
         problems.append("bad_category")
-    if parsed.get("visibility") not in {"public", "player_self", "staff"}:
+    if parsed.get("visibility") not in {"public", "private", "staff", "owner"}:
         problems.append("bad_visibility")
     facts = parsed.get("facts")
     if not isinstance(facts, list) or not facts:
