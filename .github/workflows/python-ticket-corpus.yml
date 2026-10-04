@@ -1,0 +1,46 @@
+name: Python ticket corpus tests
+
+on:
+  pull_request:
+    paths:
+      - "training/ticket-corpus/**"
+      - "training/datasets/GOVERNANCE-CHECKPOINT.md"
+      - ".github/workflows/python-ticket-corpus.yml"
+  push:
+    branches: [main]
+    paths:
+      - "training/ticket-corpus/**"
+      - "training/datasets/GOVERNANCE-CHECKPOINT.md"
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    name: pytest (W18 ticket corpus)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned W16 dataset dependency
+        uses: actions/checkout@v4
+        with:
+          repository: wsg138/Enthusia-AI
+          ref: 2bc856cdf8970102cdf03000cffb93fb82e8428c
+          path: .dependencies/w16
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test packages
+        run: |
+          python -m pip install -e "./.dependencies/w16/training/datasets"
+          python -m pip install -e "./training/ticket-corpus[test]"
+
+      - name: Run ticket corpus suite with W16 contract cross-check
+        env:
+          W16_PACKAGE_DIR: ${{ github.workspace }}/.dependencies/w16/training/datasets
+        run: python -m pytest training/ticket-corpus/tests -q
