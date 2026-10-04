@@ -56,17 +56,17 @@ def source_visibility(record: dict) -> str:
     ext = Path(path).suffix.lower()
     name = Path(path).name.lower()
 
-    # Implementation source and mutable/internal config are staff context even
-    # when they belong to an otherwise player-facing plugin repository.
+    # Implementation source and mutable/internal configuration are staff
+    # context even inside otherwise player-facing plugin repositories.
     if ext in SOURCE_EXTS:
         return "staff"
     if ext in CONFIG_EXTS and name not in {"plugin.yml", "paper-plugin.yml"}:
         return "staff"
-    if any(token in lower for token in ("/src/", "/internal/", "/config/", "config.")):
+    if any(token in lower for token in (
+        "/src/", "/internal/", "/config/", "config.", "config-", "/audit",
+    )):
         return "staff"
 
-    # Public/player-facing README, guides, manifests, and command docs remain
-    # usable for public support examples.
     return "public"
 
 
