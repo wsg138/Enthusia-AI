@@ -378,9 +378,10 @@
       "role": "chat_system",
       "include": true,
       "use_for_rag": true,
-      "use_for_synthetic_grounding": true,
+      "use_for_synthetic_grounding": false,
       "direct_sft": false,
-      "production_authority": "requires_deployment_verification"
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Current chat-system source is useful for runtime investigation, but upstream-derived documentation/support links make broad synthetic SFT grounding unsafe; use RAG/live config instead."
     },
     {
       "owner": "wsg138",
@@ -433,9 +434,10 @@
       "role": "moderation_system",
       "include": true,
       "use_for_rag": true,
-      "use_for_synthetic_grounding": true,
+      "use_for_synthetic_grounding": false,
       "direct_sft": false,
-      "production_authority": "requires_deployment_verification"
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Separate moderation sibling system; keep available for staff/development RAG but do not use its implementation/repository docs as support-model SFT grounding."
     },
     {
       "owner": "wsg138",
