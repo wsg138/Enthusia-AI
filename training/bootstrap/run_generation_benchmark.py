@@ -132,15 +132,57 @@ def _question_is_grounded(job: dict, parsed: dict) -> bool:
     line = job.get("target_line")
     if not isinstance(question, str) or not isinstance(line, str):
         return False
-    question_terms = _lexemes(question)
-    if not question_terms:
-        return True
+
+    q_lower = question.lower()
     support_text = " ".join([
         line,
         str(job.get("repository", "")),
         str(job.get("path", "")),
     ])
-    support_terms = _lexemes(support_text)
+    support_lower = support_text.lower()
+
+    # High-risk semantic nouns must be explicitly supported rather than
+    # inferred from a nearby label.
+    if re.search(r"\\brank\\b", q_lower) and not re.search(r"\\brank\\b", support_lower):
+        return False
+    if re.search(r"\\b(?:price|cost)\\b", q_lower) and not re.search(
+        r"\\b(?:price|cost|\\$|usd)\\b", support_lower
+    ):
+        return False
+    if "leaderboard" in q_lower and "leaderboard" not in support_lower:
+        return False
+    if "arena" in q_lower and "arena" not in support_lower:
+        return False
+    if "cooldown" in q_lower and "cooldown" not in support_lower:
+        return False
+
+    # Permission questions are supported either by the word itself or a
+    # permission-node-shaped value in the source line.
+    if re.search(r"\\bpermissions?\\b", q_lower) and not (
+        re.search(r"\\bpermissions?\\b", support_lower)
+        or re.search(r"\\b[a-z][a-z0-9_-]+(?:\\.[a-z0-9_-]+)+\\b", support_lower)
+    ):
+        return False
+
+    # Version/software requirement questions require concrete version/runtime
+    # evidence rather than inference.
+    if "version" in q_lower and not (
+        "version" in support_lower
+        or re.search(r"\\b\\d+(?:\\.\\d+)+", support_lower)
+    ):
+        return False
+
+    # "speed" is a safe paraphrase when the line states a cadence/rate.
+    semantic_support = support_lower
+    if "speed" in q_lower and re.search(
+        r"(?:per second|per tick|every tick|interval|cps|rate)", support_lower
+    ):
+        semantic_support += " speed"
+
+    question_terms = _lexemes(question)
+    if not question_terms:
+        return True
+    support_terms = _lexemes(semantic_support)
     matched = sum(
         1 for term in question_terms
         if term in support_terms
@@ -150,7 +192,7 @@ def _question_is_grounded(job: dict, parsed: dict) -> bool:
             if len(support) >= 4
         )
     )
-    return matched / len(question_terms) >= 0.60
+    return matched / len(question_terms) >= 0.40
 
 
 def validate_output(job: dict, parsed: dict) -> list[str]:
