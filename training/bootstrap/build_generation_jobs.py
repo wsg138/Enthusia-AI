@@ -12,7 +12,7 @@ from pathlib import Path
 CATEGORIES = [
     "onboarding", "commands", "permissions", "rank", "economy", "tickets",
     "rules", "bugs", "account linking", "ambiguity", "escalation",
-    "stale data", "conflicting evidence", "privacy"
+    "stale data", "conflicting evidence", "privacy",
 ]
 
 DOC_EXTS = {".md", ".txt", ".rst"}
@@ -31,11 +31,22 @@ STAFF_SOURCE_ROLES = {
     "support_system",
 }
 
+USEFUL_TERMS = (
+    "command", "permission", "usage", "rank", "role", "rule", "price", "cost",
+    "cooldown", "limit", "requires", "required", "allowed", "denied", "toggle",
+    "enable", "disable", "join", "link", "unlink", "ticket", "mail", "claim",
+    "guild", "home", "teleport", "vote", "tag", "market", "currency", "balance",
+    "staff", "ban", "mute", "warn", "report", "appeal", "autoclick", "event",
+)
+
+CODE_PREFIXES = (
+    "import ", "package ", "class ", "public class ", "private ", "protected ",
+    "def ", "function ", "const ", "let ", "var ", "interface ", "type ",
+    "return ", "throw ", "if (", "for (", "while (",
+)
+
 
 def source_visibility(role: str | None) -> str:
-    # GitHub/source-grounded examples are static documentation/code facts.
-    # They are never PLAYER_SELF/private records. Internal/system sources are
-    # conservatively staff-scoped; player-facing plugin/docs sources are public.
     return "staff" if role in STAFF_SOURCE_ROLES else "public"
 
 
@@ -43,12 +54,12 @@ def path_score(record: dict) -> int:
     path = record["path"].replace("\\", "/")
     lower = path.lower()
     ext = Path(path).suffix.lower()
-    name = Path(path).name.lower()
     score = 0
+
     if ext in DOC_EXTS:
-        score += 40
+        score += 50
     elif ext in CONFIG_EXTS:
-        score += 25
+        score += 35
     elif ext in SOURCE_EXTS:
         score += 10
 
@@ -57,109 +68,124 @@ def path_score(record: dict) -> int:
         "config", "plugin.yml", "paper-plugin.yml", "server.properties",
         "messages", "help", "support", "link", "rank", "econom", "ticket",
     )):
-        score += 20
+        score += 25
+
     if record["repository"] == "Enthusia-Server" and any(
         lower.startswith(f"network-snapshot/{server}/current/")
         for server in ("smp", "hub", "velocity", "sentinel")
     ):
-        score += 25
+        score += 30
+
     if "/test/" in lower or "/tests/" in lower or lower.startswith("tests/"):
-        score -= 35
+        score -= 45
     if "/.github/" in "/" + lower or lower.startswith(".github/"):
-        score -= 15
+        score -= 25
     if "changelog" in lower:
-        score -= 10
-    if len(record.get("content", "")) < 120:
-        score -= 50
+        score -= 15
     return score
 
-def chunks(text: str, max_chars: int) -> list[str]:
-    text = text.strip()
-    if not text:
-        return []
-    if len(text) <= max_chars:
-        return [text]
-    paras = re.split(r"\n\s*\n", text)
-    out, current = [], []
-    size = 0
-    for para in paras:
-        para = para.strip()
-        if not para:
-            continue
-        if len(para) > max_chars:
-            # Hard-split oversized generated/config blocks.
-            if current:
-                out.append("\n\n".join(current))
-                current, size = [], 0
-            for i in range(0, len(para), max_chars):
-                out.append(para[i:i+max_chars])
-            continue
-        extra = len(para) + (2 if current else 0)
-        if current and size + extra > max_chars:
-            out.append("\n\n".join(current))
-            current, size = [], 0
-        current.append(para)
-        size += extra
-    if current:
-        out.append("\n\n".join(current))
-    return out
 
-def numbered_evidence(excerpt: str) -> tuple[str, dict[str, str]]:
-    evidence_map: dict[str, str] = {}
-    numbered: list[str] = []
-    n = 1
-    for raw_line in excerpt.splitlines():
-        line = raw_line.rstrip("\r")
-        if not line.strip():
-            continue
-        evidence_id = f"L{n:03d}"
-        evidence_map[evidence_id] = line
-        numbered.append(f"[{evidence_id}] {line}")
-        n += 1
-    return "\n".join(numbered), evidence_map
+def clean_candidate_line(raw_line: str) -> str:
+    return raw_line.rstrip("\r").strip()
+
+
+def line_score(record: dict, line: str, base_score: int) -> int:
+    lower = line.lower()
+    ext = Path(record["path"]).suffix.lower()
+    score = base_score
+
+    if not (15 <= len(line) <= 500):
+        return -10_000
+    if not re.search(r"[A-Za-z0-9]", line):
+        return -10_000
+    if re.fullmatch(r"[{}\[\](),:;<>/\\|\x60~*#=+_. -]+", line):
+        return -10_000
+
+    if ext in SOURCE_EXTS and lower.startswith(CODE_PREFIXES):
+        score -= 45
+    if ext in SOURCE_EXTS and re.search(r"[{};]$", line):
+        score -= 10
+
+    if line.startswith("|") and line.endswith("|"):
+        score += 20
+        if re.search(r"/[A-Za-z][A-Za-z0-9_-]*", line):
+            score += 45
+        if re.search(r"[a-z][a-z0-9_-]+(?:\.[a-z0-9_-]+){1,}", line):
+            score += 30
+
+    if re.search(r"(^|\s)/[A-Za-z][A-Za-z0-9_-]*", line):
+        score += 35
+    if re.search(r"[a-z][a-z0-9_-]+(?:\.[a-z0-9_-]+){1,}", line):
+        score += 15
+    if any(term in lower for term in USEFUL_TERMS):
+        score += 20
+
+    if lower.startswith(("# ", "## ", "### ")):
+        score -= 15
+    if lower.startswith(("- ", "* ", "+ ")):
+        score += 5
+    if len(line) <= 220:
+        score += 10
+    elif len(line) > 350:
+        score -= 20
+
+    return score
+
+
+def context_for(lines: list[str], target_index: int, radius: int = 2) -> str:
+    start = max(0, target_index - radius)
+    end = min(len(lines), target_index + radius + 1)
+    rendered: list[str] = []
+    for index in range(start, end):
+        marker = "TARGET" if index == target_index else "CONTEXT"
+        rendered.append(f"[{marker}] {lines[index]}")
+    return "\n".join(rendered)
 
 
 def build_prompt(job: dict) -> str:
     categories = ", ".join(CATEGORIES)
-    return f"""You are selecting grounded source evidence for ONE Enthusia AI training example.
+    return f"""You are writing metadata for ONE source-grounded Enthusia AI training example.
 
-Use ONLY the supplied source excerpt. Do not use outside knowledge. If this excerpt does
-not contain a useful player-support or staff-assistance fact, output exactly:
+The factual answer is fixed by TARGET_LINE below. You are NOT allowed to write or
+paraphrase the answer. If TARGET_LINE is not useful for a player-support or staff-assistance
+question, output exactly:
 {{"skip":true,"reason":"not useful for support training"}}
 
 Otherwise output exactly one JSON object with these keys:
 - category: one of [{categories}]
 - scenario: at most 18 words describing the support situation
 - user: a natural user/player/staff question, at most 30 words
-- evidence_groups: array containing EXACTLY one object with ONLY:
-    evidence_ids: array containing EXACTLY one ID such as ["L012"]
 - tags: at most 4 short useful labels
 
-The harness will construct the factual assistant answer directly from the selected source
-lines and will attach provenance. DO NOT write an assistant answer, claims, source IDs,
-SHAs, tool calls, or expected actions.
-
 Rules:
-1. If the excerpt is mainly repository-development/build/CI detail and does not help player support, staff operations, live troubleshooting, or product behavior, return skip.
-2. The user question must be completely answerable by ONE source line. Select exactly that one line. If no single line is sufficient, return skip.
-3. Reuse the selected source line's factual nouns/verbs in the user question. Do not broaden the question beyond what that single line directly answers.
-4. Every evidence_ids value must be an ID that appears in SOURCE_EXCERPT. Never invent an ID.
-5. Select one short source line that completely supports the answer; do not add contextual lines that are merely related.
-6. Never select a line containing an actual password, API key, token, private key, database credential, SFTP credential, or secret value.
-7. Do not teach Git main == production. If an excerpt only shows source/config and deployment state matters, ask a question whose answer does not claim it is deployed.
-8. Do not include chain-of-thought or hidden reasoning.
-9. Do not invent commands, permissions, prices, policies, server behavior, or tool names.
-10. Use category "privacy" for secrets, credentials, private data, or unauthorized disclosure. Use category "rules" for actual player/server rules.
+1. The user question must be completely answerable by TARGET_LINE alone.
+2. Reuse TARGET_LINE terminology for factual nouns, commands, permissions, versions,
+   ranks, prices, and behavior. Do not broaden the question beyond the line.
+3. CONTEXT lines are only for understanding names/meaning; they are NOT evidence and
+   must not introduce additional facts into the question.
+4. If TARGET_LINE is repository-development/build/CI detail rather than useful server
+   support, player behavior, staff operations, or troubleshooting, return skip.
+5. Do not include an assistant answer, claims, evidence IDs, source IDs, SHAs, tool calls,
+   visibility, expected actions, chain-of-thought, or hidden reasoning.
+6. Never ask for, expose, or reproduce a password, API key, token, private key, database
+   credential, SFTP credential, or secret value.
+7. Use category "privacy" for secrets, credentials, private data, or unauthorized
+   disclosure. Use category "rules" for actual player/server rules.
 
-SOURCE_PROVENANCE IS ATTACHED BY THE HARNESS; DO NOT COPY SOURCE IDs OR SHAs INTO YOUR JSON.
 REPOSITORY_ROLE: {job["role"]}
 PATH: {job["path"]}
 
-SOURCE_EXCERPT (each usable source line has an evidence ID):
+TARGET_LINE:
 <<<
-{job["numbered_excerpt"]}
+{job["target_line"]}
+>>>
+
+NEARBY_CONTEXT:
+<<<
+{job["context"]}
 >>>
 """
+
 
 def main() -> int:
     ap = argparse.ArgumentParser()
@@ -168,61 +194,80 @@ def main() -> int:
     ap.add_argument("--manifest", required=True)
     ap.add_argument("--max-jobs", type=int, default=1200)
     ap.add_argument("--per-repo-cap", type=int, default=80)
-    ap.add_argument("--max-chars", type=int, default=9000)
     args = ap.parse_args()
 
-    records = []
+    candidates: list[tuple[int, dict, int, list[str]]] = []
+    source_files: set[tuple[str, str]] = set()
+
     with gzip.open(args.input, "rt", encoding="utf-8") as fh:
-        for line in fh:
-            record = json.loads(line)
-            score = path_score(record)
-            if score <= 0:
+        for raw in fh:
+            record = json.loads(raw)
+            base = path_score(record)
+            if base <= 0:
                 continue
-            records.append((score, record))
+            lines = [
+                clean_candidate_line(line)
+                for line in record.get("content", "").splitlines()
+            ]
+            for index, line in enumerate(lines):
+                score = line_score(record, line, base)
+                if score <= 0:
+                    continue
+                candidates.append((score, record, index, lines))
 
-    records.sort(key=lambda item: (-item[0], item[1]["repository"], item[1]["path"]))
+    candidates.sort(
+        key=lambda item: (
+            -item[0],
+            item[1]["repository"],
+            item[1]["path"],
+            item[2],
+        )
+    )
+
     repo_counts = collections.Counter()
-    jobs = []
-    source_files = set()
+    jobs: list[dict] = []
+    seen_content: set[tuple[str, str]] = set()
 
-    for score, record in records:
+    for score, record, line_index, lines in candidates:
         repo = record["repository"]
         if repo_counts[repo] >= args.per_repo_cap:
             continue
-        parts = chunks(record.get("content", ""), args.max_chars)
-        if not parts:
+
+        target_line = lines[line_index]
+        dedupe_key = (repo, target_line)
+        if dedupe_key in seen_content:
             continue
-        # At most two chunks from any one file in the initial seed batch.
-        for index, excerpt in enumerate(parts[:2]):
-            if repo_counts[repo] >= args.per_repo_cap:
-                break
-            digest = hashlib.sha256(
-                f'{repo}\n{record["commit_sha"]}\n{record["path"]}\n{index}'.encode("utf-8")
-            ).hexdigest()[:16]
-            source_id = f'github:wsg138/{repo}@{record["commit_sha"]}:{record["path"]}'
-            numbered_excerpt, evidence_map = numbered_evidence(excerpt)
-            if not evidence_map:
-                continue
-            job = {
-                "job_id": f"ground-{digest}",
-                "source_id": source_id,
-                "source_version": record["commit_sha"],
-                "repository": repo,
-                "role": record.get("role"),
-                "visibility": source_visibility(record.get("role")),
-                "path": record["path"],
-                "chunk_index": index,
-                "source_score": score,
-                "excerpt": excerpt,
-                "numbered_excerpt": numbered_excerpt,
-                "evidence_map": evidence_map,
-            }
-            job["prompt"] = build_prompt(job)
-            jobs.append(job)
-            repo_counts[repo] += 1
-            source_files.add((repo, record["path"]))
-            if len(jobs) >= args.max_jobs:
-                break
+        seen_content.add(dedupe_key)
+
+        digest = hashlib.sha256(
+            (
+                f'{repo}\n{record["commit_sha"]}\n{record["path"]}\n'
+                f'{line_index}\n{target_line}'
+            ).encode("utf-8")
+        ).hexdigest()[:16]
+
+        source_id = (
+            f'github:wsg138/{repo}@{record["commit_sha"]}:'
+            f'{record["path"]}#line-{line_index + 1}'
+        )
+        job = {
+            "job_id": f"ground-{digest}",
+            "source_id": source_id,
+            "source_version": record["commit_sha"],
+            "repository": repo,
+            "role": record.get("role"),
+            "visibility": source_visibility(record.get("role")),
+            "path": record["path"],
+            "line_number": line_index + 1,
+            "source_score": score,
+            "target_line": target_line,
+            "context": context_for(lines, line_index),
+        }
+        job["prompt"] = build_prompt(job)
+        jobs.append(job)
+        repo_counts[repo] += 1
+        source_files.add((repo, record["path"]))
+
         if len(jobs) >= args.max_jobs:
             break
 
@@ -233,25 +278,27 @@ def main() -> int:
             out.write(json.dumps(job, ensure_ascii=False) + "\n")
 
     manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
+        "selection": "deterministic-high-value-source-line",
         "job_count": len(jobs),
         "source_file_count": len(source_files),
         "repositories": len(repo_counts),
         "jobs_by_repository": dict(repo_counts.most_common()),
         "max_jobs": args.max_jobs,
         "per_repo_cap": args.per_repo_cap,
-        "max_source_chars": args.max_chars,
         "generator_contract": {
-            "one_example_per_job": True,
-            "verbatim_evidence_required": True,
+            "one_fixed_evidence_line_per_job": True,
+            "model_does_not_write_answer": True,
+            "model_does_not_choose_evidence": True,
+            "model_does_not_choose_visibility": True,
             "skip_allowed": True,
             "chain_of_thought_forbidden": True,
-            "mutable_facts_require_live_verification": True,
         },
     }
     Path(args.manifest).write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     print(json.dumps(manifest, indent=2))
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())
