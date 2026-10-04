@@ -1,0 +1,78 @@
+{
+  "adversarial_by_type": {
+    "ambiguous_ranks": 2,
+    "conflicting_configs": 2,
+    "hallucinated_commands": 2,
+    "prompt_injection": 2,
+    "stale_data": 2,
+    "unauthorized_info": 2,
+    "undeployed_git": 2
+  },
+  "corpus_file": "w17-sample-corpus.jsonl",
+  "corpus_sha256": "af150e57276131200aeeb907480805ef98bd1f7fd1f0bd5e832de106b107512b",
+  "counts_by_category": {
+    "account linking": 5,
+    "ambiguity": 4,
+    "bugs": 6,
+    "commands": 25,
+    "conflicting evidence": 4,
+    "economy": 6,
+    "escalation": 6,
+    "onboarding": 15,
+    "permissions": 6,
+    "privacy": 7,
+    "rank": 10,
+    "rules": 6,
+    "stale data": 5,
+    "tickets": 6
+  },
+  "counts_by_kind": {
+    "adversarial": 14,
+    "qa": 88,
+    "trace": 7
+  },
+  "generator": {
+    "created_at": "2026-10-03T16:00:00Z",
+    "fixture_source_versions": {
+      "docs:account/linking.md": "2026.10",
+      "docs:archive/ranks-2026-09.md": "2026.09",
+      "docs:bugs/reporting.md": "2026.10",
+      "docs:claims/flags.md": "2026.10",
+      "docs:commands/basics.md": "2026.10",
+      "docs:commands/claims.md": "2026.10",
+      "docs:commands/fly.md": "2026.10",
+      "docs:economy/overview.md": "2026.10",
+      "docs:events/schedule.md": "2026.10",
+      "docs:moderation/appeals.md": "2026.10",
+      "docs:onboarding/first-steps.md": "2026.10",
+      "docs:onboarding/join.md": "2026.10",
+      "docs:permissions/luckperms.md": "2026.10",
+      "docs:policy/escalation.md": "2026.10",
+      "docs:policy/item-restoration.md": "2026.10",
+      "docs:policy/verification.md": "2026.10",
+      "docs:policy/visibility.md": "2026.10",
+      "docs:ranks/staff.md": "2026.10",
+      "docs:ranks/store.md": "2026.10",
+      "docs:rules/chat.md": "2026.10",
+      "docs:rules/exploits.md": "2026.10",
+      "docs:rules/griefing.md": "2026.10",
+      "docs:server-info.md": "2026.10",
+      "docs:tickets/support.md": "2026.10"
+    },
+    "name": "enthusia-generation-v0.1.0",
+    "seed": 17017
+  },
+  "quality_labels": {
+    "BAD_RESPONSE": 1,
+    "GOOD": 102,
+    "IDEAL": 1,
+    "OUTDATED": 4,
+    "PRIVATE_EXCLUDE": 1
+  },
+  "record_count": 109,
+  "validation": {
+    "problem_count": 0,
+    "structural_problems": [],
+    "valid": true
+  }
+}

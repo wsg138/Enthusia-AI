@@ -1,0 +1,62 @@
+# Python training tests (W16 dataset pipeline + W17 synthetic generation)
+#
+# Runs the pytest suites for training/datasets and training/generation when
+# present on the branch. W17's W16-dependent tests skip cleanly if the
+# datasets package is absent (stacked PRs).
+name: Python training tests
+
+on:
+  pull_request:
+    paths:
+      - "training/**"
+      - ".github/workflows/python-training.yml"
+  push:
+    branches: [main]
+    paths:
+      - "training/**"
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    name: pytest (training)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned W16 dataset dependency
+        uses: actions/checkout@v4
+        with:
+          repository: wsg138/Enthusia-AI
+          ref: 2bc856cdf8970102cdf03000cffb93fb82e8428c
+          path: .dependencies/w16
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python training test packages
+        run: |
+          python -m pip install -e "./.dependencies/w16/training/datasets[test]"
+          python -m pip install -e "./training/generation"
+
+      - name: Test pinned dataset pipeline (W16)
+        run: python -m pytest .dependencies/w16/training/datasets/tests -q
+
+      - name: Test synthetic generation (W17)
+        run: python -m pytest training/generation/tests -q
+
+      - name: Regenerate sample corpus and verify determinism
+        run: |
+          cd training/generation
+          python -m enthusia_generation.corpus --out /tmp/corpus-check
+          python3 - <<'EOF'
+          import hashlib
+          a = hashlib.sha256(open('corpus/w17-sample-corpus.jsonl','rb').read()).hexdigest()
+          b = hashlib.sha256(open('/tmp/corpus-check/w17-sample-corpus.jsonl','rb').read()).hexdigest()
+          assert a == b, "corpus regeneration is not deterministic"
+          print("corpus deterministic:", a[:16])
+          EOF
