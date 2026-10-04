@@ -46,8 +46,28 @@ CODE_PREFIXES = (
 )
 
 
-def source_visibility(role: str | None) -> str:
-    return "staff" if role in STAFF_SOURCE_ROLES else "public"
+def source_visibility(record: dict) -> str:
+    role = record.get("role")
+    if role in STAFF_SOURCE_ROLES:
+        return "staff"
+
+    path = str(record.get("path", "")).replace("\\", "/")
+    lower = path.lower()
+    ext = Path(path).suffix.lower()
+    name = Path(path).name.lower()
+
+    # Implementation source and mutable/internal config are staff context even
+    # when they belong to an otherwise player-facing plugin repository.
+    if ext in SOURCE_EXTS:
+        return "staff"
+    if ext in CONFIG_EXTS and name not in {"plugin.yml", "paper-plugin.yml"}:
+        return "staff"
+    if any(token in lower for token in ("/src/", "/internal/", "/config/", "config.")):
+        return "staff"
+
+    # Public/player-facing README, guides, manifests, and command docs remain
+    # usable for public support examples.
+    return "public"
 
 
 def path_score(record: dict) -> int:
@@ -256,7 +276,7 @@ def main() -> int:
             "source_version": record["commit_sha"],
             "repository": repo,
             "role": record.get("role"),
-            "visibility": source_visibility(record.get("role")),
+            "visibility": source_visibility(record),
             "path": record["path"],
             "line_number": line_index + 1,
             "source_score": score,
