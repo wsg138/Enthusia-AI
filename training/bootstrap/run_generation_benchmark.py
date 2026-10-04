@@ -183,13 +183,19 @@ def _question_is_grounded(job: dict, parsed: dict) -> bool:
     if not question_terms:
         return True
     support_terms = _lexemes(semantic_support)
+    # _lexemes already emits simple plural/-ing/-ed stems. Match those
+    # directly. Only allow one-way compound-prefix matches for reasonably long
+    # terms; never allow short substring matches such as "ran" -> "rank".
     matched = sum(
         1 for term in question_terms
         if term in support_terms
-        or any(
-            term in support or support in term
-            for support in support_terms
-            if len(support) >= 4
+        or (
+            len(term) >= 5
+            and any(
+                support.startswith(term)
+                for support in support_terms
+                if len(support) >= len(term)
+            )
         )
     )
     return matched / len(question_terms) >= 0.40
