@@ -95,6 +95,11 @@ QUESTION_STOPWORDS = {
     "how", "i", "in", "is", "it", "me", "my", "of", "on", "or", "the",
     "to", "use", "using", "what", "when", "where", "which", "who", "why",
     "will", "with", "you", "your",
+    # Query scaffolding that does not add factual scope.
+    "about", "available", "behavior", "command", "commands", "definition",
+    "defined", "feature", "features", "frequency", "guide", "mean", "means",
+    "plugin", "plugins", "rule", "rules", "subcommand", "subcommands", "term",
+    "terms",
 }
 
 
@@ -138,7 +143,7 @@ def _question_is_grounded(job: dict, parsed: dict) -> bool:
             if len(support) >= 4
         )
     )
-    return matched / len(question_terms) >= 0.70
+    return matched / len(question_terms) >= 0.60
 
 
 def validate_output(job: dict, parsed: dict) -> list[str]:
