@@ -101,7 +101,7 @@ Otherwise output exactly one JSON object with these keys:
 - assistant: the ideal concise answer, at most 80 words
 - facts: array of 1-2 objects, each with ONLY:
     claim: concise supported factual claim, at most 24 words
-    evidence: VERBATIM short substring copied from SOURCE_EXCERPT, at most 200 characters
+    evidence: VERBATIM contiguous substring copied from ONE line of SOURCE_EXCERPT, at most 200 characters
 - expected_actions: array of at most 3 high-level actions such as
   "verify:live", "tool:player_identity", "tool:permission_lookup",
   "escalate:human-staff", or "escalate:openai"
@@ -111,7 +111,7 @@ Rules:
 1. If the excerpt is mainly repository-development/build/CI detail and does not help player support, staff operations, live troubleshooting, or tool selection, return skip.
 2. Every factual sentence in assistant must be supported by at least one fact/evidence item.
 3. Use visibility "private" for player-self/account-specific context.
-4. evidence must occur verbatim in SOURCE_EXCERPT.
+4. evidence must occur verbatim in SOURCE_EXCERPT as one contiguous substring. Preserve punctuation and whitespace exactly; never join separate source lines into one evidence value. If two lines are needed, use two facts.
 5. Never output passwords, API keys, tokens, private keys, database credentials, SFTP
    credentials, or secret-looking values even if source text contains them.
 6. Do not teach Git main == production. If deployment state matters, require verification.
