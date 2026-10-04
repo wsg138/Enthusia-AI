@@ -114,6 +114,7 @@ def ensure_repo(owner: str, name: str, branch: str, root: Path) -> tuple[Path, s
         # tree fetches only blobs actually needed for the current checkout.
         run([
             "gh", "repo", "clone", f"{owner}/{name}", str(repo_dir), "--",
+            "-c", "core.longpaths=true",
             "--depth", "1", "--single-branch", "--branch", branch, "--filter=blob:none"
         ])
         sha = run(["git", "rev-parse", "HEAD"], cwd=repo_dir)
@@ -129,6 +130,11 @@ def main() -> int:
     ap.add_argument("--workspace", required=True)
     ap.add_argument("--output", required=True)
     ap.add_argument("--summary", required=True)
+    ap.add_argument(
+        "--audit",
+        required=False,
+        help="Optional JSON audit manifest for rejected/sensitive paths; never stores file contents.",
+    )
     ap.add_argument("--max-bytes", type=int, default=MAX_BYTES_DEFAULT)
     ap.add_argument(
         "--keep-repos",
@@ -141,6 +147,7 @@ def main() -> int:
     workspace = Path(args.workspace)
     output = Path(args.output)
     summary_path = Path(args.summary)
+    audit_path = Path(args.audit) if args.audit else None
     workspace.mkdir(parents=True, exist_ok=True)
     output.parent.mkdir(parents=True, exist_ok=True)
     summary_path.parent.mkdir(parents=True, exist_ok=True)
@@ -153,6 +160,11 @@ def main() -> int:
         "sensitive_rejected": 0,
     }
     repo_summary = []
+    audit = {
+        "schema_version": 1,
+        "sensitive_rejections": [],
+        "repository_failures": [],
+    }
 
     output.parent.mkdir(parents=True, exist_ok=True)
     opener = (
@@ -171,11 +183,13 @@ def main() -> int:
                 )
             except Exception as exc:
                 counts["repositories_failed"] += 1
-                repo_summary.append({
+                failure = {
                     "repository": entry["name"],
                     "status": "FAILED",
                     "error": f"{type(exc).__name__}: {exc}",
-                })
+                }
+                repo_summary.append(failure)
+                audit["repository_failures"].append(failure)
                 print(f"{entry['name']}: FAILED — {type(exc).__name__}: {exc}")
                 continue
             accepted = skipped = sensitive = 0
@@ -208,6 +222,13 @@ def main() -> int:
                         continue
                     if looks_sensitive(text):
                         sensitive += 1
+                        audit["sensitive_rejections"].append({
+                            "repository": entry["name"],
+                            "commit_sha": sha,
+                            "path": rel.as_posix(),
+                            "content_sha256": hashlib.sha256(raw).hexdigest(),
+                            "reason": "high_signal_secret_pattern",
+                        })
                         continue
                     record = {
                         "schema_version": 1,
@@ -259,7 +280,12 @@ def main() -> int:
         "note": "Source corpus is for RAG/synthetic grounding. It is not a normalized SFT dataset."
     }
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    if audit_path is not None:
+        audit_path.parent.mkdir(parents=True, exist_ok=True)
+        audit_path.write_text(json.dumps(audit, indent=2), encoding="utf-8")
     print(summary_path)
+    if audit_path is not None:
+        print(audit_path)
     return 0
 
 
