@@ -1,12 +1,1 @@
-{
-  "name": "@enthusia/training-generation",
-  "version": "0.1.0",
-  "private": true,
-  "description": "Training data generation (W01 skeleton \u2014 W13)",
-  "type": "module",
-  "license": "UNLICENSED",
-  "main": "./src/index.ts",
-  "exports": {
-    ".": "./src/index.ts"
-  }
-}
+{"description":"Training data generation (W17: synthetic corpus generator, Python implementation)","exports":{".":"./src/index.ts"},"license":"UNLICENSED","main":"./src/index.ts","name":"@enthusia/training-generation","private":true,"type":"module","version":"0.1.0"}
