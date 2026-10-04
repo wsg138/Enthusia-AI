@@ -76,28 +76,18 @@ def _clean_display_line(line: str) -> str:
 
 
 def _resolve_evidence(job: dict, parsed: dict) -> tuple[list[dict], str]:
-    facts: list[dict] = []
-    answer_parts: list[str] = []
-    seen_ids: set[str] = set()
-    for group in parsed.get("evidence_groups", []):
-        for evidence_id in group.get("evidence_ids", []):
-            if evidence_id in seen_ids:
-                continue
-            seen_ids.add(evidence_id)
-            evidence = job["evidence_map"][evidence_id]
-            display = _clean_display_line(evidence)
-            if display and display[-1] not in ".!?":
-                display += "."
-            facts.append({
-                "claim": display,
-                "evidence_ids": [evidence_id],
-                "evidence": evidence,
-                "source": job["source_id"],
-                "source_version": job["source_version"],
-            })
-            if display:
-                answer_parts.append(display)
-    return facts, " ".join(answer_parts)
+    evidence = str(job.get("target_line", ""))
+    display = _clean_display_line(evidence)
+    if display and display[-1] not in ".!?":
+        display += "."
+    fact = {
+        "claim": display,
+        "evidence": evidence,
+        "source": job["source_id"],
+        "source_version": job["source_version"],
+        "line_number": job.get("line_number"),
+    }
+    return ([fact] if display else []), display
 
 
 QUESTION_STOPWORDS = {
@@ -127,14 +117,8 @@ def _lexemes(text: str) -> set[str]:
 
 def _question_is_grounded(job: dict, parsed: dict) -> bool:
     question = parsed.get("user")
-    groups = parsed.get("evidence_groups")
-    if not isinstance(question, str) or not isinstance(groups, list) or len(groups) != 1:
-        return False
-    ids = groups[0].get("evidence_ids") if isinstance(groups[0], dict) else None
-    if not isinstance(ids, list) or len(ids) != 1:
-        return False
-    line = job.get("evidence_map", {}).get(ids[0])
-    if not isinstance(line, str):
+    line = job.get("target_line")
+    if not isinstance(question, str) or not isinstance(line, str):
         return False
     question_terms = _lexemes(question)
     if not question_terms:
@@ -148,7 +132,11 @@ def _question_is_grounded(job: dict, parsed: dict) -> bool:
     matched = sum(
         1 for term in question_terms
         if term in support_terms
-        or any(term in support or support in term for support in support_terms if len(support) >= 4)
+        or any(
+            term in support or support in term
+            for support in support_terms
+            if len(support) >= 4
+        )
     )
     return matched / len(question_terms) >= 0.70
 
@@ -160,53 +148,38 @@ def validate_output(job: dict, parsed: dict) -> list[str]:
             problems.append("skip_missing_reason")
         return problems
 
-    for key in ("category", "scenario", "user", "evidence_groups", "tags"):
+    for key in ("category", "scenario", "user", "tags"):
         if key not in parsed:
             problems.append(f"missing:{key}")
-    forbidden_generated = {"assistant", "facts", "expected_actions", "tools", "source", "source_version"}
+
+    forbidden_generated = {
+        "assistant", "facts", "expected_actions", "tools", "source",
+        "source_version", "visibility", "evidence_groups", "evidence_ids",
+    }
     if forbidden_generated.intersection(parsed):
         problems.append("forbidden_generated_fields")
+
     if parsed.get("category") not in CATEGORIES:
         problems.append("bad_category")
-    if "visibility" in parsed:
-        problems.append("model_generated_visibility")
-
-    groups = parsed.get("evidence_groups")
-    if not isinstance(groups, list) or len(groups) != 1:
-        problems.append("bad_evidence_groups")
-        groups = []
-    for i, group in enumerate(groups):
-        if not isinstance(group, dict) or set(group) != {"evidence_ids"}:
-            problems.append(f"group_{i}_shape")
-            continue
-        ids = group.get("evidence_ids")
-        if (
-            not isinstance(ids, list)
-            or len(ids) != 1
-            or any(
-                not isinstance(evidence_id, str)
-                or evidence_id not in job.get("evidence_map", {})
-                for evidence_id in (ids if isinstance(ids, list) else [])
-            )
-        ):
-            problems.append(f"group_{i}_bad_evidence_ids")
-            continue
-        selected_lines = [job["evidence_map"][evidence_id] for evidence_id in ids]
-        if sum(len(line) for line in selected_lines) > 500:
-            problems.append(f"group_{i}_evidence_too_long")
-        selected_serialized = "\\n".join(selected_lines)
-        if any(pattern.search(selected_serialized) for pattern in SECRET_PATTERNS):
-            problems.append(f"group_{i}_secret_pattern")
-
     if isinstance(parsed.get("scenario"), str) and len(parsed["scenario"].split()) > 18:
         problems.append("scenario_too_long")
     if isinstance(parsed.get("user"), str) and len(parsed["user"].split()) > 30:
         problems.append("user_too_long")
+
     tags = parsed.get("tags")
     if not isinstance(tags, list) or len(tags) > 4 or any(
         not isinstance(tag, str) for tag in (tags if isinstance(tags, list) else [])
     ):
         problems.append("bad_tags")
+
+    target_line = job.get("target_line")
+    if not isinstance(target_line, str) or not target_line.strip():
+        problems.append("missing_target_line")
+    elif len(target_line) > 500:
+        problems.append("target_line_too_long")
+    elif any(pattern.search(target_line) for pattern in SECRET_PATTERNS):
+        problems.append("target_line_secret_pattern")
+
     if not _question_is_grounded(job, parsed):
         problems.append("question_not_fully_grounded")
 
@@ -225,7 +198,6 @@ def validate_output(job: dict, parsed: dict) -> list[str]:
     return problems
 
 def _response_schema(job: dict) -> dict:
-    evidence_ids = sorted(job.get("evidence_map", {}).keys())
     skip_shape = {
         "type": "object",
         "properties": {
@@ -241,38 +213,16 @@ def _response_schema(job: dict) -> dict:
             "category": {"type": "string", "enum": sorted(CATEGORIES)},
             "scenario": {"type": "string"},
             "user": {"type": "string"},
-            "evidence_groups": {
-                "type": "array",
-                "minItems": 1,
-                "maxItems": 1,
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "evidence_ids": {
-                            "type": "array",
-                            "minItems": 1,
-                            "maxItems": 1,
-                            "items": {"type": "string", "enum": evidence_ids},
-                        }
-                    },
-                    "required": ["evidence_ids"],
-                    "additionalProperties": False,
-                },
-            },
             "tags": {
                 "type": "array",
                 "maxItems": 4,
                 "items": {"type": "string"},
             },
         },
-        "required": [
-            "category", "scenario", "user",
-            "evidence_groups", "tags",
-        ],
+        "required": ["category", "scenario", "user", "tags"],
         "additionalProperties": False,
     }
     return {"oneOf": [skip_shape, example_shape]}
-
 
 def request_json(
     endpoint: str,
@@ -375,6 +325,8 @@ def main() -> int:
                 "path": job["path"],
                 "source_id": job["source_id"],
                 "source_version": job["source_version"],
+                "line_number": job.get("line_number"),
+                "target_line": job.get("target_line"),
             }
             try:
                 raw, elapsed = request_json(
