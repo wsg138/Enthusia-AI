@@ -96,32 +96,30 @@ player-support or staff-assistance fact, output exactly:
 Otherwise output exactly one JSON object with these keys:
 - category: one of [{categories}]
 - visibility: "public", "private", or "staff"
-- scenario: one short sentence describing the support situation
-- user: a natural user/player/staff question
-- assistant: the ideal concise answer
-- facts: array of 1-4 objects, each with:
-    claim: concise supported factual claim
-    evidence: VERBATIM short substring copied from SOURCE_EXCERPT
-    source: exactly SOURCE_ID below
-    source_version: exactly SOURCE_VERSION below
-- expected_actions: array of zero or more high-level actions such as
+- scenario: at most 18 words describing the support situation
+- user: a natural user/player/staff question, at most 30 words
+- assistant: the ideal concise answer, at most 80 words
+- facts: array of 1-2 objects, each with ONLY:
+    claim: concise supported factual claim, at most 24 words
+    evidence: VERBATIM short substring copied from SOURCE_EXCERPT, at most 200 characters
+- expected_actions: array of at most 3 high-level actions such as
   "verify:live", "tool:player_identity", "tool:permission_lookup",
   "escalate:human-staff", or "escalate:openai"
-- tags: short array of useful labels
+- tags: at most 4 short useful labels
 
 Rules:
-1. Every factual sentence in assistant must be supported by at least one fact/evidence item.
-2. Use visibility "private" for player-self/account-specific context.
-3. evidence must occur verbatim in SOURCE_EXCERPT.
-4. Never output passwords, API keys, tokens, private keys, database credentials, SFTP
+1. If the excerpt is mainly repository-development/build/CI detail and does not help player support, staff operations, live troubleshooting, or tool selection, return skip.
+2. Every factual sentence in assistant must be supported by at least one fact/evidence item.
+3. Use visibility "private" for player-self/account-specific context.
+4. evidence must occur verbatim in SOURCE_EXCERPT.
+5. Never output passwords, API keys, tokens, private keys, database credentials, SFTP
    credentials, or secret-looking values even if source text contains them.
-5. Do not teach Git main == production. If deployment state matters, require verification.
-6. For mutable facts (rank, permissions, balance, status, ticket state, punishments), prefer
+6. Do not teach Git main == production. If deployment state matters, require verification.
+7. For mutable facts (rank, permissions, balance, status, ticket state, punishments), prefer
    an answer that says to verify live rather than memorizing the supplied value.
-7. Do not include chain-of-thought or hidden reasoning.
-8. Do not invent commands, permissions, prices, policies, or server behavior.
-SOURCE_ID: {job["source_id"]}
-SOURCE_VERSION: {job["source_version"]}
+8. Do not include chain-of-thought or hidden reasoning.
+9. Do not invent commands, permissions, prices, policies, or server behavior.
+SOURCE_PROVENANCE IS ATTACHED BY THE HARNESS; DO NOT COPY SOURCE IDs OR SHAs INTO YOUR JSON.
 REPOSITORY_ROLE: {job["role"]}
 PATH: {job["path"]}
 
