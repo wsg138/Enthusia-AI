@@ -43,20 +43,23 @@ def run(cmd: list[str], cwd: Path | None = None) -> str:
     return p.stdout.strip()
 
 
-def allowed(path: Path, max_bytes: int) -> tuple[bool, str]:
-    rel = PurePosixPath(path.as_posix())
+def allowed(actual_path: Path, relative_path: Path, max_bytes: int) -> tuple[bool, str]:
+    rel = PurePosixPath(relative_path.as_posix())
     lower_parts = {part.lower() for part in rel.parts}
     if lower_parts & DENY_PARTS:
         return False, "denied_path"
-    name_lower = path.name.lower()
+    name_lower = relative_path.name.lower()
     if name_lower in DENY_FILENAMES or name_lower.startswith(".env."):
         return False, "denied_secret_filename"
-    if path.suffix.lower() in DENY_SUFFIXES:
+    if relative_path.suffix.lower() in DENY_SUFFIXES:
         return False, "denied_binary_or_secret_suffix"
-    if path.name not in ALLOWED_FILENAMES and path.suffix.lower() not in TEXT_EXTENSIONS:
+    if (
+        relative_path.name not in ALLOWED_FILENAMES
+        and relative_path.suffix.lower() not in TEXT_EXTENSIONS
+    ):
         return False, "unsupported_extension"
     try:
-        if path.stat().st_size > max_bytes:
+        if actual_path.stat().st_size > max_bytes:
             return False, "too_large"
     except OSError:
         return False, "stat_failed"
@@ -146,19 +149,24 @@ def main() -> int:
                 print(f"{entry['name']}: FAILED — {type(exc).__name__}: {exc}")
                 continue
             accepted = skipped = sensitive = 0
+            skip_reasons: dict[str, int] = {}
             for path in sorted(repo_dir.rglob("*")):
                 if not path.is_file():
                     continue
                 rel = path.relative_to(repo_dir)
-                ok, reason = allowed(rel, args.max_bytes)
+                ok, reason = allowed(path, rel, args.max_bytes)
                 if not ok:
                     skipped += 1
+                    skip_reasons[reason] = skip_reasons.get(reason, 0) + 1
                     continue
                 try:
                     raw = path.read_bytes()
                     text = raw.decode("utf-8")
                 except (OSError, UnicodeDecodeError):
                     skipped += 1
+                    skip_reasons["read_or_decode_failed"] = (
+                        skip_reasons.get("read_or_decode_failed", 0) + 1
+                    )
                     continue
                 if looks_sensitive(text):
                     sensitive += 1
@@ -192,8 +200,16 @@ def main() -> int:
                 "accepted_files": accepted,
                 "skipped_files": skipped,
                 "sensitive_rejected": sensitive,
+                "skip_reasons": skip_reasons,
             })
-            print(f"{entry['name']}: {accepted} accepted, {skipped} skipped, {sensitive} sensitive-rejected")
+            reasons = ", ".join(
+                f"{name}={count}" for name, count in sorted(skip_reasons.items())
+            )
+            print(
+                f"{entry['name']}: {accepted} accepted, {skipped} skipped, "
+                f"{sensitive} sensitive-rejected"
+                + (f" [{reasons}]" if reasons else "")
+            )
             if not args.keep_repos:
                 shutil.rmtree(repo_dir, ignore_errors=True)
 
