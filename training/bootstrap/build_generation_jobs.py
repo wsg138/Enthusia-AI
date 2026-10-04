@@ -95,7 +95,7 @@ player-support or staff-assistance fact, output exactly:
 
 Otherwise output exactly one JSON object with these keys:
 - category: one of [{categories}]
-- visibility: "public", "player_self", or "staff"
+- visibility: "public", "private", or "staff"
 - scenario: one short sentence describing the support situation
 - user: a natural user/player/staff question
 - assistant: the ideal concise answer
@@ -110,15 +110,15 @@ Otherwise output exactly one JSON object with these keys:
 - tags: short array of useful labels
 
 Rules:
-1. Every factual sentence in assistant must be supported by at least one fact/evidence item.
+1. Every factual sentence in assistant must be supported by at least one fact/evidence item.\n2. Use visibility "private" for player-self/account-specific context.
 2. evidence must occur verbatim in SOURCE_EXCERPT.
 3. Never output passwords, API keys, tokens, private keys, database credentials, SFTP
    credentials, or secret-looking values even if source text contains them.
-4. Do not teach Git main == production. If deployment state matters, require verification.
-5. For mutable facts (rank, permissions, balance, status, ticket state, punishments), prefer
+5. Do not teach Git main == production. If deployment state matters, require verification.
+6. For mutable facts (rank, permissions, balance, status, ticket state, punishments), prefer
    an answer that says to verify live rather than memorizing the supplied value.
-6. Do not include chain-of-thought or hidden reasoning.
-7. Do not invent commands, permissions, prices, policies, or server behavior.
+7. Do not include chain-of-thought or hidden reasoning.
+8. Do not invent commands, permissions, prices, policies, or server behavior.
 
 SOURCE_ID: {job["source_id"]}
 SOURCE_VERSION: {job["source_version"]}
