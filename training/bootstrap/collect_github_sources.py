@@ -6,6 +6,7 @@ import gzip
 import hashlib
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -69,13 +70,54 @@ def allowed(actual_path: Path, relative_path: Path, max_bytes: int) -> tuple[boo
 
 
 def looks_sensitive(text: str) -> bool:
-    # High-signal guards only. Full dataset secret scanning remains W16's job.
+    # High-signal guards for source/code text.
     upper = text.upper()
     private_key_marker = "-----BEGIN " + "PRIVATE KEY-----"
     if private_key_marker in upper:
         return True
     if "DISCORD_TOKEN=" in upper or "DATABASE_URL=" in upper:
         return True
+    return False
+
+
+CONFIG_EXTENSIONS = {
+    ".yml", ".yaml", ".json", ".toml", ".properties", ".ini", ".cfg", ".xml"
+}
+SENSITIVE_CONFIG_KEY = re.compile(
+    r"(?ix)^\s*(?:"
+    r"(?:mysql|db|database|storage)[._-]?password|"
+    r"password|passwd|pwd|"
+    r"(?:bot|auth|access|refresh|api|control|trigger)[._-]?token|"
+    r"botToken|triggerToken|"
+    r"api[._-]?key|secret[._-]?key|secret[._-]?access[._-]?key|"
+    r"client[._-]?secret|shared[._-]?secret|control[._-]?secret|"
+    r"sync[._-]?secret|authority[._-]?secret|"
+    r"webhook(?:[._-]?url)?|"
+    r"forwarding[._-]?secret(?:[._-]?file)?|"
+    r"private[._-]?key|"
+    r"database[._-]?url"
+    r")\s*$"
+)
+
+
+def config_has_sensitive_key(relative_path: Path, text: str) -> bool:
+    ext = relative_path.suffix.lower()
+    if ext not in CONFIG_EXTENSIONS and relative_path.name.lower() not in {
+        "server.properties", "plugin.yml", "paper-plugin.yml"
+    }:
+        return False
+
+    # We intentionally reject the entire config document whenever it defines a
+    # sensitive credential-bearing key, even if the current value appears blank
+    # or templated. The AI does not need these files badly enough to justify
+    # risking credential ingestion.
+    for raw in text.splitlines():
+        stripped = raw.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        match = re.match(r'^\s*["\']?([^:=\"\']+)["\']?\s*[:=]', raw)
+        if match and SENSITIVE_CONFIG_KEY.match(match.group(1).strip()):
+            return True
     return False
 
 
@@ -220,14 +262,20 @@ def main() -> int:
                             skip_reasons.get("read_or_decode_failed", 0) + 1
                         )
                         continue
-                    if looks_sensitive(text):
+                    sensitive_reason = None
+                    if config_has_sensitive_key(rel, text):
+                        sensitive_reason = "sensitive_config_key"
+                    elif looks_sensitive(text):
+                        sensitive_reason = "high_signal_secret_pattern"
+
+                    if sensitive_reason is not None:
                         sensitive += 1
                         audit["sensitive_rejections"].append({
                             "repository": entry["name"],
                             "commit_sha": sha,
                             "path": rel.as_posix(),
                             "content_sha256": hashlib.sha256(raw).hexdigest(),
-                            "reason": "high_signal_secret_pattern",
+                            "reason": sensitive_reason,
                         })
                         continue
                     record = {
