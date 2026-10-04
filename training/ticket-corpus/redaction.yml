@@ -1,0 +1,23 @@
+# Redaction configuration for the W18 ticket corpus pipeline.
+# All rules are deterministic. Pseudonyms are stable within a corpus run.
+
+# Replace Discord user IDs, mentions, and usernames with run-scoped
+# PLAYER_N / STAFF_N / BOT_N pseudonyms. No source-ID-derived hash is retained.
+pseudonymize_users: true
+
+# Built-in PII rules (true = replace with typed placeholder).
+redact_emails: true        # -> [EMAIL]
+redact_ips: true           # -> [IP] (IPv4 and IPv6)
+redact_phones: true        # -> [PHONE]
+redact_snowflakes: true    # Discord mentions <@id> and raw 17-20 digit IDs -> [USER]
+strip_url_queries: true    # https://host/path?token=... -> https://host/path
+
+# Custom regex rules, applied after built-ins. Each entry:
+#   name: label used in redaction reports
+#   regex: Python regex
+#   replacement: replacement string (may use \1 groups)
+custom_patterns: []
+# Example:
+# - name: minecraft_uuid
+#   regex: '\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b'
+#   replacement: '[UUID]'
