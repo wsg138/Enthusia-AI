@@ -2,11 +2,6 @@
   "name": "@enthusia/training-datasets",
   "version": "0.1.0",
   "private": true,
-  "description": "Training dataset curation and lineage (W01 skeleton \u2014 W13)",
-  "type": "module",
-  "license": "UNLICENSED",
-  "main": "./src/index.ts",
-  "exports": {
-    ".": "./src/index.ts"
-  }
+  "description": "Training dataset curation and lineage (W16). Implementation is Python (spec \u00a79.3); see README.md. This package.json only keeps the npm workspace entry valid.",
+  "license": "UNLICENSED"
 }

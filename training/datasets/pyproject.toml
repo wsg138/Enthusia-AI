@@ -1,0 +1,20 @@
+[project]
+name = "enthusia-datasets"
+version = "0.1.0"
+description = "Enthusia AI dataset foundation (W16): schema, secret scan, dedupe, splits, quality, versioning, deterministic preprocessing"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["enthusia_datasets*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
