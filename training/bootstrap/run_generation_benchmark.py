@@ -17,6 +17,12 @@ CATEGORIES = {
     "stale data", "conflicting evidence", "privacy"
 }
 
+ALLOWED_EXPECTED_ACTIONS = {
+    "verify:live",
+    "escalate:human-staff",
+    "escalate:openai",
+}
+
 SECRET_PATTERNS = [
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
     re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"),
@@ -49,6 +55,13 @@ def validate_output(job: dict, parsed: dict) -> list[str]:
         problems.append("bad_category")
     if parsed.get("visibility") not in {"public", "private", "staff", "owner"}:
         problems.append("bad_visibility")
+    actions = parsed.get("expected_actions")
+    if not isinstance(actions, list) or any(
+        not isinstance(action, str) or action not in ALLOWED_EXPECTED_ACTIONS
+        for action in (actions if isinstance(actions, list) else [])
+    ):
+        problems.append("bad_expected_actions")
+
     facts = parsed.get("facts")
     if not isinstance(facts, list) or not facts:
         problems.append("facts_empty")
