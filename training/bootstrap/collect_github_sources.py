@@ -77,20 +77,48 @@ def looks_sensitive(text: str) -> bool:
     return False
 
 
+def _force_remove_readonly(func, path, exc_info) -> None:
+    """Windows Git checkouts can contain read-only files; make them writable and retry."""
+    try:
+        os.chmod(path, stat.S_IWRITE)
+        func(path)
+    except OSError:
+        raise exc_info[1]
+
+
+def remove_tree(path: Path) -> None:
+    if not path.exists():
+        return
+    # Python 3.12+ supports onexc; fall back to onerror for older interpreters.
+    try:
+        shutil.rmtree(path, onexc=_force_remove_readonly)
+    except TypeError:
+        shutil.rmtree(path, onerror=_force_remove_readonly)
+
+
 def ensure_repo(owner: str, name: str, branch: str, root: Path) -> tuple[Path, str]:
-    repo_dir = root / name
-    if repo_dir.exists():
-        shutil.rmtree(repo_dir, ignore_errors=True)
+    root.mkdir(parents=True, exist_ok=True)
+    # Always clone into a fresh unique directory. A previous interrupted run
+    # can therefore never block the next run with a stale non-empty checkout.
+    repo_dir = Path(tempfile.mkdtemp(prefix=f"{name}-", dir=root))
+    # gh repo clone requires the destination not to exist, so remove the empty
+    # directory created by mkdtemp and immediately reuse its unique pathname.
+    remove_tree(repo_dir)
+
     if not shutil.which("gh"):
         raise RuntimeError("gh CLI is required so GitHub authentication stays outside the corpus")
-    # Shallow + blob-filtered keeps temporary repo storage low. The working
-    # tree fetches only blobs actually needed for the current checkout.
-    run([
-        "gh", "repo", "clone", f"{owner}/{name}", str(repo_dir), "--",
-        "--depth", "1", "--single-branch", "--branch", branch, "--filter=blob:none"
-    ])
-    sha = run(["git", "rev-parse", "HEAD"], cwd=repo_dir)
-    return repo_dir, sha
+    try:
+        # Shallow + blob-filtered keeps temporary repo storage low. The working
+        # tree fetches only blobs actually needed for the current checkout.
+        run([
+            "gh", "repo", "clone", f"{owner}/{name}", str(repo_dir), "--",
+            "--depth", "1", "--single-branch", "--branch", branch, "--filter=blob:none"
+        ])
+        sha = run(["git", "rev-parse", "HEAD"], cwd=repo_dir)
+        return repo_dir, sha
+    except Exception:
+        remove_tree(repo_dir)
+        raise
 
 
 def main() -> int:
@@ -219,7 +247,7 @@ def main() -> int:
                 + (f" [{reasons}]" if reasons else "")
             )
             if not args.keep_repos:
-                shutil.rmtree(repo_dir, ignore_errors=True)
+                remove_tree(repo_dir)
 
     summary = {
         "schema_version": 1,
