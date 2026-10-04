@@ -8,6 +8,8 @@ export default defineConfig({
       'apps/*/test/**/*.test.ts',
       'services/*/test/**/*.test.ts',
       'integrations/*/test/**/*.test.ts',
+      'training/*/test/**/*.test.ts',
+      'tests/**/*.test.ts',
     ],
     reporters: ['default'],
   },
