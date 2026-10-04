@@ -1,12 +1,1 @@
-{
-  "name": "@enthusia/training-evaluation",
-  "version": "0.1.0",
-  "private": true,
-  "description": "Model evaluation harness (W01 skeleton \u2014 W15)",
-  "type": "module",
-  "license": "UNLICENSED",
-  "main": "./src/index.ts",
-  "exports": {
-    ".": "./src/index.ts"
-  }
-}
+{"bin":{"enthusia-eval":"./dist/cli.js"},"dependencies":{"zod":"^4.0.0"},"description":"Evaluation framework: golden dataset, evaluator harness, scenario templates (stale-truth, visibility, escalation), mock systems, machine-readable regression reports (W20)","exports":{".":{"default":"./dist/index.js","types":"./dist/index.d.ts"}},"license":"UNLICENSED","main":"./dist/index.js","name":"@enthusia/training-evaluation","private":true,"scripts":{"build":"tsc -p tsconfig.json","eval":"node ./dist/cli.js","typecheck":"tsc --noEmit -p tsconfig.typecheck.json"},"type":"module","types":"./dist/index.d.ts","version":"0.1.0"}
