@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
 import os
 import platform
@@ -22,12 +23,23 @@ def run(cmd: list[str]) -> dict:
 def memory_bytes() -> int | None:
     try:
         if platform.system() == "Windows":
-            p = subprocess.run(
-                ["powershell", "-NoProfile", "-Command",
-                 "(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory"],
-                capture_output=True, text=True, timeout=20, check=False,
-            )
-            return int(p.stdout.strip()) if p.returncode == 0 and p.stdout.strip().isdigit() else None
+            class MEMORYSTATUSEX(ctypes.Structure):
+                _fields_ = [
+                    ("dwLength", ctypes.c_ulong),
+                    ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong),
+                    ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong),
+                    ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong),
+                    ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+                ]
+            status = MEMORYSTATUSEX()
+            status.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
+                return int(status.ullTotalPhys)
+            return None
         page = os.sysconf("SC_PAGE_SIZE")
         pages = os.sysconf("SC_PHYS_PAGES")
         return int(page * pages)
@@ -50,6 +62,8 @@ def main() -> int:
         "schema_version": 1,
         "platform": platform.platform(),
         "python": sys.version,
+        "python_executable": sys.executable,
+        "python_m_pip": run([sys.executable, "-m", "pip", "--version"]),
         "cpu_count_logical": os.cpu_count(),
         "memory_bytes": memory_bytes(),
         "disk": {
