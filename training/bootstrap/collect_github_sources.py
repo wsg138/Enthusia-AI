@@ -112,7 +112,13 @@ def main() -> int:
     output.parent.mkdir(parents=True, exist_ok=True)
     summary_path.parent.mkdir(parents=True, exist_ok=True)
 
-    counts = {"repositories": 0, "accepted_files": 0, "skipped_files": 0, "sensitive_rejected": 0}
+    counts = {
+        "repositories": 0,
+        "repositories_failed": 0,
+        "accepted_files": 0,
+        "skipped_files": 0,
+        "sensitive_rejected": 0,
+    }
     repo_summary = []
 
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -126,9 +132,19 @@ def main() -> int:
         for entry in manifest["repositories"]:
             if not entry.get("include", False):
                 continue
-            repo_dir, sha = ensure_repo(
-                entry["owner"], entry["name"], entry["default_branch"], workspace
-            )
+            try:
+                repo_dir, sha = ensure_repo(
+                    entry["owner"], entry["name"], entry["default_branch"], workspace
+                )
+            except Exception as exc:
+                counts["repositories_failed"] += 1
+                repo_summary.append({
+                    "repository": entry["name"],
+                    "status": "FAILED",
+                    "error": f"{type(exc).__name__}: {exc}",
+                })
+                print(f"{entry['name']}: FAILED — {type(exc).__name__}: {exc}")
+                continue
             accepted = skipped = sensitive = 0
             for path in sorted(repo_dir.rglob("*")):
                 if not path.is_file():
