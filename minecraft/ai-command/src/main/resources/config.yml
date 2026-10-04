@@ -1,0 +1,30 @@
+# Enthusia AI — /ai command configuration.
+#
+# The plugin is a thin client for the AI Gateway (W02). It performs no
+# reasoning of its own; every question is forwarded to the gateway.
+
+gateway:
+  # Base URL of the AI Gateway (POST /v1/chat, GET /health/live, GET /health/ready).
+  base-url: "http://127.0.0.1:4100"
+  # Service API key sent as `Authorization: Bearer <key>`.
+  # Supports ${ENV_NAME} expansion — prefer the environment over this file:
+  #   The default expands this runtime environment variable. If it is absent,
+  #   the value becomes blank and a production gateway rejects the request (401).
+  api-key: "${ENTHUSIA_AI_GATEWAY_API_KEY}"
+  # How long to wait for the gateway before giving up (milliseconds).
+  request-timeout-ms: 30000
+
+rate-limit:
+  # Token-bucket capacity per player, refilled continuously over one minute.
+  max-per-minute: 10
+
+messages:
+  # Wrap AI answers at this many visible characters per chat line.
+  max-line-chars: 200
+
+server:
+  # Sent to the gateway as context.serverName so answers can be server-aware.
+  name: "smp"
+
+# Verbose logging of /ai request traces (server log only, never chat).
+debug: false
