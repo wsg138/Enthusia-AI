@@ -48,7 +48,7 @@ def _clean_display_line(line: str) -> str:
             .replace("**", "")
             .replace("__", "")
             .replace("`", "")
-            for cell in re.split(r"(?<!\\\\)\\|", text.strip("|"))
+            for cell in re.split(r"(?<!\\)\|", text.strip("|"))
         ]
         cells = [
             cell for cell in cells
@@ -62,13 +62,13 @@ def _clean_display_line(line: str) -> str:
         if cells:
             return "; ".join(cells)
 
-    text = re.sub(r"^#{1,6}\\s+", "", text)
-    text = re.sub(r"^[-*+]\\s+", "", text)
-    text = re.sub(r"^\\d+[.)]\\s+", "", text)
+    text = re.sub(r"^#{1,6}\s+", "", text)
+    text = re.sub(r"^[-*+]\s+", "", text)
+    text = re.sub(r"^\d+[.)]\s+", "", text)
     text = text.replace("**", "").replace("__", "").replace("`", "")
 
     # Common README command examples use "/command  # explanation".
-    command_comment = re.fullmatch(r"(/[^#]+?)\\s+#\\s+(.+)", text)
+    command_comment = re.fullmatch(r"(/[^#]+?)\s+#\s+(.+)", text)
     if command_comment:
         return f"{command_comment.group(1).strip()}: {command_comment.group(2).strip()}"
 
@@ -100,6 +100,59 @@ def _resolve_evidence(job: dict, parsed: dict) -> tuple[list[dict], str]:
     return facts, " ".join(answer_parts)
 
 
+QUESTION_STOPWORDS = {
+    "a", "an", "and", "are", "can", "could", "do", "does", "for", "from",
+    "how", "i", "in", "is", "it", "me", "my", "of", "on", "or", "the",
+    "to", "use", "using", "what", "when", "where", "which", "who", "why",
+    "will", "with", "you", "your",
+}
+
+
+def _lexemes(text: str) -> set[str]:
+    raw = re.findall(r"[A-Za-z0-9_./:+-]+", text.lower())
+    result: set[str] = set()
+    for token in raw:
+        token = token.strip("./:+-")
+        if len(token) < 3 or token in QUESTION_STOPWORDS:
+            continue
+        result.add(token)
+        if len(token) > 4 and token.endswith("s"):
+            result.add(token[:-1])
+        if len(token) > 5 and token.endswith("ing"):
+            result.add(token[:-3])
+        if len(token) > 4 and token.endswith("ed"):
+            result.add(token[:-2])
+    return result
+
+
+def _question_is_grounded(job: dict, parsed: dict) -> bool:
+    question = parsed.get("user")
+    groups = parsed.get("evidence_groups")
+    if not isinstance(question, str) or not isinstance(groups, list) or len(groups) != 1:
+        return False
+    ids = groups[0].get("evidence_ids") if isinstance(groups[0], dict) else None
+    if not isinstance(ids, list) or len(ids) != 1:
+        return False
+    line = job.get("evidence_map", {}).get(ids[0])
+    if not isinstance(line, str):
+        return False
+    question_terms = _lexemes(question)
+    if not question_terms:
+        return True
+    support_text = " ".join([
+        line,
+        str(job.get("repository", "")),
+        str(job.get("path", "")),
+    ])
+    support_terms = _lexemes(support_text)
+    matched = sum(
+        1 for term in question_terms
+        if term in support_terms
+        or any(term in support or support in term for support in support_terms if len(support) >= 4)
+    )
+    return matched / len(question_terms) >= 0.70
+
+
 def validate_output(job: dict, parsed: dict) -> list[str]:
     problems: list[str] = []
     if parsed.get("skip") is True:
@@ -107,7 +160,7 @@ def validate_output(job: dict, parsed: dict) -> list[str]:
             problems.append("skip_missing_reason")
         return problems
 
-    for key in ("category", "visibility", "scenario", "user", "evidence_groups", "tags"):
+    for key in ("category", "scenario", "user", "evidence_groups", "tags"):
         if key not in parsed:
             problems.append(f"missing:{key}")
     forbidden_generated = {"assistant", "facts", "expected_actions", "tools", "source", "source_version"}
@@ -115,8 +168,8 @@ def validate_output(job: dict, parsed: dict) -> list[str]:
         problems.append("forbidden_generated_fields")
     if parsed.get("category") not in CATEGORIES:
         problems.append("bad_category")
-    if parsed.get("visibility") not in {"public", "private", "staff", "owner"}:
-        problems.append("bad_visibility")
+    if "visibility" in parsed:
+        problems.append("model_generated_visibility")
 
     groups = parsed.get("evidence_groups")
     if not isinstance(groups, list) or len(groups) != 1:
@@ -154,6 +207,8 @@ def validate_output(job: dict, parsed: dict) -> list[str]:
         not isinstance(tag, str) for tag in (tags if isinstance(tags, list) else [])
     ):
         problems.append("bad_tags")
+    if not _question_is_grounded(job, parsed):
+        problems.append("question_not_fully_grounded")
 
     serialized = json.dumps(parsed, ensure_ascii=False)
     if any(pattern.search(serialized) for pattern in SECRET_PATTERNS):
@@ -184,7 +239,6 @@ def _response_schema(job: dict) -> dict:
         "type": "object",
         "properties": {
             "category": {"type": "string", "enum": sorted(CATEGORIES)},
-            "visibility": {"type": "string", "enum": ["public", "private", "staff"]},
             "scenario": {"type": "string"},
             "user": {"type": "string"},
             "evidence_groups": {
@@ -212,7 +266,7 @@ def _response_schema(job: dict) -> dict:
             },
         },
         "required": [
-            "category", "visibility", "scenario", "user",
+            "category", "scenario", "user",
             "evidence_groups", "tags",
         ],
         "additionalProperties": False,
@@ -338,6 +392,7 @@ def main() -> int:
                     validation = validate_output(job, parsed)
                     if not validation and parsed.get("skip") is not True:
                         facts, assistant = _resolve_evidence(job, parsed)
+                        parsed["visibility"] = job.get("visibility", "staff")
                         parsed["facts"] = facts
                         parsed["assistant"] = assistant
                         parsed["expected_actions"] = []
