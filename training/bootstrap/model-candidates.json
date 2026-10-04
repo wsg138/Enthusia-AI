@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "status": "benchmark_before_lock",
+  "candidates": [
+    {
+      "id": "Qwen/Qwen3.5-35B-A3B",
+      "role": "primary_candidate",
+      "total_parameters_billion": 35,
+      "activated_parameters_billion": 3,
+      "license": "Apache-2.0",
+      "notes": [
+        "Newer post-trained MoE candidate.",
+        "Official Qwen base variant is explicitly intended for fine-tuning/research.",
+        "Current GGUF builds exist for llama.cpp serving.",
+        "Benchmark tool use, support QA, RAM, CPU impact, and quantization before selection."
+      ],
+      "base_for_finetune": "Qwen/Qwen3.5-35B-A3B-Base",
+      "serving_reference": "ggml-org/Qwen3.5-35B-A3B-GGUF",
+      "locked": false
+    },
+    {
+      "id": "Qwen/Qwen3-30B-A3B",
+      "role": "fallback_candidate",
+      "total_parameters_billion": 30.5,
+      "activated_parameters_billion": 3.3,
+      "license": "Apache-2.0",
+      "notes": [
+        "Established MoE candidate already anticipated by the master specification.",
+        "Strong local serving ecosystem and lower total parameter footprint than Qwen3.5-35B-A3B.",
+        "Retain as fallback if Qwen3.5 training/serving support or quality/cost is worse."
+      ],
+      "base_for_finetune": "Qwen/Qwen3-30B-A3B-Base",
+      "serving_reference": "Qwen/Qwen3-30B-A3B",
+      "locked": false
+    }
+  ],
+  "selection_gate": {
+    "must_compare": [
+      "baseline Enthusia golden-set accuracy",
+      "tool-call/schema adherence",
+      "stale-truth behavior",
+      "hallucination rate",
+      "escalation behavior",
+      "RAM footprint",
+      "CPU and memory-bandwidth impact on shared dedicated host",
+      "tokens per second at planned quantization",
+      "fine-tune VRAM/cost feasibility within USD 25"
+    ],
+    "gpu_rental_budget_usd": 25,
+    "paid_training_allowed_now": false
+  }
+}
