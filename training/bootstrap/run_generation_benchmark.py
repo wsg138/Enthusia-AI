@@ -17,18 +17,6 @@ CATEGORIES = {
     "stale data", "conflicting evidence", "privacy"
 }
 
-ALLOWED_EXPECTED_ACTIONS = {
-    "verify:live",
-    "escalate:human-staff",
-    "escalate:openai",
-}
-
-STOPWORDS = {
-    "a","an","and","are","as","at","be","by","can","do","for","from","has","have",
-    "how","i","if","in","is","it","of","on","or","that","the","their","this","to",
-    "use","using","was","what","when","where","which","who","will","with","you","your",
-}
-
 SECRET_PATTERNS = [
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
     re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"),
@@ -48,121 +36,104 @@ def strip_code_fence(text: str) -> str:
             text = text.rstrip()[:-3]
     return text.strip()
 
-def content_tokens(text: str) -> set[str]:
-    tokens = {
-        token.lower()
-        for token in re.findall(r"[A-Za-z0-9_./:+-]+", text)
-        if len(token) >= 3
-    }
-    return {token for token in tokens if token not in STOPWORDS}
+def _clean_display_line(line: str) -> str:
+    text = line.strip()
+    text = re.sub(r"^#{1,6}\\s+", "", text)
+    text = re.sub(r"^[-*+]\\s+", "", text)
+    text = re.sub(r"^\\d+[.)]\\s+", "", text)
+    text = text.replace("**", "").replace("__", "").replace("`", "")
+    return text.strip()
 
 
-def unsupported_assistant_sentences(parsed: dict, job: dict) -> list[str]:
-    assistant = parsed.get("assistant")
-    facts = parsed.get("facts")
-    if not isinstance(assistant, str) or not isinstance(facts, list):
-        return []
-    support_parts: list[str] = []
-    for fact in facts:
-        if not isinstance(fact, dict):
-            continue
-        claim = fact.get("claim")
-        if isinstance(claim, str):
-            support_parts.append(claim)
-        ids = fact.get("evidence_ids")
-        if isinstance(ids, list):
-            for evidence_id in ids:
-                line = job.get("evidence_map", {}).get(evidence_id)
-                if isinstance(line, str):
-                    support_parts.append(line)
-    support = "\n".join(support_parts)
-    support_tokens = content_tokens(support)
-    unsupported: list[str] = []
-    for sentence in re.split(r"(?<=[.!?])\s+", assistant.strip()):
-        tokens = content_tokens(sentence)
-        if len(tokens) < 4:
-            continue
-        overlap = len(tokens & support_tokens) / len(tokens)
-        if overlap < 0.28:
-            unsupported.append(sentence)
-            continue
-        # Commands, versions/numbers, URLs/domains, and permission-like nodes
-        # are high-risk details: require a literal anchor in the selected facts.
-        risky = []
-        risky.extend(re.findall(r"/[A-Za-z][A-Za-z0-9_-]*", sentence))
-        risky.extend(re.findall(r"\b\d+(?:\.\d+)+(?:[-+][A-Za-z0-9.]+)?\b", sentence))
-        risky.extend(re.findall(r"https?://\S+|\b[A-Za-z0-9.-]+\.(?:com|net|org|gg|io)\b", sentence))
-        risky.extend(re.findall(r"\b[a-z][a-z0-9_-]+(?:\.[a-z0-9_-]+){1,}\b", sentence))
-        support_lower = support.lower()
-        if any(item.lower().rstrip(".,)") not in support_lower for item in risky):
-            unsupported.append(sentence)
-    return unsupported
+def _resolve_evidence(job: dict, parsed: dict) -> tuple[list[dict], str]:
+    facts: list[dict] = []
+    answer_parts: list[str] = []
+    for group in parsed.get("evidence_groups", []):
+        ids = list(group.get("evidence_ids", []))
+        lines = [job["evidence_map"][evidence_id] for evidence_id in ids]
+        evidence = "\\n".join(lines)
+        display = " ".join(_clean_display_line(line) for line in lines if _clean_display_line(line))
+        if display and display[-1] not in ".!?":
+            display += "."
+        facts.append({
+            "claim": display,
+            "evidence_ids": ids,
+            "evidence": evidence,
+            "source": job["source_id"],
+            "source_version": job["source_version"],
+        })
+        if display:
+            answer_parts.append(display)
+    return facts, " ".join(answer_parts)
 
 
 def validate_output(job: dict, parsed: dict) -> list[str]:
-    problems = []
+    problems: list[str] = []
     if parsed.get("skip") is True:
         if not isinstance(parsed.get("reason"), str):
             problems.append("skip_missing_reason")
         return problems
-    for key in ("category", "visibility", "scenario", "user", "assistant", "facts", "expected_actions", "tags"):
+
+    for key in ("category", "visibility", "scenario", "user", "evidence_groups", "tags"):
         if key not in parsed:
             problems.append(f"missing:{key}")
+    forbidden_generated = {"assistant", "facts", "expected_actions", "tools", "source", "source_version"}
+    if forbidden_generated.intersection(parsed):
+        problems.append("forbidden_generated_fields")
     if parsed.get("category") not in CATEGORIES:
         problems.append("bad_category")
     if parsed.get("visibility") not in {"public", "private", "staff", "owner"}:
         problems.append("bad_visibility")
-    actions = parsed.get("expected_actions")
-    if not isinstance(actions, list) or any(
-        not isinstance(action, str) or action not in ALLOWED_EXPECTED_ACTIONS
-        for action in (actions if isinstance(actions, list) else [])
-    ):
-        problems.append("bad_expected_actions")
 
-    facts = parsed.get("facts")
-    if not isinstance(facts, list) or not facts:
-        problems.append("facts_empty")
-        facts = []
-    for i, fact in enumerate(facts):
-        if not isinstance(fact, dict):
-            problems.append(f"fact_{i}_not_object")
+    groups = parsed.get("evidence_groups")
+    if not isinstance(groups, list) or not (1 <= len(groups) <= 2):
+        problems.append("bad_evidence_groups")
+        groups = []
+    for i, group in enumerate(groups):
+        if not isinstance(group, dict) or set(group) != {"evidence_ids"}:
+            problems.append(f"group_{i}_shape")
             continue
-        claim = fact.get("claim")
-        if not isinstance(claim, str) or not claim.strip():
-            problems.append(f"fact_{i}_claim_missing")
-        elif len(claim.split()) > 24:
-            problems.append(f"fact_{i}_claim_too_long")
-        evidence_ids = fact.get("evidence_ids")
+        ids = group.get("evidence_ids")
         if (
-            not isinstance(evidence_ids, list)
-            or not (1 <= len(evidence_ids) <= 2)
+            not isinstance(ids, list)
+            or not (1 <= len(ids) <= 2)
             or any(
                 not isinstance(evidence_id, str)
                 or evidence_id not in job.get("evidence_map", {})
-                for evidence_id in (evidence_ids if isinstance(evidence_ids, list) else [])
+                for evidence_id in (ids if isinstance(ids, list) else [])
             )
         ):
-            problems.append(f"fact_{i}_bad_evidence_ids")
-    if isinstance(facts, list) and len(facts) > 2:
-        problems.append("too_many_facts")
+            problems.append(f"group_{i}_bad_evidence_ids")
+            continue
+        selected_lines = [job["evidence_map"][evidence_id] for evidence_id in ids]
+        if sum(len(line) for line in selected_lines) > 500:
+            problems.append(f"group_{i}_evidence_too_long")
+        selected_serialized = "\\n".join(selected_lines)
+        if any(pattern.search(selected_serialized) for pattern in SECRET_PATTERNS):
+            problems.append(f"group_{i}_secret_pattern")
+
     if isinstance(parsed.get("scenario"), str) and len(parsed["scenario"].split()) > 18:
         problems.append("scenario_too_long")
     if isinstance(parsed.get("user"), str) and len(parsed["user"].split()) > 30:
         problems.append("user_too_long")
-    if isinstance(parsed.get("assistant"), str) and len(parsed["assistant"].split()) > 80:
-        problems.append("assistant_too_long")
     tags = parsed.get("tags")
-    if not isinstance(tags, list) or len(tags) > 4 or any(not isinstance(tag, str) for tag in (tags if isinstance(tags, list) else [])):
+    if not isinstance(tags, list) or len(tags) > 4 or any(
+        not isinstance(tag, str) for tag in (tags if isinstance(tags, list) else [])
+    ):
         problems.append("bad_tags")
-    unsupported = unsupported_assistant_sentences(parsed, job)
-    if unsupported:
-        problems.append("assistant_not_fully_fact_grounded")
 
     serialized = json.dumps(parsed, ensure_ascii=False)
     if any(pattern.search(serialized) for pattern in SECRET_PATTERNS):
         problems.append("secret_pattern_in_output")
     if {"reasoning", "chain_of_thought", "analysis", "thoughts"}.intersection(parsed):
         problems.append("chain_of_thought_key")
+
+    if not problems:
+        facts, assistant = _resolve_evidence(job, parsed)
+        if not facts or not assistant:
+            problems.append("resolved_answer_empty")
+        elif len(assistant.split()) > 80 or len(assistant) > 800:
+            problems.append("resolved_answer_too_long")
     return problems
 
 def request_json(endpoint: str, prompt: str, timeout: int, max_tokens: int) -> tuple[str, float]:
@@ -267,16 +238,10 @@ def main() -> int:
                     parsed = json.loads(strip_code_fence(raw))
                     validation = validate_output(job, parsed)
                     if not validation and parsed.get("skip") is not True:
-                        # Provenance is deterministic input metadata; do not waste
-                        # model tokens asking it to repeat source IDs and SHAs.
-                        for fact in parsed.get("facts", []):
-                            evidence_ids = list(fact.get("evidence_ids", []))
-                            fact["evidence"] = "\n".join(
-                                job["evidence_map"][evidence_id]
-                                for evidence_id in evidence_ids
-                            )
-                            fact["source"] = job["source_id"]
-                            fact["source_version"] = job["source_version"]
+                        facts, assistant = _resolve_evidence(job, parsed)
+                        parsed["facts"] = facts
+                        parsed["assistant"] = assistant
+                        parsed["expected_actions"] = []
                     result["parsed"] = parsed
                     result["validation_problems"] = validation
                     if validation:
