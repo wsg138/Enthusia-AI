@@ -1,12 +1,1 @@
-{
-  "name": "@enthusia/openai-gateway",
-  "version": "0.1.0",
-  "private": true,
-  "description": "Strong-model escalation gateway with cost controls (W01 skeleton \u2014 W09)",
-  "type": "module",
-  "license": "UNLICENSED",
-  "main": "./src/index.ts",
-  "exports": {
-    ".": "./src/index.ts"
-  }
-}
+{"dependencies":{"@enthusia/contracts":"^0.1.0"},"description":"Strong-model escalation gateway with cost controls (W13)","exports":{".":"./src/index.ts"},"license":"UNLICENSED","main":"./src/index.ts","name":"@enthusia/openai-gateway","private":true,"scripts":{"test":"vitest run --config ./vitest.config.ts"},"type":"module","version":"0.1.0"}
