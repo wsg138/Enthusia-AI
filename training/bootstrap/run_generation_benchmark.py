@@ -59,6 +59,8 @@ def _clean_display_line(line: str) -> str:
             if len(cells) > 3:
                 rendered += " " + " ".join(cells[3:])
             return rendered.strip()
+        if len(cells) == 2:
+            return f"{cells[0]}: {cells[1]}"
         if cells:
             return "; ".join(cells)
 
@@ -72,6 +74,11 @@ def _clean_display_line(line: str) -> str:
     if command_comment:
         return f"{command_comment.group(1).strip()}: {command_comment.group(2).strip()}"
 
+    text = re.sub(r"^#\s*", "", text)
+    if text.lower().startswith("usage:"):
+        text = "Usage:" + text[6:]
+    if text.lower().startswith("aliases:"):
+        text = "Aliases:" + text[8:]
     return text.strip()
 
 
