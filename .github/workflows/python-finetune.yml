@@ -1,0 +1,45 @@
+name: Python fine-tune pipeline tests
+
+on:
+  pull_request:
+    paths:
+      - "training/finetune/**"
+      - ".github/workflows/python-finetune.yml"
+  push:
+    branches: [main]
+    paths:
+      - "training/finetune/**"
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    name: pytest (W19 fine-tune)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned W16 dataset dependency
+        uses: actions/checkout@v4
+        with:
+          repository: wsg138/Enthusia-AI
+          ref: 2bc856cdf8970102cdf03000cffb93fb82e8428c
+          path: .dependencies/w16
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install canonical dataset and fine-tune packages
+        run: |
+          python -m pip install -e "./.dependencies/w16/training/datasets"
+          python -m pip install -e "./training/finetune[test]"
+
+      - name: Run W16 contract suite
+        run: python -m pytest .dependencies/w16/training/datasets/tests -q
+
+      - name: Run W19 suite
+        run: python -m pytest training/finetune/tests -q

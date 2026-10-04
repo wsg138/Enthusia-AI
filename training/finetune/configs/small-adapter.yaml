@@ -1,0 +1,46 @@
+# Small adapter run — owner's PC (RTX 4060 Ti 8 GB, 64 GB RAM).
+# QLoRA 4-bit on a small instruct model; fits 8 GB VRAM. Local, $0 GPU cost.
+# Per WORKER-EXECUTION-PLAN section 22: small adapter run before any full run.
+name: small-adapter
+description: >
+  Small QLoRA run on the owner's RTX 4060 Ti 8 GB. Proves the training
+  stack end to end (data -> adapter -> eval -> GGUF) with zero spend.
+
+base_model: meta-llama/Llama-3.2-3B-Instruct
+tokenizer: meta-llama/Llama-3.2-3B-Instruct
+quantization: 4bit
+
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj]
+
+training:
+  learning_rate: 0.0002
+  optimizer: paged_adamw_8bit
+  scheduler: cosine
+  warmup_ratio: 0.03
+  batch_size: 2
+  gradient_accumulation: 8
+  max_seq_length: 2048
+  epochs: 1
+  seed: 42
+
+dataset:
+  version: enthusia-ai-dataset-2026.10.03-v1
+  train_path: ""
+  validation_path: ""
+
+budget:
+  price_per_hour_usd: 0.0
+  estimated_hours: 0.0
+  storage_usd: 0.0
+
+output:
+  adapter_dir: runs/small-adapter/adapter
+  gguf_path: runs/small-adapter/enthusia-ai.Q4_K_M.gguf
+  quant: Q4_K_M
+
+eval:
+  w20_checkout: ""
