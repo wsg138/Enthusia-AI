@@ -1,0 +1,54 @@
+# Full run — rented GPU, budget-capped.
+#
+# HARD CAP: USD $25 total (TRAINING-AND-EVALUATION-SPEC section 14).
+# Estimate below: 24 h x $0.90/h + $2.00 storage = $23.60 <= $25.00.
+# The pipeline REFUSES to start if estimate + recorded spend > $25.
+#
+# BEFORE RENTING: fill in the ACTUAL rental price and re-run
+# `finetune check-budget --config configs/full-run.yaml`. If the real
+# price breaks the cap, reduce hours or get explicit owner approval
+# (owner_approved_override + owner_approval_reason) — see budget.py.
+name: full-run
+description: >
+  Full QLoRA fine-tune on a rented high-VRAM GPU. Run only after local
+  pipeline validation (smoke + small-adapter) passes.
+
+base_model: meta-llama/Llama-3.1-8B-Instruct
+tokenizer: meta-llama/Llama-3.1-8B-Instruct
+quantization: 4bit
+
+lora:
+  r: 32
+  alpha: 64
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+
+training:
+  learning_rate: 0.0002
+  optimizer: paged_adamw_8bit
+  scheduler: cosine
+  warmup_ratio: 0.03
+  batch_size: 4
+  gradient_accumulation: 4
+  max_seq_length: 4096
+  epochs: 2
+  seed: 1337
+
+dataset:
+  version: enthusia-ai-dataset-2026.10.03-v1
+  train_path: ""
+  validation_path: ""
+
+budget:
+  # EXAMPLE pricing — replace with the actual rental quote before renting.
+  price_per_hour_usd: 0.90
+  estimated_hours: 24
+  storage_usd: 2.00
+
+output:
+  adapter_dir: runs/full-run/adapter
+  gguf_path: runs/full-run/enthusia-ai.Q4_K_M.gguf
+  quant: Q4_K_M
+
+eval:
+  w20_checkout: ""

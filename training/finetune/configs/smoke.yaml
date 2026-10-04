@@ -1,0 +1,46 @@
+# Smoke config — validates the whole pipeline path locally for $0.
+# Runs a handful of steps on CPU so config bugs surface before any GPU
+# time is spent. Expected cost: $0.00.
+name: smoke
+description: >
+  Pipeline smoke test: tiny step count, CPU-friendly, no GPU. Catches
+  config/assembly/export-planning errors before paid time starts.
+
+base_model: meta-llama/Llama-3.2-1B
+tokenizer: meta-llama/Llama-3.2-1B
+quantization: 4bit
+
+lora:
+  r: 8
+  alpha: 16
+  dropout: 0.05
+  target_modules: [q_proj, v_proj]
+
+training:
+  learning_rate: 0.0002
+  optimizer: adamw
+  scheduler: cosine
+  warmup_ratio: 0.03
+  batch_size: 1
+  gradient_accumulation: 1
+  max_seq_length: 512
+  max_steps: 10
+  seed: 42
+
+dataset:
+  version: enthusia-ai-dataset-2026.10.03-v1
+  train_path: ""
+  validation_path: ""
+
+budget:
+  price_per_hour_usd: 0.0
+  estimated_hours: 0.0
+  storage_usd: 0.0
+
+output:
+  adapter_dir: runs/smoke/adapter
+  gguf_path: runs/smoke/enthusia-ai-smoke.Q4_K_M.gguf
+  quant: Q4_K_M
+
+eval:
+  w20_checkout: ""
