@@ -86,6 +86,7 @@ def request_json(endpoint: str, prompt: str, timeout: int, max_tokens: int) -> t
         "temperature": 0.15,
         "max_tokens": max_tokens,
         "stream": False,
+        "chat_template_kwargs": {"enable_thinking": False},
     }
     req = urllib.request.Request(
         endpoint.rstrip("/") + "/v1/chat/completions",
