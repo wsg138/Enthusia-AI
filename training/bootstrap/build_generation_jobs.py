@@ -19,6 +19,26 @@ DOC_EXTS = {".md", ".txt", ".rst"}
 CONFIG_EXTS = {".yml", ".yaml", ".json", ".toml", ".properties", ".ini", ".cfg", ".xml"}
 SOURCE_EXTS = {".java", ".kt", ".kts", ".ts", ".tsx", ".js", ".mjs", ".cjs", ".py"}
 
+STAFF_SOURCE_ROLES = {
+    "staff_system",
+    "infrastructure",
+    "infrastructure_docs",
+    "network_configuration",
+    "staging_reference",
+    "moderation_system",
+    "ai_system",
+    "infrastructure_test",
+    "support_system",
+}
+
+
+def source_visibility(role: str | None) -> str:
+    # GitHub/source-grounded examples are static documentation/code facts.
+    # They are never PLAYER_SELF/private records. Internal/system sources are
+    # conservatively staff-scoped; player-facing plugin/docs sources are public.
+    return "staff" if role in STAFF_SOURCE_ROLES else "public"
+
+
 def path_score(record: dict) -> int:
     path = record["path"].replace("\\", "/")
     lower = path.lower()
@@ -109,7 +129,6 @@ not contain a useful player-support or staff-assistance fact, output exactly:
 
 Otherwise output exactly one JSON object with these keys:
 - category: one of [{categories}]
-- visibility: "public", "private", or "staff"
 - scenario: at most 18 words describing the support situation
 - user: a natural user/player/staff question, at most 30 words
 - evidence_groups: array containing EXACTLY one object with ONLY:
@@ -123,7 +142,7 @@ SHAs, tool calls, or expected actions.
 Rules:
 1. If the excerpt is mainly repository-development/build/CI detail and does not help player support, staff operations, live troubleshooting, or product behavior, return skip.
 2. The user question must be completely answerable by ONE source line. Select exactly that one line. If no single line is sufficient, return skip.
-3. Use visibility "private" for player-self/account-specific context.
+3. Reuse the selected source line's factual nouns/verbs in the user question. Do not broaden the question beyond what that single line directly answers.
 4. Every evidence_ids value must be an ID that appears in SOURCE_EXCERPT. Never invent an ID.
 5. Select one short source line that completely supports the answer; do not add contextual lines that are merely related.
 6. Never select a line containing an actual password, API key, token, private key, database credential, SFTP credential, or secret value.
@@ -190,6 +209,7 @@ def main() -> int:
                 "source_version": record["commit_sha"],
                 "repository": repo,
                 "role": record.get("role"),
+                "visibility": source_visibility(record.get("role")),
                 "path": record["path"],
                 "chunk_index": index,
                 "source_score": score,
