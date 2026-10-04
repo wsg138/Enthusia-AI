@@ -102,9 +102,8 @@ Otherwise output exactly one JSON object with these keys:
 - facts: array of 1-2 objects, each with ONLY:
     claim: concise supported factual claim, at most 24 words
     evidence: VERBATIM contiguous substring copied from ONE line of SOURCE_EXCERPT, at most 200 characters
-- expected_actions: array of at most 3 high-level actions such as
-  "verify:live", "tool:player_identity", "tool:permission_lookup",
-  "escalate:human-staff", or "escalate:openai"
+- expected_actions: array containing ONLY zero or more of:
+  "verify:live", "escalate:human-staff", "escalate:openai"
 - tags: at most 4 short useful labels
 
 Rules:
@@ -118,7 +117,9 @@ Rules:
 7. For mutable facts (rank, permissions, balance, status, ticket state, punishments), prefer
    an answer that says to verify live rather than memorizing the supplied value.
 8. Do not include chain-of-thought or hidden reasoning.
-9. Do not invent commands, permissions, prices, policies, or server behavior.
+9. Do not invent commands, permissions, prices, policies, server behavior, or tool names.
+10. expected_actions should usually be empty for static documented facts. Use "verify:live" only when the answer depends on mutable/deployment/runtime state. Never add an action merely because it is available.
+11. Use category "privacy" for secrets, credentials, private data, or unauthorized disclosure. Use category "rules" for actual player/server rules.
 SOURCE_PROVENANCE IS ATTACHED BY THE HARNESS; DO NOT COPY SOURCE IDs OR SHAs INTO YOUR JSON.
 REPOSITORY_ROLE: {job["role"]}
 PATH: {job["path"]}
