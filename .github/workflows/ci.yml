@@ -44,6 +44,26 @@ jobs:
       - name: Validate configuration
         run: npm run config:validate
 
+  python-dataset-tests:
+    name: Python dataset tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: training/datasets/pyproject.toml
+
+      - name: Install dataset package
+        run: python -m pip install -e "./training/datasets[test]"
+
+      - name: Run dataset pytest suite
+        run: python -m pytest training/datasets/tests -q
+
   secret-scan:
     name: Secret scan (gitleaks)
     runs-on: ubuntu-latest
