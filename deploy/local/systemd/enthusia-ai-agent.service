@@ -1,0 +1,56 @@
+# Enthusia AI agent service (TEMPLATE — W21 prepare-only).
+#
+# Install (manual, future): copy to /etc/systemd/system/, then
+#   systemctl daemon-reload
+# Resource bounds mirror deploy/RESOURCE-LIMITS.md and deploy/bloom/resource-limits.env.
+# SMP safety: the AI agent is expendable — OOMScoreAdjust keeps it ahead of
+# SMP-critical services in the kernel's kill order (§35.4).
+
+[Unit]
+Description=Enthusia AI agent service
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=enthusiasm
+Group=enthusiasm
+WorkingDirectory=/opt/enthusia-ai/agent
+
+# --- Resource bounds (§63, §35.2) ---
+MemoryMax=8G
+MemoryHigh=6G
+CPUQuota=200%
+TasksMax=256
+
+# --- OOM: AI dies before SMP, moderation, Ticket Bot (§35.4) ---
+OOMScoreAdjust=500
+
+# --- Environment (edit paths/secrets; never commit real secrets, §34.1) ---
+Environment=NODE_ENV=production
+Environment=LOG_LEVEL=info
+Environment=METRICS_PORT=9090
+Environment=HEALTH_PORT=8080
+EnvironmentFile=-/etc/enthusia-ai/agent.env
+
+ExecStart=/usr/bin/node /opt/enthusia-ai/agent/dist/main.js
+
+# --- Health gating: require /health/ready before considering the unit up ---
+ExecStartPost=/bin/bash -c 'for i in $(seq 1 60); do curl -sf http://localhost:8080/health/ready >/dev/null && exit 0; sleep 2; done; exit 1'
+
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30s
+# Crash-loop guard: give up after 5 failures in 10 minutes, alert via logs.
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+# --- Hardening ---
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/enthusia-ai/agent/data /var/log/enthusia-ai
+
+[Install]
+WantedBy=multi-user.target

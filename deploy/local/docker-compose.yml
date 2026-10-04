@@ -1,0 +1,52 @@
+version: "3.9"
+
+# Enthusia AI — local development compose (W21 prepare-only).
+#
+# Provides postgres + qdrant for tests/dev. Local dev must never require
+# production credentials (MASTER-SPECIFICATION.md §76).
+#
+# Usage:
+#   docker compose up -d postgres qdrant
+#   DATABASE_URL=postgres://enthusiasm:enthusiasm-dev@localhost:5432/enthusiasm \
+#     QDRANT_URL=http://localhost:6333 npm test
+#
+# No secrets here — the dev password below is a well-known local placeholder,
+# never used outside this machine.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: enthusiasm-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: enthusiasm
+      POSTGRES_PASSWORD: enthusiasm-dev
+      POSTGRES_DB: enthusiasm
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U enthusiasm"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: enthusiasm-qdrant-dev
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrantdata:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:6333/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
+  qdrantdata:
