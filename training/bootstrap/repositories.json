@@ -19,11 +19,12 @@
       "name": "CustomEnchants",
       "default_branch": "main",
       "role": "minecraft_plugin",
-      "include": true,
-      "use_for_rag": true,
-      "use_for_synthetic_grounding": true,
+      "include": false,
+      "use_for_rag": false,
+      "use_for_synthetic_grounding": false,
       "direct_sft": false,
-      "production_authority": "requires_deployment_verification"
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Legacy CustomEnchantsPlus project not present in current Enthusia production snapshot; repository paths reference another network context."
     },
     {
       "owner": "wsg138",
@@ -219,9 +220,10 @@
       "role": "minecraft_plugin",
       "include": true,
       "use_for_rag": true,
-      "use_for_synthetic_grounding": true,
+      "use_for_synthetic_grounding": false,
       "direct_sft": false,
-      "production_authority": "requires_deployment_verification"
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Enthusia development/staff diagnostics project not present in current production plugin snapshot; retain for development RAG only until deployment is verified."
     },
     {
       "owner": "wsg138",
@@ -230,9 +232,10 @@
       "role": "minecraft_plugin",
       "include": true,
       "use_for_rag": true,
-      "use_for_synthetic_grounding": true,
+      "use_for_synthetic_grounding": false,
       "direct_sft": false,
-      "production_authority": "requires_deployment_verification"
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Private experimental Enthusia project not present in current production plugin snapshot; retain for development RAG only."
     },
     {
       "owner": "wsg138",
@@ -263,9 +266,10 @@
       "role": "minecraft_plugin",
       "include": true,
       "use_for_rag": true,
-      "use_for_synthetic_grounding": true,
+      "use_for_synthetic_grounding": false,
       "direct_sft": false,
-      "production_authority": "requires_deployment_verification"
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Enthusia restart system repository not present in the current captured production plugin snapshot; retain for development RAG until live deployment is verified."
     },
     {
       "owner": "wsg138",
@@ -307,7 +311,7 @@
       "role": "staging_reference",
       "include": true,
       "use_for_rag": true,
-      "use_for_synthetic_grounding": true,
+      "use_for_synthetic_grounding": false,
       "direct_sft": false,
       "production_authority": "non_production_reference"
     },
@@ -338,11 +342,12 @@
       "name": "ClaimVector",
       "default_branch": "main",
       "role": "minecraft_plugin",
-      "include": true,
-      "use_for_rag": true,
-      "use_for_synthetic_grounding": true,
+      "include": false,
+      "use_for_rag": false,
+      "use_for_synthetic_grounding": false,
       "direct_sft": false,
-      "production_authority": "requires_deployment_verification"
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Client mod for Lifesteal.net; unrelated to Enthusia."
     },
     {
       "owner": "wsg138",
@@ -406,7 +411,7 @@
       "role": "infrastructure_test",
       "include": true,
       "use_for_rag": true,
-      "use_for_synthetic_grounding": true,
+      "use_for_synthetic_grounding": false,
       "direct_sft": false,
       "production_authority": "non_production_reference"
     },
@@ -484,6 +489,14 @@
     {
       "name": "WarzoneRotator",
       "reason": "archived"
+    },
+    {
+      "name": "ClaimVector",
+      "reason": "Client mod for Lifesteal.net; unrelated to Enthusia."
+    },
+    {
+      "name": "CustomEnchants",
+      "reason": "Legacy CustomEnchantsPlus project not present in current Enthusia production snapshot; repository paths reference another network context."
     }
   ]
 }
