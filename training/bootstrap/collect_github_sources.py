@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import json
 import os
@@ -76,13 +77,15 @@ def looks_sensitive(text: str) -> bool:
 def ensure_repo(owner: str, name: str, branch: str, root: Path) -> tuple[Path, str]:
     repo_dir = root / name
     if repo_dir.exists():
-        run(["git", "fetch", "--prune", "origin"], cwd=repo_dir)
-    else:
-        if not shutil.which("gh"):
-            raise RuntimeError("gh CLI is required so GitHub authentication stays outside the corpus")
-        run(["gh", "repo", "clone", f"{owner}/{name}", str(repo_dir), "--", "--filter=blob:none"])
-    run(["git", "checkout", branch], cwd=repo_dir)
-    run(["git", "reset", "--hard", f"origin/{branch}"], cwd=repo_dir)
+        shutil.rmtree(repo_dir, ignore_errors=True)
+    if not shutil.which("gh"):
+        raise RuntimeError("gh CLI is required so GitHub authentication stays outside the corpus")
+    # Shallow + blob-filtered keeps temporary repo storage low. The working
+    # tree fetches only blobs actually needed for the current checkout.
+    run([
+        "gh", "repo", "clone", f"{owner}/{name}", str(repo_dir), "--",
+        "--depth", "1", "--single-branch", "--branch", branch, "--filter=blob:none"
+    ])
     sha = run(["git", "rev-parse", "HEAD"], cwd=repo_dir)
     return repo_dir, sha
 
@@ -94,6 +97,11 @@ def main() -> int:
     ap.add_argument("--output", required=True)
     ap.add_argument("--summary", required=True)
     ap.add_argument("--max-bytes", type=int, default=MAX_BYTES_DEFAULT)
+    ap.add_argument(
+        "--keep-repos",
+        action="store_true",
+        help="Keep temporary clones after harvesting. Default deletes each repo immediately.",
+    )
     args = ap.parse_args()
 
     manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
@@ -107,7 +115,14 @@ def main() -> int:
     counts = {"repositories": 0, "accepted_files": 0, "skipped_files": 0, "sensitive_rejected": 0}
     repo_summary = []
 
-    with output.open("w", encoding="utf-8") as out:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    opener = (
+        (lambda: gzip.open(output, "wt", encoding="utf-8"))
+        if output.suffix.lower() == ".gz"
+        else (lambda: output.open("w", encoding="utf-8"))
+    )
+
+    with opener() as out:
         for entry in manifest["repositories"]:
             if not entry.get("include", False):
                 continue
@@ -163,6 +178,8 @@ def main() -> int:
                 "sensitive_rejected": sensitive,
             })
             print(f"{entry['name']}: {accepted} accepted, {skipped} skipped, {sensitive} sensitive-rejected")
+            if not args.keep_repos:
+                shutil.rmtree(repo_dir, ignore_errors=True)
 
     summary = {
         "schema_version": 1,
