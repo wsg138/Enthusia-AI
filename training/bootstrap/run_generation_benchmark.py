@@ -157,7 +157,64 @@ def validate_output(job: dict, parsed: dict) -> list[str]:
             problems.append("resolved_answer_too_long")
     return problems
 
-def request_json(endpoint: str, prompt: str, timeout: int, max_tokens: int) -> tuple[str, float]:
+def _response_schema(job: dict) -> dict:
+    evidence_ids = sorted(job.get("evidence_map", {}).keys())
+    skip_shape = {
+        "type": "object",
+        "properties": {
+            "skip": {"const": True},
+            "reason": {"type": "string"},
+        },
+        "required": ["skip", "reason"],
+        "additionalProperties": False,
+    }
+    example_shape = {
+        "type": "object",
+        "properties": {
+            "category": {"type": "string", "enum": sorted(CATEGORIES)},
+            "visibility": {"type": "string", "enum": ["public", "private", "staff"]},
+            "scenario": {"type": "string"},
+            "user": {"type": "string"},
+            "evidence_groups": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 2,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "evidence_ids": {
+                            "type": "array",
+                            "minItems": 1,
+                            "maxItems": 2,
+                            "items": {"type": "string", "enum": evidence_ids},
+                        }
+                    },
+                    "required": ["evidence_ids"],
+                    "additionalProperties": False,
+                },
+            },
+            "tags": {
+                "type": "array",
+                "maxItems": 4,
+                "items": {"type": "string"},
+            },
+        },
+        "required": [
+            "category", "visibility", "scenario", "user",
+            "evidence_groups", "tags",
+        ],
+        "additionalProperties": False,
+    }
+    return {"oneOf": [skip_shape, example_shape]}
+
+
+def request_json(
+    endpoint: str,
+    prompt: str,
+    job: dict,
+    timeout: int,
+    max_tokens: int,
+) -> tuple[str, float]:
     payload = {
         "model": "local",
         "messages": [
@@ -171,7 +228,10 @@ def request_json(endpoint: str, prompt: str, timeout: int, max_tokens: int) -> t
         "max_tokens": max_tokens,
         "stream": False,
         "chat_template_kwargs": {"enable_thinking": False},
-        "response_format": {"type": "json_object"},
+        "response_format": {
+            "type": "json_object",
+            "schema": _response_schema(job),
+        },
     }
     req = urllib.request.Request(
         endpoint.rstrip("/") + "/v1/chat/completions",
@@ -251,7 +311,13 @@ def main() -> int:
                 "source_version": job["source_version"],
             }
             try:
-                raw, elapsed = request_json(args.endpoint, job["prompt"], args.timeout, args.max_tokens)
+                raw, elapsed = request_json(
+                    args.endpoint,
+                    job["prompt"],
+                    job,
+                    args.timeout,
+                    args.max_tokens,
+                )
                 stats["latency_seconds_total"] += elapsed
                 result["latency_seconds"] = elapsed
                 result["raw_response"] = raw
