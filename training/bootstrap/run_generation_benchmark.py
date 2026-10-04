@@ -39,15 +39,21 @@ def strip_code_fence(text: str) -> str:
 def _clean_display_line(line: str) -> str:
     text = line.strip()
 
-    # Convert Markdown table rows into readable deterministic prose without
-    # inventing facts. Common command tables become:
-    #   /command: description Permission: node.
+    # Convert Markdown table rows to readable prose. Split only unescaped pipes
+    # so cells such as packages\\|letters\\|announcements remain intact.
     if text.startswith("|") and text.endswith("|"):
         cells = [
-            cell.strip().replace("**", "").replace("__", "").replace("`", "")
-            for cell in text.strip("|").split("|")
+            cell.strip()
+            .replace("\\|", "|")
+            .replace("**", "")
+            .replace("__", "")
+            .replace("`", "")
+            for cell in re.split(r"(?<!\\\\)\\|", text.strip("|"))
         ]
-        cells = [cell for cell in cells if cell and not re.fullmatch(r":?-{3,}:?", cell)]
+        cells = [
+            cell for cell in cells
+            if cell and not re.fullmatch(r":?-{3,}:?", cell)
+        ]
         if len(cells) >= 3 and cells[0].startswith("/"):
             rendered = f"{cells[0]}: {cells[1]} Permission: {cells[2]}"
             if len(cells) > 3:
@@ -60,6 +66,12 @@ def _clean_display_line(line: str) -> str:
     text = re.sub(r"^[-*+]\\s+", "", text)
     text = re.sub(r"^\\d+[.)]\\s+", "", text)
     text = text.replace("**", "").replace("__", "").replace("`", "")
+
+    # Common README command examples use "/command  # explanation".
+    command_comment = re.fullmatch(r"(/[^#]+?)\\s+#\\s+(.+)", text)
+    if command_comment:
+        return f"{command_comment.group(1).strip()}: {command_comment.group(2).strip()}"
+
     return text.strip()
 
 
@@ -107,7 +119,7 @@ def validate_output(job: dict, parsed: dict) -> list[str]:
         problems.append("bad_visibility")
 
     groups = parsed.get("evidence_groups")
-    if not isinstance(groups, list) or not (1 <= len(groups) <= 2):
+    if not isinstance(groups, list) or len(groups) != 1:
         problems.append("bad_evidence_groups")
         groups = []
     for i, group in enumerate(groups):
@@ -117,7 +129,7 @@ def validate_output(job: dict, parsed: dict) -> list[str]:
         ids = group.get("evidence_ids")
         if (
             not isinstance(ids, list)
-            or not (1 <= len(ids) <= 2)
+            or len(ids) != 1
             or any(
                 not isinstance(evidence_id, str)
                 or evidence_id not in job.get("evidence_map", {})
@@ -178,14 +190,14 @@ def _response_schema(job: dict) -> dict:
             "evidence_groups": {
                 "type": "array",
                 "minItems": 1,
-                "maxItems": 2,
+                "maxItems": 1,
                 "items": {
                     "type": "object",
                     "properties": {
                         "evidence_ids": {
                             "type": "array",
                             "minItems": 1,
-                            "maxItems": 2,
+                            "maxItems": 1,
                             "items": {"type": "string", "enum": evidence_ids},
                         }
                     },
