@@ -1,0 +1,145 @@
+{
+  "_comment": "TEMPLATE ONLY — W21 prepare-only workstream. No deployment is performed from this repository. Apply this egg by importing it into the Pterodactyl panel manually; resource caps (RAM/CPU) are enforced by the panel server allocation plus deploy/RESOURCE-LIMITS.md, not by this file. Spec: MASTER-SPECIFICATION.md §§35, 63.",
+  "author": "enthusia-ai-w21",
+  "config": {
+    "files": "{}",
+    "logs": "{}",
+    "startup": "{\"done\": \"enthusia.ai: service started\"}",
+    "stop": "^^C"
+  },
+  "description": "Template egg for the Enthusia AI split: agent, Discord bot, local inference (llama.cpp), indexer, and vector store. Each role is one Pterodactyl server on this egg; AI_SERVICE selects the role. PREPARE ONLY — not deployed.",
+  "docker_images": {
+    "Node.js 22 (agent / bot / indexer)": "ghcr.io/pterodactyl/yolks:nodejs_22",
+    "llama.cpp inference (custom build)": "ghcr.io/enthusia/llama-cpp-yolk:template"
+  },
+  "features": [
+    "eula",
+    "pid_limit"
+  ],
+  "file_denylist": [],
+  "name": "Enthusia AI (TEMPLATE)",
+  "scripts": {
+    "install": "#!/bin/ash\n# TEMPLATE install script — intentionally a no-op.\n# The real install pins the service artifact built by CI (see deploy/RUNBOOK.md).\necho 'Enthusia AI egg: nothing to install at template import time.'",
+    "privileged": false
+  },
+  "startup": "bash startup.sh",
+  "variables": [
+    {
+      "default_value": "agent",
+      "description": "Which Enthusia AI role this server runs: agent, discord, inference, indexer. One role per Pterodactyl server (§35.1).",
+      "env_variable": "AI_SERVICE",
+      "name": "AI Service Role",
+      "rules": "required|string|in:agent,discord,inference,indexer",
+      "user_editable": true,
+      "user_viewable": true
+    },
+    {
+      "default_value": "28",
+      "description": "Hard cap for the inference model resident memory, in GB. Initial envelope 24-32 GB per spec §63. Mirrors MODEL_RAM_MAX_GB in resource-limits.env.",
+      "env_variable": "MODEL_RAM_MAX_GB",
+      "name": "Model RAM Cap (GB)",
+      "rules": "required|integer|min:8|max:64",
+      "user_editable": true,
+      "user_viewable": true
+    },
+    {
+      "default_value": "8",
+      "description": "llama.cpp thread count. Explicitly bounded so inference cannot saturate all cores (§35.2).",
+      "env_variable": "INFERENCE_THREADS",
+      "name": "Inference Threads",
+      "rules": "required|integer|min:1|max:64",
+      "user_editable": true,
+      "user_viewable": true
+    },
+    {
+      "default_value": "2",
+      "description": "Indexer worker concurrency. Low-priority background work (§63).",
+      "env_variable": "INDEXER_THREADS",
+      "name": "Indexer Threads",
+      "rules": "required|integer|min:1|max:16",
+      "user_editable": true,
+      "user_viewable": true
+    },
+    {
+      "default_value": "",
+      "description": "Optional taskset CPU list for the inference process, e.g. '8-15'. Empty = no pinning. Documented in deploy/RESOURCE-LIMITS.md.",
+      "env_variable": "CPU_PIN",
+      "name": "CPU Pinning",
+      "rules": "nullable|string",
+      "user_editable": true,
+      "user_viewable": true
+    },
+    {
+      "default_value": "info",
+      "description": "Structured log level (trace|debug|info|warn|error|fatal). See deploy/LOGGING.md.",
+      "env_variable": "LOG_LEVEL",
+      "name": "Log Level",
+      "rules": "required|string|in:trace,debug,info,warn,error,fatal",
+      "user_editable": true,
+      "user_viewable": true
+    },
+    {
+      "default_value": "9090",
+      "description": "Metrics port for Enthusia Node services. Raw llama.cpp exposes /metrics on HEALTH_PORT when --metrics is enabled.",
+      "env_variable": "METRICS_PORT",
+      "name": "Metrics Port",
+      "rules": "required|integer|min:1|max:65535",
+      "user_editable": true,
+      "user_viewable": true
+    },
+    {
+      "default_value": "8080",
+      "description": "HTTP/health port. Raw llama.cpp serves /health, /metrics, and /v1/* on this same port.",
+      "env_variable": "HEALTH_PORT",
+      "name": "Health Port",
+      "rules": "required|integer|min:1|max:65535",
+      "user_editable": true,
+      "user_viewable": true
+    },
+    {
+      "default_value": "127.0.0.1",
+      "description": "llama.cpp bind host. Default loopback prevents accidental public exposure. Set only to a private/internal address when cross-container access is required.",
+      "env_variable": "INFERENCE_BIND_HOST",
+      "name": "Inference Bind Host",
+      "rules": "required|string|max:255",
+      "user_editable": true,
+      "user_viewable": true
+    },
+    {
+      "default_value": "",
+      "description": "Service API key required by the local inference runtime. SECRET — injected in the panel, then passed to llama.cpp through LLAMA_API_KEY (not command-line argv).",
+      "env_variable": "ENTHUSIA_INFERENCE_API_KEY",
+      "name": "Inference API Key",
+      "rules": "required|string|min:16",
+      "user_editable": true,
+      "user_viewable": false
+    },
+    {
+      "default_value": "",
+      "description": "Discord bot token. SECRET — injected in the panel, never committed (§34.1).",
+      "env_variable": "DISCORD_BOT_TOKEN",
+      "name": "Discord Bot Token",
+      "rules": "nullable|string",
+      "user_editable": true,
+      "user_viewable": false
+    },
+    {
+      "default_value": "",
+      "description": "OpenAI API key for strong-model escalation. SECRET — injected in the panel, never committed (§34.1).",
+      "env_variable": "OPENAI_API_KEY",
+      "name": "OpenAI API Key",
+      "rules": "nullable|string",
+      "user_editable": true,
+      "user_viewable": false
+    },
+    {
+      "default_value": "",
+      "description": "Postgres connection string for durable metadata. SECRET — injected in the panel, never committed (§34.1).",
+      "env_variable": "DATABASE_URL",
+      "name": "Database URL",
+      "rules": "nullable|string",
+      "user_editable": true,
+      "user_viewable": false
+    }
+  ]
+}

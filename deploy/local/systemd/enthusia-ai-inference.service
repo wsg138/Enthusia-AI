@@ -1,0 +1,62 @@
+# Enthusia AI local inference service, llama.cpp server (TEMPLATE — W21 prepare-only).
+#
+# Install (manual, future): copy to /etc/systemd/system/, then
+#   systemctl daemon-reload
+# The 24–32 GB model envelope (§63) and explicit thread bounds (§35.2) are
+# enforced here. This unit must start AFTER SMP-critical services (§35.3);
+# large model startup must not coincide with them.
+
+[Unit]
+Description=Enthusia AI local inference (llama.cpp)
+After=network.target
+# Starts after SMP-critical units; adjust to the host's real SMP unit names.
+# After=enthusia-smp.service enthusiasm-ticketbot.service
+
+[Service]
+Type=simple
+User=enthusiasm
+Group=enthusiasm
+WorkingDirectory=/opt/enthusia-ai/inference
+
+# --- Resource bounds: model server capped 24–32 GB (§63) ---
+MemoryMax=32G
+MemoryHigh=30G
+# 8 threads = 800% of one core; inference must not saturate all cores (§35.2).
+CPUQuota=800%
+TasksMax=128
+LimitMEMLOCK=32G
+
+# --- OOM: inference dies first under memory pressure (§35.4) ---
+OOMScoreAdjust=800
+
+# --- llama.cpp server flags (§9.2: configurable threads, bounded memory) ---
+# ENTHUSIA_INFERENCE_API_KEY is required from inference.env; never commit it.
+Environment=INFERENCE_THREADS=8
+Environment=MODEL_PATH=/opt/enthusia-ai/models/model.gguf
+Environment=HEALTH_PORT=8080
+Environment=INFERENCE_BIND_HOST=127.0.0.1
+EnvironmentFile=-/etc/enthusia-ai/inference.env
+
+# Optional CPU pinning: CPUAffinity=8-15 keeps inference off SMP cores (§35.2).
+# CPUAffinity=8-15
+
+ExecStartPre=/bin/bash -c 'test -n "$ENTHUSIA_INFERENCE_API_KEY"'
+ExecStart=/bin/bash -c 'export LLAMA_API_KEY="$ENTHUSIA_INFERENCE_API_KEY"; exec /usr/local/bin/llama-server -m "$MODEL_PATH" -t "$INFERENCE_THREADS" --host "$INFERENCE_BIND_HOST" --port "$HEALTH_PORT" --metrics --mlock'
+
+# --- Health gating: llama.cpp returns HTTP 200 from /health only after the model is ready ---
+ExecStartPost=/bin/bash -c 'for i in $(seq 1 150); do curl -sf http://localhost:8080/health >/dev/null && exit 0; sleep 2; done; exit 1'
+
+Restart=on-failure
+RestartSec=30
+TimeoutStopSec=120s
+StartLimitIntervalSec=1800
+StartLimitBurst=3
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/enthusia-ai/inference /var/log/enthusia-ai
+
+[Install]
+WantedBy=multi-user.target
