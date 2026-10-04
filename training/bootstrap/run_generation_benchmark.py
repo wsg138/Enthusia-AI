@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import collections
 import gzip
 import json
 import re
@@ -123,15 +124,29 @@ def main() -> int:
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     existing = load_existing(output)
-    selected = []
+    buckets: dict[str, list[dict]] = collections.defaultdict(list)
     with gzip.open(args.jobs, "rt", encoding="utf-8") as fh:
         for line in fh:
             job = json.loads(line)
             if job["job_id"] in existing:
                 continue
-            selected.append(job)
-            if len(selected) >= args.limit:
-                break
+            buckets[job["repository"]].append(job)
+
+    selected = []
+    repository_order = sorted(buckets)
+    round_index = 0
+    while len(selected) < args.limit:
+        added = False
+        for repository in repository_order:
+            jobs = buckets[repository]
+            if round_index < len(jobs):
+                selected.append(jobs[round_index])
+                added = True
+                if len(selected) >= args.limit:
+                    break
+        if not added:
+            break
+        round_index += 1
 
     stats = {
         "attempted": 0, "valid": 0, "skipped": 0, "invalid": 0, "request_errors": 0,
