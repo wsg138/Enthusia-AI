@@ -1,12 +1,1 @@
-{
-  "name": "@enthusia/integration-github",
-  "version": "0.1.0",
-  "private": true,
-  "description": "GitHub source integration (W01 skeleton \u2014 W04)",
-  "type": "module",
-  "license": "UNLICENSED",
-  "main": "./src/index.ts",
-  "exports": {
-    ".": "./src/index.ts"
-  }
-}
+{"dependencies":{"@enthusia/contracts":"^0.1.0","zod":"^4.0.0"},"description":"GitHub repository indexer: approved-repo registry, Git Data API ingestion, SHA-tracked incremental indexing, parsing, symbol extraction, and entity relationships (W08)","exports":{".":"./src/index.ts"},"license":"UNLICENSED","main":"./src/index.ts","name":"@enthusia/integration-github","private":true,"type":"module","version":"0.1.0"}
