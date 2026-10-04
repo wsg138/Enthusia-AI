@@ -38,6 +38,24 @@ def strip_code_fence(text: str) -> str:
 
 def _clean_display_line(line: str) -> str:
     text = line.strip()
+
+    # Convert Markdown table rows into readable deterministic prose without
+    # inventing facts. Common command tables become:
+    #   /command: description Permission: node.
+    if text.startswith("|") and text.endswith("|"):
+        cells = [
+            cell.strip().replace("**", "").replace("__", "").replace("`", "")
+            for cell in text.strip("|").split("|")
+        ]
+        cells = [cell for cell in cells if cell and not re.fullmatch(r":?-{3,}:?", cell)]
+        if len(cells) >= 3 and cells[0].startswith("/"):
+            rendered = f"{cells[0]}: {cells[1]} Permission: {cells[2]}"
+            if len(cells) > 3:
+                rendered += " " + " ".join(cells[3:])
+            return rendered.strip()
+        if cells:
+            return "; ".join(cells)
+
     text = re.sub(r"^#{1,6}\\s+", "", text)
     text = re.sub(r"^[-*+]\\s+", "", text)
     text = re.sub(r"^\\d+[.)]\\s+", "", text)
@@ -48,22 +66,25 @@ def _clean_display_line(line: str) -> str:
 def _resolve_evidence(job: dict, parsed: dict) -> tuple[list[dict], str]:
     facts: list[dict] = []
     answer_parts: list[str] = []
+    seen_ids: set[str] = set()
     for group in parsed.get("evidence_groups", []):
-        ids = list(group.get("evidence_ids", []))
-        lines = [job["evidence_map"][evidence_id] for evidence_id in ids]
-        evidence = "\\n".join(lines)
-        display = " ".join(_clean_display_line(line) for line in lines if _clean_display_line(line))
-        if display and display[-1] not in ".!?":
-            display += "."
-        facts.append({
-            "claim": display,
-            "evidence_ids": ids,
-            "evidence": evidence,
-            "source": job["source_id"],
-            "source_version": job["source_version"],
-        })
-        if display:
-            answer_parts.append(display)
+        for evidence_id in group.get("evidence_ids", []):
+            if evidence_id in seen_ids:
+                continue
+            seen_ids.add(evidence_id)
+            evidence = job["evidence_map"][evidence_id]
+            display = _clean_display_line(evidence)
+            if display and display[-1] not in ".!?":
+                display += "."
+            facts.append({
+                "claim": display,
+                "evidence_ids": [evidence_id],
+                "evidence": evidence,
+                "source": job["source_id"],
+                "source_version": job["source_version"],
+            })
+            if display:
+                answer_parts.append(display)
     return facts, " ".join(answer_parts)
 
 
