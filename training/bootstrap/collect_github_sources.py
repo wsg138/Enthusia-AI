@@ -21,7 +21,7 @@ ALLOWED_FILENAMES = {
 }
 DENY_PARTS = {
     ".git", ".idea", ".vscode", "node_modules", "build", "target", "dist", "out",
-    ".gradle", ".cache", "coverage", "logs", "log", "data", "backups", "backup",
+    ".gradle", ".cache", "coverage", "logs", "backups", "backup",
     ".ssh", "secrets", "credentials", "vendor"
 }
 DENY_FILENAMES = {
@@ -150,45 +150,53 @@ def main() -> int:
                 continue
             accepted = skipped = sensitive = 0
             skip_reasons: dict[str, int] = {}
-            for path in sorted(repo_dir.rglob("*")):
-                if not path.is_file():
-                    continue
-                rel = path.relative_to(repo_dir)
-                ok, reason = allowed(path, rel, args.max_bytes)
-                if not ok:
-                    skipped += 1
-                    skip_reasons[reason] = skip_reasons.get(reason, 0) + 1
-                    continue
-                try:
-                    raw = path.read_bytes()
-                    text = raw.decode("utf-8")
-                except (OSError, UnicodeDecodeError):
-                    skipped += 1
-                    skip_reasons["read_or_decode_failed"] = (
-                        skip_reasons.get("read_or_decode_failed", 0) + 1
-                    )
-                    continue
-                if looks_sensitive(text):
-                    sensitive += 1
-                    continue
-                record = {
-                    "schema_version": 1,
-                    "kind": "authoritative_source_material",
-                    "owner": entry["owner"],
-                    "repository": entry["name"],
-                    "role": entry["role"],
-                    "default_branch": entry["default_branch"],
-                    "commit_sha": sha,
-                    "path": rel.as_posix(),
-                    "content_sha256": hashlib.sha256(raw).hexdigest(),
-                    "production_authority": entry["production_authority"],
-                    "use_for_rag": entry["use_for_rag"],
-                    "use_for_synthetic_grounding": entry["use_for_synthetic_grounding"],
-                    "direct_sft": entry["direct_sft"],
-                    "content": text,
-                }
-                out.write(json.dumps(record, ensure_ascii=False) + "\n")
-                accepted += 1
+            for root, dirnames, filenames in os.walk(repo_dir, topdown=True):
+                # Prune generated/secret trees before descending into them.
+                dirnames[:] = sorted(
+                    dirname
+                    for dirname in dirnames
+                    if dirname.lower() not in DENY_PARTS
+                    and not dirname.lower().startswith(".env")
+                )
+                root_path = Path(root)
+                for filename in sorted(filenames):
+                    path = root_path / filename
+                    rel = path.relative_to(repo_dir)
+                    ok, reason = allowed(path, rel, args.max_bytes)
+                    if not ok:
+                        skipped += 1
+                        skip_reasons[reason] = skip_reasons.get(reason, 0) + 1
+                        continue
+                    try:
+                        raw = path.read_bytes()
+                        text = raw.decode("utf-8")
+                    except (OSError, UnicodeDecodeError):
+                        skipped += 1
+                        skip_reasons["read_or_decode_failed"] = (
+                            skip_reasons.get("read_or_decode_failed", 0) + 1
+                        )
+                        continue
+                    if looks_sensitive(text):
+                        sensitive += 1
+                        continue
+                    record = {
+                        "schema_version": 1,
+                        "kind": "authoritative_source_material",
+                        "owner": entry["owner"],
+                        "repository": entry["name"],
+                        "role": entry["role"],
+                        "default_branch": entry["default_branch"],
+                        "commit_sha": sha,
+                        "path": rel.as_posix(),
+                        "content_sha256": hashlib.sha256(raw).hexdigest(),
+                        "production_authority": entry["production_authority"],
+                        "use_for_rag": entry["use_for_rag"],
+                        "use_for_synthetic_grounding": entry["use_for_synthetic_grounding"],
+                        "direct_sft": entry["direct_sft"],
+                        "content": text,
+                    }
+                    out.write(json.dumps(record, ensure_ascii=False) + "\n")
+                    accepted += 1
 
             counts["repositories"] += 1
             counts["accepted_files"] += accepted
