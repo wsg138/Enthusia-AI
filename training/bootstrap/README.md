@@ -7,7 +7,7 @@ Its job is to prepare **source material and hardware/model benchmarking**, not t
 ## What can run immediately
 
 1. `pc_preflight.py` — records the local machine's GPU/RAM/disk/software capabilities.
-2. `collect_github_sources.py` — clones/fetches approved Enthusia repositories and emits a versioned source-material JSONL corpus.
+2. `collect_github_sources.py` — shallow-clones one approved repository at a time, streams it into a compressed versioned source-material corpus, and deletes the temporary clone before continuing.
 3. Later, W17 can consume the collected source material to generate source-grounded synthetic examples.
 4. W16 remains the canonical normalized training-dataset pipeline.
 
@@ -17,7 +17,7 @@ On the owner's Windows PC, from this repository:
 
 ```powershell
 python training/bootstrap/pc_preflight.py --output training/bootstrap/artifacts/pc-preflight.json
-python training/bootstrap/collect_github_sources.py --manifest training/bootstrap/repositories.json --workspace D:\Enthusia-AI-SourceCache --output training/bootstrap/artifacts/github-source-corpus.jsonl --summary training/bootstrap/artifacts/github-source-summary.json
+python training/bootstrap/collect_github_sources.py --manifest training/bootstrap/repositories.json --workspace D:\Enthusia-AI-SourceCache --output training/bootstrap/artifacts/github-source-corpus.jsonl.gz --summary training/bootstrap/artifacts/github-source-summary.json
 ```
 
 The collector uses the local `gh` CLI for cloning so authentication remains outside the corpus and outside model-visible data.
@@ -41,3 +41,15 @@ See `model-candidates.json`. The current primary benchmark pair is:
 - Qwen3-30B-A3B
 
 Do not spend rented-GPU budget until the local preflight and baseline benchmark are recorded.
+
+## Low-storage behavior
+
+The default collector is designed for the owner's limited local free space:
+
+- only one repository is cloned at a time;
+- clones are shallow and blob-filtered;
+- each clone is deleted immediately after harvesting;
+- the source corpus is gzip-compressed while it is written;
+- build outputs, binaries, logs, databases, backups, and large files are excluded.
+
+Use `--keep-repos` only when there is intentionally enough disk space.
