@@ -101,11 +101,10 @@ def numbered_evidence(excerpt: str) -> tuple[str, dict[str, str]]:
 
 def build_prompt(job: dict) -> str:
     categories = ", ".join(CATEGORIES)
-    return f"""You are generating ONE grounded Enthusia AI training example.
+    return f"""You are selecting grounded source evidence for ONE Enthusia AI training example.
 
-Use ONLY the supplied source excerpt. Do not use outside knowledge. Do not infer mutable
-server facts that are not directly supported. If this excerpt does not contain a useful
-player-support or staff-assistance fact, output exactly:
+Use ONLY the supplied source excerpt. Do not use outside knowledge. If this excerpt does
+not contain a useful player-support or staff-assistance fact, output exactly:
 {{"skip":true,"reason":"not useful for support training"}}
 
 Otherwise output exactly one JSON object with these keys:
@@ -113,28 +112,26 @@ Otherwise output exactly one JSON object with these keys:
 - visibility: "public", "private", or "staff"
 - scenario: at most 18 words describing the support situation
 - user: a natural user/player/staff question, at most 30 words
-- assistant: the ideal concise answer, at most 80 words
-- facts: array of 1-2 objects, each with ONLY:
-    claim: concise supported factual claim, at most 24 words
+- evidence_groups: array of 1-2 objects, each with ONLY:
     evidence_ids: array of 1-2 IDs such as ["L012"] or ["L012","L013"]
-- expected_actions: array containing ONLY zero or more of:
-  "verify:live", "escalate:human-staff", "escalate:openai"
 - tags: at most 4 short useful labels
 
+The harness will construct the factual assistant answer directly from the selected source
+lines and will attach provenance. DO NOT write an assistant answer, claims, source IDs,
+SHAs, tool calls, or expected actions.
+
 Rules:
-1. If the excerpt is mainly repository-development/build/CI detail and does not help player support, staff operations, live troubleshooting, or tool selection, return skip.
-2. Every factual sentence in assistant must be supported by at least one fact/evidence item.
+1. If the excerpt is mainly repository-development/build/CI detail and does not help player support, staff operations, live troubleshooting, or product behavior, return skip.
+2. Select only source lines that directly answer the user question.
 3. Use visibility "private" for player-self/account-specific context.
-4. Every evidence_ids value must be an ID that appears in SOURCE_EXCERPT. Never invent an ID. Use the smallest 1-2 source lines that directly support the claim.
-5. Never output passwords, API keys, tokens, private keys, database credentials, SFTP
-   credentials, or secret-looking values even if source text contains them.
-6. Do not teach Git main == production. If deployment state matters, require verification.
-7. For mutable facts (rank, permissions, balance, status, ticket state, punishments), prefer
-   an answer that says to verify live rather than memorizing the supplied value.
+4. Every evidence_ids value must be an ID that appears in SOURCE_EXCERPT. Never invent an ID.
+5. Prefer the smallest 1-2 short source lines that completely support the answer.
+6. Never select a line containing an actual password, API key, token, private key, database credential, SFTP credential, or secret value.
+7. Do not teach Git main == production. If an excerpt only shows source/config and deployment state matters, ask a question whose answer does not claim it is deployed.
 8. Do not include chain-of-thought or hidden reasoning.
 9. Do not invent commands, permissions, prices, policies, server behavior, or tool names.
-10. expected_actions should usually be empty for static documented facts. Use "verify:live" only when the answer depends on mutable/deployment/runtime state. Never add an action merely because it is available.
-11. Use category "privacy" for secrets, credentials, private data, or unauthorized disclosure. Use category "rules" for actual player/server rules.
+10. Use category "privacy" for secrets, credentials, private data, or unauthorized disclosure. Use category "rules" for actual player/server rules.
+
 SOURCE_PROVENANCE IS ATTACHED BY THE HARNESS; DO NOT COPY SOURCE IDs OR SHAs INTO YOUR JSON.
 REPOSITORY_ROLE: {job["role"]}
 PATH: {job["path"]}
