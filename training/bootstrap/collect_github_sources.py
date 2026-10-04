@@ -7,7 +7,9 @@ import hashlib
 import json
 import os
 import shutil
+import stat
 import subprocess
+import tempfile
 from pathlib import Path, PurePosixPath
 
 TEXT_EXTENSIONS = {
