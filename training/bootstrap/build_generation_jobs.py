@@ -164,6 +164,8 @@ def main() -> int:
             continue
         # At most two chunks from any one file in the initial seed batch.
         for index, excerpt in enumerate(parts[:2]):
+            if repo_counts[repo] >= args.per_repo_cap:
+                break
             digest = hashlib.sha256(
                 f'{repo}\n{record["commit_sha"]}\n{record["path"]}\n{index}'.encode("utf-8")
             ).hexdigest()[:16]
