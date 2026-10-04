@@ -44,6 +44,24 @@ jobs:
       - name: Validate configuration
         run: npm run config:validate
 
+  minecraft-java:
+    name: Minecraft /ai · Java 25 · Maven verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Compile and test Minecraft plugin
+        run: mvn -B -ntp -f minecraft/ai-command/pom.xml verify
+
+
   python-dataset-tests:
     name: Python dataset tests
     runs-on: ubuntu-latest

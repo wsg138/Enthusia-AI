@@ -1,0 +1,24 @@
+name: EnthusiaAI
+version: 1.0.0-SNAPSHOT
+main: com.enthusia.ai.EnthusiaAiPlugin
+api-version: "26.2"
+author: Enthusia
+description: In-game /ai command backed by the Enthusia AI Gateway. Thin client — no local reasoning.
+website: https://github.com/wsg138/Enthusia-AI
+
+commands:
+  ai:
+    description: Ask the Enthusia AI a question.
+    usage: /ai <question>
+    permission: enthusia.ai.use
+
+permissions:
+  enthusia.ai.use:
+    description: Ask the AI questions in-game.
+    default: true
+  enthusia.ai.staff:
+    description: Staff AI tools (staff queries, gateway health).
+    default: op
+  enthusia.ai.admin:
+    description: AI administration (config reload, rate-limit reset).
+    default: op
