@@ -57,10 +57,9 @@ def validate_output(job: dict, parsed: dict) -> list[str]:
         if not isinstance(fact, dict):
             problems.append(f"fact_{i}_not_object")
             continue
-        if fact.get("source") != job["source_id"]:
-            problems.append(f"fact_{i}_source_mismatch")
-        if fact.get("source_version") != job["source_version"]:
-            problems.append(f"fact_{i}_version_mismatch")
+        claim = fact.get("claim")
+        if not isinstance(claim, str) or not claim.strip():
+            problems.append(f"fact_{i}_claim_missing")
         evidence = fact.get("evidence")
         if not isinstance(evidence, str) or not evidence.strip():
             problems.append(f"fact_{i}_evidence_missing")
@@ -87,6 +86,7 @@ def request_json(endpoint: str, prompt: str, timeout: int, max_tokens: int) -> t
         "max_tokens": max_tokens,
         "stream": False,
         "chat_template_kwargs": {"enable_thinking": False},
+        "response_format": {"type": "json_object"},
     }
     req = urllib.request.Request(
         endpoint.rstrip("/") + "/v1/chat/completions",
@@ -119,7 +119,7 @@ def main() -> int:
     ap.add_argument("--endpoint", default="http://127.0.0.1:8091")
     ap.add_argument("--limit", type=int, default=30)
     ap.add_argument("--timeout", type=int, default=300)
-    ap.add_argument("--max-tokens", type=int, default=900)
+    ap.add_argument("--max-tokens", type=int, default=450)
     args = ap.parse_args()
 
     output = Path(args.output)
@@ -172,8 +172,14 @@ def main() -> int:
                 result["raw_response"] = raw
                 try:
                     parsed = json.loads(strip_code_fence(raw))
-                    result["parsed"] = parsed
                     validation = validate_output(job, parsed)
+                    if not validation and parsed.get("skip") is not True:
+                        # Provenance is deterministic input metadata; do not waste
+                        # model tokens asking it to repeat source IDs and SHAs.
+                        for fact in parsed.get("facts", []):
+                            fact["source"] = job["source_id"]
+                            fact["source_version"] = job["source_version"]
+                    result["parsed"] = parsed
                     result["validation_problems"] = validation
                     if validation:
                         stats["invalid"] += 1
