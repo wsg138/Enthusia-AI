@@ -84,6 +84,21 @@ def chunks(text: str, max_chars: int) -> list[str]:
         out.append("\n\n".join(current))
     return out
 
+def numbered_evidence(excerpt: str) -> tuple[str, dict[str, str]]:
+    evidence_map: dict[str, str] = {}
+    numbered: list[str] = []
+    n = 1
+    for raw_line in excerpt.splitlines():
+        line = raw_line.rstrip("\r")
+        if not line.strip():
+            continue
+        evidence_id = f"L{n:03d}"
+        evidence_map[evidence_id] = line
+        numbered.append(f"[{evidence_id}] {line}")
+        n += 1
+    return "\n".join(numbered), evidence_map
+
+
 def build_prompt(job: dict) -> str:
     categories = ", ".join(CATEGORIES)
     return f"""You are generating ONE grounded Enthusia AI training example.
@@ -101,7 +116,7 @@ Otherwise output exactly one JSON object with these keys:
 - assistant: the ideal concise answer, at most 80 words
 - facts: array of 1-2 objects, each with ONLY:
     claim: concise supported factual claim, at most 24 words
-    evidence: VERBATIM contiguous substring copied from ONE line of SOURCE_EXCERPT, at most 200 characters
+    evidence_ids: array of 1-2 IDs such as ["L012"] or ["L012","L013"]
 - expected_actions: array containing ONLY zero or more of:
   "verify:live", "escalate:human-staff", "escalate:openai"
 - tags: at most 4 short useful labels
@@ -110,7 +125,7 @@ Rules:
 1. If the excerpt is mainly repository-development/build/CI detail and does not help player support, staff operations, live troubleshooting, or tool selection, return skip.
 2. Every factual sentence in assistant must be supported by at least one fact/evidence item.
 3. Use visibility "private" for player-self/account-specific context.
-4. evidence must occur verbatim in SOURCE_EXCERPT as one contiguous substring. Preserve punctuation and whitespace exactly; never join separate source lines into one evidence value. If two lines are needed, use two facts.
+4. Every evidence_ids value must be an ID that appears in SOURCE_EXCERPT. Never invent an ID. Use the smallest 1-2 source lines that directly support the claim.
 5. Never output passwords, API keys, tokens, private keys, database credentials, SFTP
    credentials, or secret-looking values even if source text contains them.
 6. Do not teach Git main == production. If deployment state matters, require verification.
@@ -124,9 +139,9 @@ SOURCE_PROVENANCE IS ATTACHED BY THE HARNESS; DO NOT COPY SOURCE IDs OR SHAs INT
 REPOSITORY_ROLE: {job["role"]}
 PATH: {job["path"]}
 
-SOURCE_EXCERPT:
+SOURCE_EXCERPT (each usable source line has an evidence ID):
 <<<
-{job["excerpt"]}
+{job["numbered_excerpt"]}
 >>>
 """
 
@@ -169,6 +184,9 @@ def main() -> int:
                 f'{repo}\n{record["commit_sha"]}\n{record["path"]}\n{index}'.encode("utf-8")
             ).hexdigest()[:16]
             source_id = f'github:wsg138/{repo}@{record["commit_sha"]}:{record["path"]}'
+            numbered_excerpt, evidence_map = numbered_evidence(excerpt)
+            if not evidence_map:
+                continue
             job = {
                 "job_id": f"ground-{digest}",
                 "source_id": source_id,
@@ -179,6 +197,8 @@ def main() -> int:
                 "chunk_index": index,
                 "source_score": score,
                 "excerpt": excerpt,
+                "numbered_excerpt": numbered_excerpt,
+                "evidence_map": evidence_map,
             }
             job["prompt"] = build_prompt(job)
             jobs.append(job)
