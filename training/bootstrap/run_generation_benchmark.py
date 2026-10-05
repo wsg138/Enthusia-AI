@@ -67,7 +67,7 @@ def _clean_display_line(line: str) -> str:
             rest = list(cells[1:])
             permission = None
             for index, cell in enumerate(rest):
-                if re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+)+", cell):
+                if re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+", cell):
                     permission = rest.pop(index)
                     break
 
