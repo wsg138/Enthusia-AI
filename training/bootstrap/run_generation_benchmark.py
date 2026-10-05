@@ -40,15 +40,15 @@ def _split_markdown_table_row(text: str) -> list[str]:
     inner = text.strip().strip("|")
     # Split only on unescaped table separators. A literal escaped pipe inside
     # command syntax (for example packages\\|letters) remains part of the cell.
-    cells = re.split(r"(?<!\\\\)\\|", inner)
+    cells = re.split(r"(?<!\\)\|", inner)
     cleaned: list[str] = []
     for cell in cells:
         value = (
             cell.strip()
-            .replace("\\\\|", "|")
+            .replace("\\|", "|")
             .replace("**", "")
             .replace("__", "")
-            .replace("\`", "")
+            .replace("`", "")
         )
         if value and not re.fullmatch(r":?-{3,}:?", value):
             cleaned.append(value)
@@ -72,13 +72,13 @@ def _clean_display_line(line: str) -> str:
         if cells:
             return "; ".join(cells)
 
-    text = re.sub(r"^#{1,6}\\s+", "", text)
-    text = re.sub(r"^[-*+]\\s+", "", text)
-    text = re.sub(r"^\\d+[.)]\\s+", "", text)
+    text = re.sub(r"^#{1,6}\s+", "", text)
+    text = re.sub(r"^[-*+]\s+", "", text)
+    text = re.sub(r"^\d+[.)]\s+", "", text)
     text = text.replace("**", "").replace("__", "").replace("\`", "")
 
     # Common README examples use "/command  # explanation".
-    command_comment = re.fullmatch(r"(/[^#]+?)\\s+#\\s+(.+)", text)
+    command_comment = re.fullmatch(r"(/[^#]+?)\s+#\s+(.+)", text)
     if command_comment:
         return f"{command_comment.group(1).strip()}: {command_comment.group(2).strip()}"
 
