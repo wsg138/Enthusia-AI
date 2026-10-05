@@ -5,7 +5,8 @@ import argparse
 import json
 from pathlib import Path
 
-GENERATOR = "qwen3.5-35b-a3b-q4_k_m-grounded-v1"
+GENERATOR = "qwen3.5-35b-a3b-q4_k_m-retrieval-grounded-v2"
+KNOWLEDGE_TOOL = "knowledge.search"
 
 def convert(result: dict) -> dict | None:
     if result.get("request_error"):
@@ -16,19 +17,6 @@ def convert(result: dict) -> dict | None:
     if not isinstance(parsed, dict) or parsed.get("skip") is True:
         return None
 
-    expected_actions = parsed.get("expected_actions", [])
-    tools = [
-        action.removeprefix("tool:")
-        for action in expected_actions
-        if isinstance(action, str) and action.startswith("tool:")
-    ]
-    tags = list(dict.fromkeys([
-        parsed.get("category", "unknown"),
-        "grounded",
-        "github-source",
-        *[tag for tag in parsed.get("tags", []) if isinstance(tag, str)],
-    ]))
-
     facts = []
     for fact in parsed.get("facts", []):
         facts.append({
@@ -36,7 +24,41 @@ def convert(result: dict) -> dict | None:
             "source": fact["source"],
             "source_version": fact["source_version"],
             "evidence": fact.get("evidence", ""),
+            **(
+                {"line_number": fact["line_number"]}
+                if fact.get("line_number") is not None
+                else {}
+            ),
         })
+
+    if not facts:
+        return None
+
+    expected_actions = [f"tool:{KNOWLEDGE_TOOL}"]
+    tools = [KNOWLEDGE_TOOL]
+    tags = list(dict.fromkeys([
+        parsed.get("category", "unknown"),
+        "grounded",
+        "retrieval-grounded",
+        "github-source",
+        *[tag for tag in parsed.get("tags", []) if isinstance(tag, str)],
+    ]))
+
+    source_result = {
+        "source": result.get("source_id"),
+        "source_version": result.get("source_version"),
+        "repository": result.get("repository"),
+        "path": result.get("path"),
+        "line_number": result.get("line_number"),
+        "evidence": result.get("target_line"),
+    }
+    tool_message = {
+        "role": "tool",
+        "content": json.dumps({
+            "tool": KNOWLEDGE_TOOL,
+            "result": source_result,
+        }, ensure_ascii=False, sort_keys=True),
+    }
 
     job_id = result["job_id"]
     return {
@@ -46,6 +68,11 @@ def convert(result: dict) -> dict | None:
         "scenario": parsed["scenario"],
         "messages": [
             {"role": "user", "content": parsed["user"]},
+            {
+                "role": "assistant",
+                "content": "I'll verify that against the current indexed source.",
+            },
+            tool_message,
             {"role": "assistant", "content": parsed["assistant"]},
         ],
         "tools": tools,
@@ -105,9 +132,11 @@ def main() -> int:
         "invalid_or_request_error": invalid,
         "status": "candidate_records_only",
         "note": (
-            "These records passed deterministic JSON/evidence validation but are "
-            "not a released training dataset until W16 normalization, secret scan, "
-            "dedupe, split isolation, and quality review accept them."
+            "These retrieval-grounded trace candidates passed deterministic "
+            "JSON/evidence validation but are not a released training dataset until "
+            "W16 normalization, secret scan, dedupe, split isolation, and quality "
+            "review accept them. Mutable facts remain in tool evidence rather than "
+            "unconditioned QA."
         ),
     }
     Path(args.manifest).write_text(json.dumps(manifest, indent=2), encoding="utf-8")
