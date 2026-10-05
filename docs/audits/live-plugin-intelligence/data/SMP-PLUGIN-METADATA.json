@@ -20,6 +20,7 @@
         "PlaceHolderAPI"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "automaticbroadcast",
@@ -82,6 +83,7 @@
         "PlotSquared"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [
         {
@@ -207,6 +209,7 @@
         "Floodgate"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "wcgreload",
@@ -242,6 +245,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "blueslimecore",
@@ -416,6 +420,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "book",
@@ -445,6 +450,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "emoji",
@@ -512,6 +518,7 @@
         "WorldBorder"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "chunky",
@@ -703,6 +710,7 @@
         "WorldGuard"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "combatlogx",
@@ -829,6 +837,7 @@
         "ProtocolLib"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "commandwhitelist",
@@ -876,6 +885,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "csf",
@@ -915,6 +925,7 @@
         "WorldEdit"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "co",
@@ -1108,6 +1119,7 @@
         "FancyNpcs",
         "FancyHolograms"
       ],
+      "provides": [],
       "commands": [
         {
           "name": "location",
@@ -1197,6 +1209,7 @@
         "FancyNpcs",
         "FancyHolograms"
       ],
+      "provides": [],
       "commands": [
         {
           "name": "crownstoredata",
@@ -1241,6 +1254,7 @@
         "MMOItems"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "deluxemenus",
@@ -1319,6 +1333,7 @@
         "floodgate"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "diary",
@@ -1380,6 +1395,7 @@
       "loadbefore": [
         "StaffPlus"
       ],
+      "provides": [],
       "commands": [
         {
           "name": "discord",
@@ -1523,6 +1539,7 @@
         "InteractiveChatDiscordSrvAddon"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [],
       "paperDependencies": {},
@@ -1548,6 +1565,7 @@
         "FastAsyncWorldEdit",
         "FAWE"
       ],
+      "provides": [],
       "commands": [
         {
           "name": "setbiome",
@@ -1657,6 +1675,7 @@
         "Plan"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "rep",
@@ -1729,6 +1748,7 @@
         "Plan"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "balance",
@@ -1814,6 +1834,7 @@
         "RoseChat"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "display",
@@ -1864,6 +1885,7 @@
       ],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "EnthusiaDonorNPCs",
@@ -1904,6 +1926,7 @@
         "PlaceholderAPI"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "enthusiadonors",
@@ -1963,6 +1986,7 @@
         "Nexo"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "mail",
@@ -2048,6 +2072,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "frontier",
@@ -2083,6 +2108,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [
         {
@@ -2125,6 +2151,7 @@
         "floodgate"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "loreitems",
@@ -2251,6 +2278,7 @@
         "Nexo"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "mapshield",
@@ -2294,6 +2322,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "enthusiamarket",
@@ -2606,6 +2635,7 @@
         "Geyser-Spigot"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "playtime",
@@ -2701,6 +2731,7 @@
         "CombatX"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "autoclick",
@@ -2750,6 +2781,7 @@
         "DiscordSRV"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [],
       "paperDependencies": {},
@@ -2788,6 +2820,7 @@
         "EnthusiaServerAutoClicker"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "estaff",
@@ -3389,6 +3422,7 @@
         "EnthusiaLoreItems"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "tags",
@@ -3575,6 +3609,7 @@
         "NewPlayerProtection"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "tpa",
@@ -3958,6 +3993,7 @@
         "CheckHacks"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [],
       "paperDependencies": {},
@@ -3979,6 +4015,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [
         {
@@ -4029,6 +4066,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [],
       "paperDependencies": {
@@ -4073,6 +4111,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [],
       "paperDependencies": {
@@ -4121,6 +4160,9 @@
       "loadbefore": [
         "WorldGuard",
         "PlotSquared"
+      ],
+      "provides": [
+        "WorldEdit"
       ],
       "commands": [],
       "permissions": [
@@ -4184,6 +4226,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [],
       "paperDependencies": {},
@@ -4210,6 +4253,7 @@
         "WorldGuard"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "gsit",
@@ -4428,6 +4472,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [
         {
@@ -4915,6 +4960,7 @@
         "PlaceholderAPI"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "imageframe",
@@ -5123,6 +5169,7 @@
         "CraftEngine"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "interactivechat",
@@ -5284,6 +5331,7 @@
         "CraftEngine"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "interactivechatdiscordsrv",
@@ -5341,6 +5389,7 @@
         "AngelChest",
         "SavageDeathChest"
       ],
+      "provides": [],
       "commands": [
         {
           "name": "inventoryrollbackplus",
@@ -5505,6 +5554,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [],
       "paperDependencies": {},
@@ -5530,6 +5580,7 @@
         "Nexo"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "sign",
@@ -5626,6 +5677,7 @@
         "Geyser-Spigot"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "lpx",
@@ -5660,6 +5712,7 @@
       "loadbefore": [
         "Vault"
       ],
+      "provides": [],
       "commands": [
         {
           "name": "luckperms",
@@ -5706,6 +5759,7 @@
         "DiscordSRV"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "guild",
@@ -6166,6 +6220,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [
         {
@@ -6241,6 +6296,7 @@
         "SimpleClaimSystem"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "notbounties",
@@ -6474,6 +6530,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [],
       "paperDependencies": {},
@@ -6501,6 +6558,7 @@
         "PlaceholderAPI"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [
         {
@@ -6640,6 +6698,7 @@
       ],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [],
       "paperDependencies": {},
@@ -6661,6 +6720,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "pearlglitchblocker",
@@ -6704,6 +6764,7 @@
         "WorldGuard"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [
         {
@@ -6741,6 +6802,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "plhide",
@@ -6770,6 +6832,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "placeholderapi",
@@ -6915,6 +6978,7 @@
         "floodgate"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [],
       "paperDependencies": {},
@@ -6938,6 +7002,7 @@
       ],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [],
       "paperDependencies": {},
@@ -6961,6 +7026,7 @@
       ],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "poseprobe",
@@ -6990,6 +7056,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [
         {
@@ -7048,6 +7115,7 @@
         "HuskTowns"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [
         {
@@ -7415,6 +7483,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [],
       "paperDependencies": {
@@ -7454,6 +7523,7 @@
         "GriefPrevention"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "skript",
@@ -7511,6 +7581,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "sleepmultiplier",
@@ -7548,6 +7619,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "startupguardian",
@@ -7596,6 +7668,7 @@
         "Vault"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "tab",
@@ -7770,6 +7843,7 @@
       ],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [
         {
@@ -7887,6 +7961,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [],
       "paperDependencies": {},
@@ -7920,6 +7995,7 @@
         "HMCCosmetics"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [
         {
@@ -8017,6 +8093,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "vault-info",
@@ -8061,6 +8138,7 @@
       ],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [],
       "paperDependencies": {},
@@ -8085,6 +8163,7 @@
       "loadbefore": [
         "ProtocolLib"
       ],
+      "provides": [],
       "commands": [
         {
           "name": "viaversion",
@@ -8124,6 +8203,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [
         {
@@ -8185,6 +8265,7 @@
       ],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "vcp",
@@ -8223,6 +8304,7 @@
         "Multiverse-Core",
         "Multiworld"
       ],
+      "provides": [],
       "commands": [],
       "permissions": [],
       "paperDependencies": {},
@@ -8251,6 +8333,7 @@
         "Plan"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "duel",
@@ -8547,6 +8630,7 @@
         "ProtocolLib"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [],
       "paperDependencies": {},
@@ -8570,6 +8654,7 @@
       ],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [],
       "paperDependencies": {},
@@ -8593,6 +8678,7 @@
       ],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [
         {
@@ -8624,6 +8710,7 @@
         "Vault"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [],
       "paperDependencies": {},
@@ -8645,6 +8732,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "apollo",
@@ -8687,6 +8775,7 @@
         "LumaGuilds"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "ekoth",
@@ -8749,6 +8838,7 @@
       "loadbefore": [
         "CoordinateOffset"
       ],
+      "provides": [],
       "commands": [],
       "permissions": [],
       "paperDependencies": {},
@@ -8770,6 +8860,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [],
       "paperDependencies": {},
@@ -8793,6 +8884,7 @@
       "loadbefore": [
         "ItemNBTAPI"
       ],
+      "provides": [],
       "commands": [],
       "permissions": [],
       "paperDependencies": {},
@@ -8818,6 +8910,7 @@
         "PlaceholderAPI"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "music",
@@ -8924,6 +9017,7 @@
         "CombatLogX"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "maceguard",
@@ -9116,6 +9210,7 @@
         "PlaceholderAPI"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [],
       "paperDependencies": {},
@@ -9137,6 +9232,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [],
       "paperDependencies": {
@@ -9276,6 +9372,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "nvreload",
@@ -9332,6 +9429,7 @@
         "Geyser-Spigot"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [],
       "paperDependencies": {},
@@ -9353,6 +9451,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "papermcp",
@@ -9391,6 +9490,7 @@
       "depend": [],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [],
       "paperDependencies": {},
@@ -9416,6 +9516,7 @@
         "MVdWPlaceholderAPI"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [],
       "paperDependencies": {},
@@ -9439,6 +9540,7 @@
         "BuycraftX"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "tebex",
@@ -9473,6 +9575,7 @@
         "ViaVersion"
       ],
       "loadbefore": [],
+      "provides": [],
       "commands": [
         {
           "name": "voicechat",
@@ -9525,6 +9628,7 @@
       ],
       "softdepend": [],
       "loadbefore": [],
+      "provides": [],
       "commands": [],
       "permissions": [],
       "paperDependencies": {},
