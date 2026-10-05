@@ -7,6 +7,13 @@ echo Updating training bootstrap...
 git pull --ff-only origin training/bootstrap-data-prep
 if errorlevel 1 goto fail
 
+echo Clearing any stale listener on port 8091 before startup...
+for /f "tokens=5" %%P in ('netstat -ano ^| findstr ":8091" ^| findstr "LISTENING"') do (
+  echo Stopping stale baseline server ^(PID %%P^)...
+  taskkill /PID %%P /F >nul 2>&1
+)
+timeout /t 1 /nobreak >nul
+
 echo Starting baseline server in a separate minimized window...
 start "Enthusia Qwen Baseline" /min cmd /c call "%REPO%\training\bootstrap\Start-Qwen35-Baseline.cmd"
 
