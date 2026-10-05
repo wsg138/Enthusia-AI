@@ -155,21 +155,35 @@ def _path_score_adjustment(record: dict, lower: str) -> int:
     )
 
 
+HARD_EXCLUDED_PATH_TOKENS = (
+    "cinematic-review",
+    "/assets/",
+    "config-audit",
+)
+
+
+def _hard_excluded_path(lower: str) -> bool:
+    return (
+        any(token in lower for token in HARD_EXCLUDED_PATH_TOKENS)
+        or lower.endswith("/implementation.md")
+    )
+
+
 def path_score(record: dict) -> int:
     # The AI implementation itself is retrieval/runtime knowledge, not useful
     # SFT truth. Training it back into the model would fossilize architecture.
-    if record.get("role") == "ai_system":
-        return -10_000
-
     path = record["path"].replace("\\", "/")
     lower = path.lower()
-    if _path_is_excluded(lower):
-        return -10_000
-    if "cinematic-review" in lower or "/assets/" in lower:
-        return -10_000
-    if "config-audit" in lower or lower.endswith("/implementation.md"):
-        return -10_000
-    return _base_path_score(path) + _path_score_adjustment(record, lower)
+    excluded = (
+        record.get("role") == "ai_system"
+        or _path_is_excluded(lower)
+        or _hard_excluded_path(lower)
+    )
+    return (
+        -10_000
+        if excluded
+        else _base_path_score(path) + _path_score_adjustment(record, lower)
+    )
 
 
 def clean_candidate_line(raw_line: str) -> str:
@@ -240,19 +254,20 @@ def _table_line_adjustment(line: str) -> int:
     return adjustment
 
 
+COMMAND_LINE_RE = re.compile(r"(^|\s)/[A-Za-z][A-Za-z0-9_-]*")
+PERMISSION_NODE_LINE_RE = re.compile(
+    r"[a-z][a-z0-9_-]+(?:\.[a-z0-9_-]+){1,}"
+)
+
+
 def _semantic_line_adjustment(line: str, lower: str) -> int:
-    adjustment = 0
-    if re.search(r"(^|\s)/[A-Za-z][A-Za-z0-9_-]*", line):
-        adjustment += 35
-    if re.search(r"[a-z][a-z0-9_-]+(?:\.[a-z0-9_-]+){1,}", line):
-        adjustment += 15
-    if any(term in lower for term in USEFUL_TERMS):
-        adjustment += 20
-    if lower.startswith(("# ", "## ", "### ")):
-        adjustment -= 15
-    if lower.startswith(("- ", "* ", "+ ")):
-        adjustment += 5
-    return adjustment
+    return (
+        35 * int(bool(COMMAND_LINE_RE.search(line)))
+        + 15 * int(bool(PERMISSION_NODE_LINE_RE.search(line)))
+        + 20 * int(any(term in lower for term in USEFUL_TERMS))
+        - 15 * int(lower.startswith(("# ", "## ", "### ")))
+        + 5 * int(lower.startswith(("- ", "* ", "+ ")))
+    )
 
 
 def _length_adjustment(line: str) -> int:
@@ -330,30 +345,40 @@ NEARBY_CONTEXT:
 """
 
 
+def _record_candidates(
+    record: dict,
+) -> list[tuple[int, dict, int, list[str]]]:
+    base = path_score(record)
+    if base <= 0:
+        return []
+    lines = [
+        clean_candidate_line(line)
+        for line in record.get("content", "").splitlines()
+    ]
+    scored = (
+        (line_score(record, line, base), record, index, lines)
+        for index, line in enumerate(lines)
+    )
+    return [candidate for candidate in scored if candidate[0] > 0]
+
+
+def _candidate_sort_key(
+    item: tuple[int, dict, int, list[str]],
+) -> tuple[int, str, str, int]:
+    return (
+        -item[0],
+        item[1]["repository"],
+        item[1]["path"],
+        item[2],
+    )
+
+
 def _load_candidates(input_path: str) -> list[tuple[int, dict, int, list[str]]]:
     candidates: list[tuple[int, dict, int, list[str]]] = []
     with gzip.open(input_path, "rt", encoding="utf-8") as fh:
         for raw in fh:
-            record = json.loads(raw)
-            base = path_score(record)
-            if base <= 0:
-                continue
-            lines = [
-                clean_candidate_line(line)
-                for line in record.get("content", "").splitlines()
-            ]
-            for index, line in enumerate(lines):
-                score = line_score(record, line, base)
-                if score > 0:
-                    candidates.append((score, record, index, lines))
-    candidates.sort(
-        key=lambda item: (
-            -item[0],
-            item[1]["repository"],
-            item[1]["path"],
-            item[2],
-        )
-    )
+            candidates.extend(_record_candidates(json.loads(raw)))
+    candidates.sort(key=_candidate_sort_key)
     return candidates
 
 
