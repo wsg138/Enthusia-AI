@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import importlib.util
 import pathlib
+import sys
 import unittest
+from unittest import mock
 
 HERE = pathlib.Path(__file__).resolve().parent
 SPEC = importlib.util.spec_from_file_location(
@@ -23,6 +25,96 @@ BUILD_SPEC = importlib.util.spec_from_file_location(
 assert BUILD_SPEC is not None and BUILD_SPEC.loader is not None
 jobs_mod = importlib.util.module_from_spec(BUILD_SPEC)
 BUILD_SPEC.loader.exec_module(jobs_mod)
+
+
+COLLECT_SPEC = importlib.util.spec_from_file_location(
+    "collect_github_sources",
+    HERE / "collect_github_sources.py",
+)
+assert COLLECT_SPEC is not None and COLLECT_SPEC.loader is not None
+collect_mod = importlib.util.module_from_spec(COLLECT_SPEC)
+COLLECT_SPEC.loader.exec_module(collect_mod)
+
+
+PREFLIGHT_SPEC = importlib.util.spec_from_file_location(
+    "pc_preflight",
+    HERE / "pc_preflight.py",
+)
+assert PREFLIGHT_SPEC is not None and PREFLIGHT_SPEC.loader is not None
+preflight_mod = importlib.util.module_from_spec(PREFLIGHT_SPEC)
+PREFLIGHT_SPEC.loader.exec_module(preflight_mod)
+
+
+class BootstrapSecurityTests(unittest.TestCase):
+    def test_github_coordinates_accept_current_safe_shapes(self) -> None:
+        self.assertEqual(collect_mod.validate_github_owner("wsg138"), "wsg138")
+        self.assertEqual(
+            collect_mod.validate_github_repository("Enthusia-AI"),
+            "Enthusia-AI",
+        )
+        self.assertEqual(
+            collect_mod.validate_git_branch("training/bootstrap-data-prep"),
+            "training/bootstrap-data-prep",
+        )
+
+    def test_github_coordinates_reject_option_and_path_injection(self) -> None:
+        invalid_values = [
+            (collect_mod.validate_github_owner, "wsg138;echo"),
+            (collect_mod.validate_github_repository, "../other"),
+            (collect_mod.validate_git_branch, "--upload-pack=evil"),
+            (collect_mod.validate_git_branch, "feature/../main"),
+        ]
+        for validator, value in invalid_values:
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    validator(value)
+
+    @mock.patch.object(collect_mod.subprocess, "run")
+    def test_collect_subprocess_uses_resolved_argv_without_shell(
+        self,
+        run_mock: mock.Mock,
+    ) -> None:
+        run_mock.return_value = mock.Mock(
+            returncode=0,
+            stdout="ok\n",
+            stderr="",
+        )
+        executable = pathlib.Path(sys.executable).resolve()
+        self.assertEqual(
+            collect_mod._run_checked(executable, ["--version"]),
+            "ok",
+        )
+        run_mock.assert_called_once_with(
+            [str(executable), "--version"],
+            cwd=None,
+            capture_output=True,
+            text=True,
+            timeout=600,
+            check=False,
+            shell=False,
+        )
+
+    @mock.patch.object(preflight_mod.subprocess, "run")
+    def test_preflight_subprocess_uses_resolved_argv_without_shell(
+        self,
+        run_mock: mock.Mock,
+    ) -> None:
+        run_mock.return_value = mock.Mock(
+            returncode=0,
+            stdout="ok\n",
+            stderr="",
+        )
+        executable = pathlib.Path(sys.executable).resolve()
+        report = preflight_mod.run_command(executable, ["--version"])
+        self.assertTrue(report["ok"])
+        run_mock.assert_called_once_with(
+            [str(executable), "--version"],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+            shell=False,
+        )
 
 
 class FormatterTests(unittest.TestCase):
