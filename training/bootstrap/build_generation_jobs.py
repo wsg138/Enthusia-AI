@@ -71,6 +71,11 @@ def source_visibility(record: dict) -> str:
 
 
 def path_score(record: dict) -> int:
+    # The AI implementation itself is retrieval/runtime knowledge, not useful
+    # SFT truth. Training it back into the model would fossilize architecture.
+    if record.get("role") == "ai_system":
+        return -10_000
+
     path = record["path"].replace("\\", "/")
     lower = path.lower()
     ext = Path(path).suffix.lower()
@@ -98,6 +103,10 @@ def path_score(record: dict) -> int:
 
     if "/test/" in lower or "/tests/" in lower or lower.startswith("tests/"):
         score -= 45
+    if "cinematic-review" in lower or "/assets/" in lower:
+        return -10_000
+    if "config-audit" in lower:
+        score -= 55
     if "/.github/" in "/" + lower or lower.startswith(".github/"):
         score -= 25
     if "changelog" in lower:
@@ -115,6 +124,8 @@ def line_score(record: dict, line: str, base_score: int) -> int:
     score = base_score
 
     if not (15 <= len(line) <= 500):
+        return -10_000
+    if "\ufffd" in line:
         return -10_000
     if not re.search(r"[A-Za-z0-9]", line):
         return -10_000
