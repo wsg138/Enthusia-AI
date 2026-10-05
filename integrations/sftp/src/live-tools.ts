@@ -14,6 +14,7 @@ import {
 } from '@enthusia/contracts';
 import {
   LiveServerSourceGateway,
+  type LiveReadOptions,
   type LiveSourceResult,
 } from './live-source.js';
 import type {
@@ -24,6 +25,10 @@ import type {
 } from './tool-adapter.js';
 
 const STAFF_TOOL_VISIBILITY = Visibility.STAFF;
+
+function liveReadOptions(ctx: ToolCallContext): LiveReadOptions {
+  return ctx.signal === undefined ? {} : liveReadOptions(ctx);
+}
 
 function stringParams(
   raw: Record<string, unknown>,
@@ -197,7 +202,7 @@ class ListPluginsTool extends LiveSourceTool {
     const output = await this.gateway.listPlugins(
       parsed['serverId'] as string,
       parsed['directoryId'] as string,
-      { signal: ctx.signal },
+      liveReadOptions(ctx),
     );
     return this.finish(ctx, output);
   }
@@ -229,7 +234,7 @@ class InspectPluginTool extends LiveSourceTool {
       parsed['serverId'] as string,
       parsed['directoryId'] as string,
       parsed['fileName'] as string,
-      { signal: ctx.signal },
+      liveReadOptions(ctx),
     );
     return this.finish(ctx, output);
   }
@@ -259,7 +264,7 @@ class DiscoverConfigsTool extends LiveSourceTool {
     const output = await this.gateway.discoverConfigs(
       parsed['serverId'] as string,
       parsed['directoryId'] as string,
-      { signal: ctx.signal },
+      liveReadOptions(ctx),
     );
     return this.finish(ctx, output);
   }
@@ -289,7 +294,7 @@ class ReadApprovedFileTool extends LiveSourceTool {
     const output = await this.gateway.readApprovedFile(
       parsed['serverId'] as string,
       parsed['sourceId'] as string,
-      { signal: ctx.signal },
+      liveReadOptions(ctx),
     );
     return this.finish(ctx, output);
   }
