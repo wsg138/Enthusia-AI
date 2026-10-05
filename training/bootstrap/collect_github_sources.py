@@ -48,37 +48,18 @@ class CommandError(RuntimeError):
     """Raised when a validated local command exits unsuccessfully."""
 
 
-def _valid_github_owner(value: str) -> bool:
-    return bool(GITHUB_OWNER_RE.fullmatch(value)) and not any(
-        (
-            value.startswith("-"),
-            value.endswith("-"),
-            "--" in value,
-        )
-    )
-
-
 def validate_github_owner(value: object) -> str:
-    if not isinstance(value, str):
+    if not isinstance(value, str) or not GITHUB_OWNER_RE.fullmatch(value):
         raise ValueError("invalid GitHub owner")
-    if not _valid_github_owner(value):
+    if value.startswith("-") or value.endswith("-") or "--" in value:
         raise ValueError("invalid GitHub owner")
     return value
 
 
-def _valid_github_repository(value: str) -> bool:
-    return (
-        bool(GITHUB_REPOSITORY_RE.fullmatch(value))
-        and value not in {".", ".."}
-        and "/" not in value
-        and "\\" not in value
-    )
-
-
 def validate_github_repository(value: object) -> str:
-    if not isinstance(value, str):
+    if not isinstance(value, str) or not GITHUB_REPOSITORY_RE.fullmatch(value):
         raise ValueError("invalid GitHub repository")
-    if not _valid_github_repository(value):
+    if value in {".", ".."} or "/" in value or "\\" in value:
         raise ValueError("invalid GitHub repository")
     return value
 
@@ -141,34 +122,22 @@ def _run_checked(
     return completed.stdout.strip()
 
 
-def _path_policy_checks(relative_path: Path) -> tuple[tuple[str, bool], ...]:
+def _path_policy_rejection(relative_path: Path) -> str | None:
     rel = PurePosixPath(relative_path.as_posix())
+    if {part.lower() for part in rel.parts} & DENY_PARTS:
+        return "denied_path"
+
     name_lower = relative_path.name.lower()
-    suffix = relative_path.suffix.lower()
+    if name_lower in DENY_FILENAMES or name_lower.startswith(".env."):
+        return "denied_secret_filename"
+    if relative_path.suffix.lower() in DENY_SUFFIXES:
+        return "denied_binary_or_secret_suffix"
+
     supported = (
         relative_path.name in ALLOWED_FILENAMES
-        or suffix in TEXT_EXTENSIONS
+        or relative_path.suffix.lower() in TEXT_EXTENSIONS
     )
-    return (
-        ("denied_path", bool({part.lower() for part in rel.parts} & DENY_PARTS)),
-        (
-            "denied_secret_filename",
-            name_lower in DENY_FILENAMES or name_lower.startswith(".env."),
-        ),
-        ("denied_binary_or_secret_suffix", suffix in DENY_SUFFIXES),
-        ("unsupported_extension", not supported),
-    )
-
-
-def _path_policy_rejection(relative_path: Path) -> str | None:
-    return next(
-        (
-            reason
-            for reason, rejected in _path_policy_checks(relative_path)
-            if rejected
-        ),
-        None,
-    )
+    return None if supported else "unsupported_extension"
 
 
 def allowed(
@@ -337,33 +306,6 @@ def _record_failure(
     print(f"{repository}: FAILED — {type(exc).__name__}: {exc}")
 
 
-def _included_manifest_entry(
-    entry: object,
-    counts: dict[str, int],
-    repo_summary: list[dict],
-    audit: dict,
-) -> dict | None:
-    if not isinstance(entry, dict):
-        error = ValueError("repository manifest entry must be an object")
-        _record_failure("<invalid-manifest-entry>", error, counts, repo_summary, audit)
-        return None
-    return entry if entry.get("include", False) else None
-
-
-def _entry_display_name(entry: dict) -> str:
-    name = entry.get("name")
-    return name if isinstance(name, str) else "<invalid-repository>"
-
-
-def _clone_validated_entry(
-    entry: dict,
-    workspace: Path,
-) -> tuple[dict, str, str, str, Path, str]:
-    owner, name, default_branch = _validated_repo_entry(entry)
-    repo_dir, sha = ensure_repo(owner, name, default_branch, workspace)
-    return entry, owner, name, default_branch, repo_dir, sha
-
-
 def _clone_entry(
     entry: object,
     workspace: Path,
@@ -371,11 +313,19 @@ def _clone_entry(
     repo_summary: list[dict],
     audit: dict,
 ) -> tuple[dict, str, str, str, Path, str] | None:
-    included = _included_manifest_entry(entry, counts, repo_summary, audit)
-    if included is None:
+    if not isinstance(entry, dict):
+        error = ValueError("repository manifest entry must be an object")
+        _record_failure("<invalid-manifest-entry>", error, counts, repo_summary, audit)
         return None
+    if not entry.get("include", False):
+        return None
+
+    display_name = entry.get("name")
+    if not isinstance(display_name, str):
+        display_name = "<invalid-repository>"
     try:
-        return _clone_validated_entry(included, workspace)
+        owner, name, default_branch = _validated_repo_entry(entry)
+        repo_dir, sha = ensure_repo(owner, name, default_branch, workspace)
     except (
         KeyError,
         TypeError,
@@ -384,14 +334,9 @@ def _clone_entry(
         OSError,
         subprocess.SubprocessError,
     ) as exc:
-        _record_failure(
-            _entry_display_name(included),
-            exc,
-            counts,
-            repo_summary,
-            audit,
-        )
+        _record_failure(display_name, exc, counts, repo_summary, audit)
         return None
+    return entry, owner, name, default_branch, repo_dir, sha
 
 
 def _read_source(path: Path) -> tuple[bytes, str] | None:
@@ -481,53 +426,6 @@ def _prune_directories(dirnames: list[str]) -> None:
     )
 
 
-def _apply_file_result(
-    status: str,
-    reason: str | None,
-    payload: dict | None,
-    out,
-    audit: dict,
-    skip_reasons: dict[str, int],
-) -> tuple[int, int, int]:
-    if status == "accepted":
-        out.write(json.dumps(payload, ensure_ascii=False) + "\n")
-        return 1, 0, 0
-    if status == "sensitive":
-        audit["sensitive_rejections"].append(payload)
-        return 0, 0, 1
-    assert reason is not None
-    skip_reasons[reason] = skip_reasons.get(reason, 0) + 1
-    return 0, 1, 0
-
-
-def _harvest_directory(
-    root_path: Path,
-    filenames: list[str],
-    repo_dir: Path,
-    metadata: tuple[dict, str, str, str, str],
-    max_bytes: int,
-    out,
-    audit: dict,
-    skip_reasons: dict[str, int],
-) -> tuple[int, int, int]:
-    totals = [0, 0, 0]
-    for filename in sorted(filenames):
-        path = root_path / filename
-        delta = _apply_file_result(
-            *_process_file(
-                path,
-                path.relative_to(repo_dir),
-                max_bytes,
-                metadata,
-            ),
-            out,
-            audit,
-            skip_reasons,
-        )
-        totals = [current + added for current, added in zip(totals, delta)]
-    return tuple(totals)
-
-
 def _harvest_repository(
     repo_dir: Path,
     metadata: tuple[dict, str, str, str, str],
@@ -535,22 +433,30 @@ def _harvest_repository(
     out,
     audit: dict,
 ) -> tuple[int, int, int, dict[str, int]]:
-    totals = [0, 0, 0]
+    accepted = skipped = sensitive = 0
     skip_reasons: dict[str, int] = {}
     for root, dirnames, filenames in os.walk(repo_dir, topdown=True):
         _prune_directories(dirnames)
-        delta = _harvest_directory(
-            Path(root),
-            filenames,
-            repo_dir,
-            metadata,
-            max_bytes,
-            out,
-            audit,
-            skip_reasons,
-        )
-        totals = [current + added for current, added in zip(totals, delta)]
-    return totals[0], totals[1], totals[2], skip_reasons
+        root_path = Path(root)
+        for filename in sorted(filenames):
+            path = root_path / filename
+            status, reason, payload = _process_file(
+                path,
+                path.relative_to(repo_dir),
+                max_bytes,
+                metadata,
+            )
+            if status == "accepted":
+                out.write(json.dumps(payload, ensure_ascii=False) + "\n")
+                accepted += 1
+            elif status == "sensitive":
+                audit["sensitive_rejections"].append(payload)
+                sensitive += 1
+            else:
+                skipped += 1
+                assert reason is not None
+                skip_reasons[reason] = skip_reasons.get(reason, 0) + 1
+    return accepted, skipped, sensitive, skip_reasons
 
 
 def _record_success(
