@@ -34,72 +34,97 @@ NOISE_MARKERS = (
 )
 
 def contains_secret(text: str) -> bool:
-    return any(p.search(text) for p in SECRET_PATTERNS)
+    return any(pattern.search(text) for pattern in SECRET_PATTERNS)
+
 
 def is_noise_path(path: str) -> bool:
-    p = "/" + path.replace("\\", "/").strip("/")
-    if any(marker.lower() in p.lower() for marker in THIRD_PARTY_ASSET_MARKERS):
-        return True
-    if any(marker.lower() in p.lower() for marker in NOISE_MARKERS):
-        return True
-    return False
+    normalized = "/" + path.replace("\\", "/").strip("/")
+    lower = normalized.lower()
+    markers = (*THIRD_PARTY_ASSET_MARKERS, *NOISE_MARKERS)
+    return any(marker.lower() in lower for marker in markers)
+
 
 def is_nonproduction_snapshot(record: dict) -> bool:
     if record.get("repository") != "Enthusia-Server":
         return False
-    p = record.get("path", "").replace("\\", "/")
-    return p.startswith("network-snapshot/test/") or p.startswith("network-snapshot/test2/")
+    path = record.get("path", "").replace("\\", "/")
+    return path.startswith(("network-snapshot/test/", "network-snapshot/test2/"))
 
-def synthetic_allowed(record: dict, policy: dict | None = None) -> tuple[bool, str]:
-    if policy is not None and (
-        not policy.get("include", False)
-        or not policy.get("use_for_synthetic_grounding", False)
-    ):
-        return False, "repository_policy"
+
+def _policy_allows(policy: dict | None, capability: str) -> bool:
+    if policy is None:
+        return True
+    return bool(policy.get("include", False) and policy.get(capability, False))
+
+
+def _common_rejection(
+    record: dict,
+    policy: dict | None,
+    capability: str,
+) -> str | None:
+    if not _policy_allows(policy, capability):
+        return "repository_policy"
     text = record.get("content", "")
     if not text.strip():
-        return False, "empty"
+        return "empty"
+    if is_noise_path(record.get("path", "")):
+        return "noise_path"
+    if contains_secret(text):
+        return "secret_pattern"
+    return None
+
+
+def synthetic_allowed(
+    record: dict,
+    policy: dict | None = None,
+) -> tuple[bool, str]:
+    common = _common_rejection(record, policy, "use_for_synthetic_grounding")
+    if common is not None:
+        return False, common
     if record.get("production_authority") == "non_production_reference":
         return False, "non_production_reference"
     if is_nonproduction_snapshot(record):
         return False, "test_snapshot"
-    if is_noise_path(record.get("path", "")):
-        return False, "noise_path"
-    if contains_secret(text):
-        return False, "secret_pattern"
     return True, "accepted"
+
 
 def rag_allowed(record: dict, policy: dict | None = None) -> tuple[bool, str]:
-    if policy is not None and (
-        not policy.get("include", False)
-        or not policy.get("use_for_rag", False)
-    ):
-        return False, "repository_policy"
-    text = record.get("content", "")
-    if not text.strip():
-        return False, "empty"
-    if is_noise_path(record.get("path", "")):
-        return False, "noise_path"
-    if contains_secret(text):
-        return False, "secret_pattern"
-    return True, "accepted"
+    rejection = _common_rejection(record, policy, "use_for_rag")
+    return (False, rejection) if rejection is not None else (True, "accepted")
 
-def score(record: dict, synthetic: bool) -> tuple:
+
+def score(record: dict, _synthetic: bool) -> tuple:
     # Higher wins when identical content exists in several places.
-    authority = 1 if record.get("production_authority") == "requires_deployment_verification" else 0
+    authority = int(
+        record.get("production_authority") == "requires_deployment_verification"
+    )
     repo = record.get("repository", "")
     path = record.get("path", "")
-    prod_snapshot = 1 if repo == "Enthusia-Server" and (
-        path.startswith("network-snapshot/SMP/current/")
-        or path.startswith("network-snapshot/hub/current/")
-        or path.startswith("network-snapshot/velocity/current/")
-        or path.startswith("network-snapshot/sentinel/current/")
-    ) else 0
-    docs = 1 if Path(path).suffix.lower() in {".md", ".txt", ".rst"} else 0
-    source = 1 if Path(path).suffix.lower() in {".java", ".kt", ".kts", ".ts", ".tsx", ".js", ".mjs", ".cjs", ".py"} else 0
-    current_path = 1 if "/current/" in "/" + path.replace("\\", "/") else 0
-    non_staging = 0 if "Staging" in repo or "Sim" in repo else 1
-    return (authority, prod_snapshot, non_staging, current_path, docs, source, -len(path))
+    current_prefixes = (
+        "network-snapshot/SMP/current/",
+        "network-snapshot/hub/current/",
+        "network-snapshot/velocity/current/",
+        "network-snapshot/sentinel/current/",
+    )
+    prod_snapshot = int(
+        repo == "Enthusia-Server" and path.startswith(current_prefixes)
+    )
+    suffix = Path(path).suffix.lower()
+    docs = int(suffix in {".md", ".txt", ".rst"})
+    source = int(
+        suffix in {".java", ".kt", ".kts", ".ts", ".tsx", ".js", ".mjs", ".cjs", ".py"}
+    )
+    current_path = int("/current/" in "/" + path.replace("\\", "/"))
+    non_staging = int("Staging" not in repo and "Sim" not in repo)
+    return (
+        authority,
+        prod_snapshot,
+        non_staging,
+        current_path,
+        docs,
+        source,
+        -len(path),
+    )
 
 def select_dedup(records: list[dict], synthetic: bool) -> tuple[list[dict], dict]:
     by_hash: dict[str, dict] = {}
@@ -123,82 +148,119 @@ def write_gzip(path: Path, records: list[dict]) -> None:
         for record in sorted(records, key=lambda r: (r.get("repository",""), r.get("path",""))):
             out.write(json.dumps(record, ensure_ascii=False) + "\n")
 
-def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--input", required=True)
-    ap.add_argument("--rag-output", required=True)
-    ap.add_argument("--synthetic-output", required=True)
-    ap.add_argument("--report", required=True)
-    ap.add_argument("--repository-manifest", required=False)
-    args = ap.parse_args()
+def _load_policies(repository_manifest: str | None) -> dict[str, dict]:
+    if not repository_manifest:
+        return {}
+    manifest = json.loads(Path(repository_manifest).read_text(encoding="utf-8"))
+    return {entry["name"]: entry for entry in manifest["repositories"]}
 
-    policies = {}
-    if args.repository_manifest:
-        manifest = json.loads(Path(args.repository_manifest).read_text(encoding="utf-8"))
-        policies = {entry["name"]: entry for entry in manifest["repositories"]}
 
-    rag_candidates = []
-    synthetic_candidates = []
-    rejected_rag = collections.Counter()
-    rejected_synthetic = collections.Counter()
+def _apply_policy(record: dict, policy: dict | None) -> dict:
+    if policy is None:
+        return record
+    updated = dict(record)
+    updated["role"] = policy.get("role", updated.get("role"))
+    updated["production_authority"] = policy.get(
+        "production_authority",
+        updated.get("production_authority"),
+    )
+    updated["use_for_rag"] = policy.get("use_for_rag", False)
+    updated["use_for_synthetic_grounding"] = policy.get(
+        "use_for_synthetic_grounding",
+        False,
+    )
+    return updated
+
+
+def _append_by_policy(
+    record: dict,
+    policy: dict | None,
+    rag_candidates: list[dict],
+    synthetic_candidates: list[dict],
+    rejected_rag: collections.Counter,
+    rejected_synthetic: collections.Counter,
+) -> None:
+    rag_ok, rag_reason = rag_allowed(record, policy)
+    if rag_ok:
+        rag_candidates.append(record)
+    else:
+        rejected_rag[rag_reason] += 1
+
+    synthetic_ok, synthetic_reason = synthetic_allowed(record, policy)
+    if synthetic_ok:
+        synthetic_candidates.append(record)
+    else:
+        rejected_synthetic[synthetic_reason] += 1
+
+
+def _collect_candidates(
+    input_path: str,
+    policies: dict[str, dict],
+) -> tuple[list[dict], list[dict], collections.Counter, collections.Counter, int]:
+    rag_candidates: list[dict] = []
+    synthetic_candidates: list[dict] = []
+    rejected_rag: collections.Counter = collections.Counter()
+    rejected_synthetic: collections.Counter = collections.Counter()
     input_count = 0
 
-    with gzip.open(args.input, "rt", encoding="utf-8") as fh:
+    with gzip.open(input_path, "rt", encoding="utf-8") as fh:
         for line in fh:
             input_count += 1
-            record = json.loads(line)
-            policy = policies.get(record.get("repository"))
-            if policy is not None:
-                record = dict(record)
-                record["role"] = policy.get("role", record.get("role"))
-                record["production_authority"] = policy.get(
-                    "production_authority", record.get("production_authority")
-                )
-                record["use_for_rag"] = policy.get("use_for_rag", False)
-                record["use_for_synthetic_grounding"] = policy.get(
-                    "use_for_synthetic_grounding", False
-                )
-            ok, reason = rag_allowed(record, policy)
-            if ok:
-                rag_candidates.append(record)
-            else:
-                rejected_rag[reason] += 1
-            ok, reason = synthetic_allowed(record, policy)
-            if ok:
-                synthetic_candidates.append(record)
-            else:
-                rejected_synthetic[reason] += 1
+            original = json.loads(line)
+            policy = policies.get(original.get("repository"))
+            record = _apply_policy(original, policy)
+            _append_by_policy(
+                record,
+                policy,
+                rag_candidates,
+                synthetic_candidates,
+                rejected_rag,
+                rejected_synthetic,
+            )
+    return (
+        rag_candidates,
+        synthetic_candidates,
+        rejected_rag,
+        rejected_synthetic,
+        input_count,
+    )
 
-    rag_records, rag_dedup = select_dedup(rag_candidates, synthetic=False)
-    synthetic_records, synth_dedup = select_dedup(synthetic_candidates, synthetic=True)
 
-    rag_path = Path(args.rag_output)
-    synth_path = Path(args.synthetic_output)
-    write_gzip(rag_path, rag_records)
-    write_gzip(synth_path, synthetic_records)
+def _summarize(records: list[dict], path: Path) -> dict:
+    repos = collections.Counter(record["repository"] for record in records)
+    chars = sum(len(record.get("content", "")) for record in records)
+    return {
+        "files": len(records),
+        "repositories": len(repos),
+        "characters": chars,
+        "approx_tokens_chars_per_4": (chars + 3) // 4,
+        "compressed_bytes": path.stat().st_size,
+        "top_repositories": dict(repos.most_common(20)),
+    }
 
-    def summarize(records: list[dict], path: Path) -> dict:
-        repos = collections.Counter(r["repository"] for r in records)
-        chars = sum(len(r.get("content","")) for r in records)
-        return {
-            "files": len(records),
-            "repositories": len(repos),
-            "characters": chars,
-            "approx_tokens_chars_per_4": (chars + 3) // 4,
-            "compressed_bytes": path.stat().st_size,
-            "top_repositories": dict(repos.most_common(20)),
-        }
 
-    report = {
+def _build_report(
+    input_count: int,
+    rag_records: list[dict],
+    rag_path: Path,
+    rejected_rag: collections.Counter,
+    rag_dedup: dict,
+    synthetic_records: list[dict],
+    synth_path: Path,
+    rejected_synthetic: collections.Counter,
+    synth_dedup: dict,
+    repository_manifest: str | None,
+) -> dict:
+    return {
         "schema_version": 1,
         "input_files": input_count,
         "rag": {
-            **summarize(rag_records, rag_path),
+            **_summarize(rag_records, rag_path),
             "rejections": dict(rejected_rag),
             **rag_dedup,
         },
         "synthetic_grounding": {
-            **summarize(synthetic_records, synth_path),
+            **_summarize(synthetic_records, synth_path),
             "rejections": dict(rejected_synthetic),
             **synth_dedup,
         },
@@ -210,9 +272,51 @@ def main() -> int:
             "synthetic_excludes_test_and_test2_server_snapshots": True,
             "third_party_bundled_assets_excluded": True,
             "direct_sft_from_source_corpus": False,
-            "current_repository_manifest_applied": bool(args.repository_manifest),
+            "current_repository_manifest_applied": bool(repository_manifest),
         },
     }
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--input", required=True)
+    ap.add_argument("--rag-output", required=True)
+    ap.add_argument("--synthetic-output", required=True)
+    ap.add_argument("--report", required=True)
+    ap.add_argument("--repository-manifest", required=False)
+    args = ap.parse_args()
+
+    policies = _load_policies(args.repository_manifest)
+    (
+        rag_candidates,
+        synthetic_candidates,
+        rejected_rag,
+        rejected_synthetic,
+        input_count,
+    ) = _collect_candidates(args.input, policies)
+
+    rag_records, rag_dedup = select_dedup(rag_candidates, synthetic=False)
+    synthetic_records, synth_dedup = select_dedup(
+        synthetic_candidates,
+        synthetic=True,
+    )
+    rag_path = Path(args.rag_output)
+    synth_path = Path(args.synthetic_output)
+    write_gzip(rag_path, rag_records)
+    write_gzip(synth_path, synthetic_records)
+
+    report = _build_report(
+        input_count,
+        rag_records,
+        rag_path,
+        rejected_rag,
+        rag_dedup,
+        synthetic_records,
+        synth_path,
+        rejected_synthetic,
+        synth_dedup,
+        args.repository_manifest,
+    )
     Path(args.report).write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report, indent=2))
     return 0
