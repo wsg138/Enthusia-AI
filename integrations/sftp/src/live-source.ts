@@ -92,14 +92,28 @@ function withDeadline<T>(
   if (signal?.aborted === true) return Promise.reject(new LiveAbortError());
 
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new LiveTimeoutError()), timeoutMs);
-    const abort = (): void => reject(new LiveAbortError());
-    signal?.addEventListener('abort', abort, { once: true });
-
-    promise.then(resolve, reject).finally(() => {
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const cleanup = (): void => {
       clearTimeout(timer);
       signal?.removeEventListener('abort', abort);
-    });
+    };
+    const finish = (action: () => void): void => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      action();
+    };
+    const abort = (): void => finish(() => reject(new LiveAbortError()));
+    timer = setTimeout(
+      () => finish(() => reject(new LiveTimeoutError())),
+      timeoutMs,
+    );
+    signal?.addEventListener('abort', abort, { once: true });
+    promise.then(
+      (value) => finish(() => resolve(value)),
+      (error: unknown) => finish(() => reject(error)),
+    );
   });
 }
 
@@ -639,7 +653,7 @@ export class LiveServerSourceGateway {
       server.liveSource.operationTimeoutMs,
     );
     const deadline = Date.now() + Math.max(1, timeoutMs);
-    const client = await this.openClient(server, serverIdentity, observedAt, deadline, options);
+    const client = await this.openClient<T>(server, serverIdentity, observedAt, deadline, options);
     if (!client.ok) return client.result;
 
     return this.runWithClient(
@@ -663,7 +677,7 @@ export class LiveServerSourceGateway {
     | { ok: true; client: SftpClient }
     | { ok: false; result: LiveSourceResult<T> }
   > {
-    const pending = this.makeClient(server.id);
+    const pending = Promise.resolve().then(() => this.makeClient(server.id));
     try {
       const client = await withDeadline(pending, this.remaining(deadline), options.signal);
       return { ok: true, client };

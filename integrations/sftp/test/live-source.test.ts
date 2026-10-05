@@ -441,6 +441,26 @@ describe('path, size, timeout, and failure isolation', () => {
     });
   });
 
+  it('maps a synchronously throwing client factory to unreachable', async () => {
+    const server = makeServer();
+    const gateway = gatewayFor(
+      { smp: server },
+      1024 * 1024,
+      () => {
+        throw new Error('synchronous simulated transport failure');
+      },
+    );
+    const out = await gateway.listPlugins('smp', 'plugins');
+
+    expect(out.ok).toBe(false);
+    if (out.ok) return;
+    expect(out.error).toEqual({
+      code: 'UNREACHABLE',
+      message: 'server source is unreachable',
+      retryable: true,
+    });
+  });
+
   it('honors cancellation without exposing transport state', async () => {
     const server = makeServer();
     const gateway = gatewayFor({ smp: server });

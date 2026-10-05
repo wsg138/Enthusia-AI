@@ -21,7 +21,7 @@ interface PaperDependency {
 interface PaperState {
   categoryIndent?: number;
   pluginIndent?: number;
-  current?: PaperDependency;
+  current: PaperDependency | undefined;
   dependencies: PaperDependency[];
 }
 
@@ -173,7 +173,7 @@ function paperDependencies(lines: readonly string[]): PaperDependency[] {
   const found = topLevelField(lines, 'dependencies');
   if (found === undefined || found.field.value.length > 0) return [];
 
-  const state: PaperState = { dependencies: [] };
+  const state: PaperState = { current: undefined, dependencies: [] };
   for (let index = found.index + 1; index < lines.length; index += 1) {
     const field = yamlField(lines[index] ?? '');
     if (field === undefined) continue;

@@ -88,7 +88,7 @@ interface YamlField {
 
 interface YamlState {
   stack: YamlFrame[];
-  redactedBlockIndent?: number;
+  redactedBlockIndent: number | undefined;
 }
 
 function normalizeKey(key: string): string {
@@ -200,7 +200,7 @@ function redactYamlLine(
 }
 
 function redactYaml(text: string, redactedFields: Set<string>): string {
-  const state: YamlState = { stack: [] };
+  const state: YamlState = { stack: [], redactedBlockIndent: undefined };
   const output: string[] = [];
   for (const line of text.split(/\r?\n/)) {
     const redacted = redactYamlLine(line, state, redactedFields);
