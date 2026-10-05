@@ -70,9 +70,11 @@ def source_visibility(record: dict, line: str = "") -> str:
     line_lower = line.lower()
     if any(token in line_lower for token in (
         "/punish", "/ban ", "/ban<", "/mute ", "/mute<", "/kick ",
-        "/reload", "blacklist", "administrator", "admin permission",
+        "blacklist", "administrator", "admin permission",
         ".admin", "staff-only", "staff only",
     )):
+        return "staff"
+    if re.search(r"(?:^|\s)/\S+\s+reload\b", line_lower):
         return "staff"
 
     return "public"
