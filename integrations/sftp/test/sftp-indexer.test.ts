@@ -101,7 +101,7 @@ describe('initial scan', () => {
     expect(artifact?.contentMetadata?.sizeBytes).toBeGreaterThan(0);
     expect(artifact?.contentMetadata?.extra?.['mtimeMs']).toBe(1_000);
     expect(artifact?.contentMetadata?.extra?.['remotePath']).toBe('/srv/smp/plugins/Essentials/config.yml');
-    expect(artifact?.parserVersion).toBe('sftp-w09/1.0.0');
+    expect(artifact?.parserVersion).toBe('sftp-live/2.0.0');
     expect(artifact?.authority).toBe('deployed_config:smp');
   });
 
@@ -250,17 +250,22 @@ describe('content safety', () => {
     expect([...retrieval.chunks.values()].some((c) => artifactIds.has(c.artifactId))).toBe(false);
   });
 
-  it('refuses credential-shaped content under an allowed filename', async () => {
+  it('redacts credential fields before indexing an otherwise useful file', async () => {
     const server = makeTree();
     server.writeFile(
       '/srv/smp/plugins/Essentials/notes.txt',
-      ['api_key = "', 'ghp_', 'abcdefghijklmnopqrstuvwx', '"'].join(''),
+      'api_key = TEST_ONLY_SECRET_VALUE\nfeature = enabled\n',
       1_000,
     );
-    const { indexer, registry } = makeIndexer(server);
+    const { indexer, registry, retrieval } = makeIndexer(server);
     const result = await indexer.scan();
-    expect(result.skippedSecretContent).toBe(1);
-    expect(registry.getCurrent(buildSftpLocator(SERVER, '/srv/smp/plugins/Essentials/notes.txt'))).toBeUndefined();
+    const locator = buildSftpLocator(SERVER, '/srv/smp/plugins/Essentials/notes.txt');
+    const artifact = registry.getCurrent(locator);
+    expect(result.skippedSecretContent).toBe(0);
+    expect(artifact).toBeDefined();
+    expect(artifact?.contentMetadata?.extra?.['redactionCount']).toBe(1);
+    expect(retrieval.chunksFor(artifact!.artifactId).some((chunk) => chunk.text.includes('[REDACTED]'))).toBe(true);
+    expect(retrieval.chunksFor(artifact!.artifactId).some((chunk) => chunk.text.includes('TEST_ONLY_SECRET_VALUE'))).toBe(false);
   });
 
   it('skips files larger than maxFileBytes', async () => {

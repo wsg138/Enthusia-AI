@@ -1,26 +1,19 @@
 /**
- * @enthusia/integration-sftp — indexer configuration (W09).
+ * @enthusia/integration-sftp — validated server-source configuration.
  *
- * Validated with Zod per spec §9.1. SECURITY NOTE (§5.5, "Tools hold
- * credentials; models do not"): this schema deliberately has NO field for
- * passwords, private keys, passphrases, or any other credential material.
- * Credentials are resolved at connect time by a `SftpCredentialsProvider`
- * supplied by the tool layer (see sftp-client.ts); the config file only
- * names *where* to resolve them from (an env var name or a secret-manager
- * reference) via `authRef`. A config file can therefore be committed,
- * logged, and indexed without ever carrying a secret.
- *
- * Fail-closed parsing: every schema is strict — unknown keys are REJECTED,
- * not silently stripped, so a config that smuggles `password` or
- * `privateKey` fails loudly instead of being misread as credential-free.
- *
- * Spec: MASTER-SPECIFICATION.md §24.1 (allowlist model), §5.5, §9.1;
- * WORKER-EXECUTION-PLAN.md §12.
+ * Credential material is deliberately absent. authRef only tells the runtime
+ * credential resolver where to obtain a secret. Model-visible APIs never
+ * return host, username, authRef, or host-key configuration.
  */
 
+import posixPath from 'node:path/posix';
 import { z } from 'zod';
 import { Visibility } from '@enthusia/contracts';
-import { compileExtraDenyPatterns, type DenyRule } from './deny.js';
+import {
+  assertAllowedPath,
+  compileExtraDenyPatterns,
+  type DenyRule,
+} from './deny.js';
 
 const serverIdSchema = z
   .string()
@@ -28,91 +21,242 @@ const serverIdSchema = z
   .max(64)
   .regex(/^[a-z0-9][a-z0-9-]*$/, 'server id must be lowercase alphanumeric with dashes');
 
+const sourceIdSchema = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[a-z0-9][a-z0-9._-]*$/, 'source id must be lowercase alphanumeric with dots, dashes, or underscores');
+
 const absolutePosixPathSchema = z
   .string()
   .min(1)
   .max(1024)
   .regex(/^\/[^\\]*$/, 'path must be an absolute POSIX path')
-  .refine((p) => !p.includes('\0'), 'path must not contain NUL');
+  .refine((path) => !path.includes('\0'), 'path must not contain NUL');
 
-/** One allowlisted root on a server: nothing outside these roots is ever listed or read. */
+const modelVisibleVisibilitySchema = z
+  .nativeEnum(Visibility)
+  .refine(
+    (visibility) => visibility !== Visibility.SECRET_DENY,
+    'SECRET_DENY sources must not be configured as readable',
+  );
+
+const hostKeySha256Schema = z
+  .string()
+  .regex(
+    /^SHA256:[A-Za-z0-9+/]{20,}={0,2}$/,
+    'host key must be an OpenSSH SHA256 fingerprint',
+  );
+
 export const sftpRootSchema = z.strictObject({
-  /** Absolute remote root, e.g. `/home/minecraft/smp/plugins`. */
   path: absolutePosixPathSchema,
-  /**
-   * Visibility assigned to artifacts indexed from this root.
-   * Conservative default: STAFF (server configs/logs are internal
-   * operational information, §17.3). Public-safe roots (e.g. published
-   * rule docs mirrored on the server) may opt into PUBLIC explicitly.
-   */
-  visibility: z.nativeEnum(Visibility).default(Visibility.STAFF),
-  /** Optional allowlist of file extensions (with dot), e.g. ['.yml', '.yaml', '.txt']. */
+  visibility: modelVisibleVisibilitySchema.default(Visibility.STAFF),
   includeExtensions: z.array(z.string().regex(/^\.[a-z0-9]+$/i)).optional(),
-  /** Optional additional substring/regex deny rules applied on top of the hard deny set. */
   extraDenyPatterns: z.array(z.string().min(1)).optional(),
 });
 
 export type SftpRootConfig = z.infer<typeof sftpRootSchema>;
 
-/** Where the tool layer should resolve credentials from. Never the credential itself. */
+export const livePluginDirectorySchema = z.strictObject({
+  id: sourceIdSchema,
+  path: absolutePosixPathSchema,
+  visibility: modelVisibleVisibilitySchema.default(Visibility.STAFF),
+});
+
+export const liveConfigDirectorySchema = z.strictObject({
+  id: sourceIdSchema,
+  path: absolutePosixPathSchema,
+  visibility: modelVisibleVisibilitySchema.default(Visibility.STAFF),
+  includeExtensions: z
+    .array(z.string().regex(/^\.[a-z0-9]+$/i))
+    .min(1)
+    .default(['.yml', '.yaml', '.json', '.properties', '.toml', '.conf', '.cfg']),
+  maxDepth: z.number().int().min(0).max(12).default(4),
+});
+
+export const liveApprovedFileSchema = z.strictObject({
+  id: sourceIdSchema,
+  path: absolutePosixPathSchema,
+  kind: z.enum(['server-properties', 'config', 'deployment-identity']),
+  format: z.enum(['properties', 'yaml', 'json', 'text']),
+  visibility: modelVisibleVisibilitySchema.default(Visibility.STAFF),
+});
+
+export const liveSourceSchema = z.strictObject({
+  displayName: z.string().min(1).max(128).optional(),
+  environment: z.string().min(1).max(64).default('production'),
+  operationTimeoutMs: z.number().int().positive().max(120_000).default(10_000),
+  maxJarBytes: z.number().int().positive().max(256 * 1024 * 1024).default(64 * 1024 * 1024),
+  maxConfigBytes: z.number().int().positive().max(16 * 1024 * 1024).default(1024 * 1024),
+  maxMetadataBytes: z.number().int().positive().max(4 * 1024 * 1024).default(512 * 1024),
+  maxResults: z.number().int().positive().max(2_000).default(200),
+  pluginDirectories: z.array(livePluginDirectorySchema).default([]),
+  configDirectories: z.array(liveConfigDirectorySchema).default([]),
+  approvedFiles: z.array(liveApprovedFileSchema).default([]),
+});
+
+export type LivePluginDirectoryConfig = z.infer<typeof livePluginDirectorySchema>;
+export type LiveConfigDirectoryConfig = z.infer<typeof liveConfigDirectorySchema>;
+export type LiveApprovedFileConfig = z.infer<typeof liveApprovedFileSchema>;
+export type LiveSourceConfig = z.infer<typeof liveSourceSchema>;
+
 export const authSourceSchema = z.enum(['env', 'secret-manager']);
 
 export const sftpServerSchema = z.strictObject({
-  /** Stable server identity used in source locators (`sftp:<id>:<path>`). */
   id: serverIdSchema,
   host: z.string().min(1).max(255),
   port: z.number().int().min(1).max(65535).default(22),
   username: z.string().min(1).max(255),
   readyTimeoutMs: z.number().int().positive().max(300_000).default(20_000),
-  /** Credential resolution: which store + which reference — never the secret. */
   authSource: authSourceSchema.default('env'),
-  /** Env var name or secret-manager reference holding the auth material. */
   authRef: z.string().min(1).max(255),
-  /** Allowlisted roots: the ONLY remote paths this indexer may touch. */
+  hostKeySha256: hostKeySha256Schema.optional(),
   roots: z.array(sftpRootSchema).min(1),
+  liveSource: liveSourceSchema.optional(),
 });
 
 export type SftpServerConfig = z.infer<typeof sftpServerSchema>;
 
 export const sftpIndexerConfigSchema = z.strictObject({
   servers: z.array(sftpServerSchema).min(1).refine(
-    (servers) => new Set(servers.map((s) => s.id)).size === servers.length,
+    (servers) => new Set(servers.map((server) => server.id)).size === servers.length,
     'server ids must be unique',
   ),
-  /** Hard cap on any single file read (bytes). Files larger than this are skipped, never truncated-and-indexed. */
   maxFileBytes: z.number().int().positive().max(256 * 1024 * 1024).default(4 * 1024 * 1024),
-  /** Max directory depth below a root. 0 = the root directory itself. */
   maxDepth: z.number().int().min(0).max(32).default(12),
-  /** Periodic reconciliation interval (ms); 0 disables the scheduler. */
   reconcileIntervalMs: z.number().int().min(0).max(24 * 3_600_000).default(15 * 60_000),
-  /** Random jitter applied to each reconciliation tick (ms). */
   reconcileJitterMs: z.number().int().min(0).max(3_600_000).default(60_000),
 });
 
 export type SftpIndexerConfig = z.infer<typeof sftpIndexerConfigSchema>;
 
-/** Validated config with compiled deny rules ready for the indexer. */
 export interface CompiledSftpIndexerConfig {
   config: SftpIndexerConfig;
-  /**
-   * Extra deny rules per root, keyed by `${serverId}:${rootPath}`.
-   * The unconditional HARD_DENY_RULES are always applied first.
-   */
   extraDenyByRoot: ReadonlyMap<string, readonly DenyRule[]>;
+}
+
+function isWithinRoot(candidate: string, root: string): boolean {
+  const relative = posixPath.relative(
+    posixPath.normalize(root),
+    posixPath.normalize(candidate),
+  );
+  if (relative === '') return true;
+  if (relative === '..' || relative.startsWith('../')) return false;
+  return !posixPath.isAbsolute(relative);
+}
+
+function findContainingRoot(
+  server: SftpServerConfig,
+  remotePath: string,
+): SftpRootConfig | undefined {
+  return server.roots
+    .filter((root) => isWithinRoot(remotePath, root.path))
+    .sort((left, right) => right.path.length - left.path.length)[0];
+}
+
+function rootDenyRules(
+  serverId: string,
+  rootPath: string,
+  rules: ReadonlyMap<string, readonly DenyRule[]>,
+): readonly DenyRule[] {
+  return rules.get(serverId + ':' + rootPath) ?? [];
+}
+
+function validateLivePath(
+  server: SftpServerConfig,
+  remotePath: string,
+  rules: ReadonlyMap<string, readonly DenyRule[]>,
+): void {
+  const root = findContainingRoot(server, remotePath);
+  if (root === undefined) {
+    throw new Error('live source path is outside every allowlisted root: server=' + server.id);
+  }
+  assertAllowedPath(remotePath, rootDenyRules(server.id, root.path, rules));
+}
+
+function liveSourceIds(server: SftpServerConfig): string[] {
+  const live = server.liveSource;
+  if (live === undefined) return [];
+  return [
+    ...live.pluginDirectories.map((source) => source.id),
+    ...live.configDirectories.map((source) => source.id),
+    ...live.approvedFiles.map((source) => source.id),
+  ];
+}
+
+function assertUniqueLiveIds(server: SftpServerConfig): void {
+  const ids = liveSourceIds(server);
+  if (new Set(ids).size !== ids.length) {
+    throw new Error('live source ids must be unique within server=' + server.id);
+  }
+}
+
+function livePaths(server: SftpServerConfig): string[] {
+  const live = server.liveSource;
+  if (live === undefined) return [];
+  return [
+    ...live.pluginDirectories.map((source) => source.path),
+    ...live.configDirectories.map((source) => source.path),
+    ...live.approvedFiles.map((source) => source.path),
+  ];
+}
+
+function validateLiveServer(
+  server: SftpServerConfig,
+  rules: ReadonlyMap<string, readonly DenyRule[]>,
+): void {
+  if (server.liveSource === undefined) return;
+  if (server.hostKeySha256 === undefined) {
+    throw new Error('live source requires pinned hostKeySha256: server=' + server.id);
+  }
+
+  assertUniqueLiveIds(server);
+  for (const path of livePaths(server)) validateLivePath(server, path, rules);
+}
+
+function compileRootDenyRules(
+  compiled: Map<string, readonly DenyRule[]>,
+  serverId: string,
+  root: SftpRootConfig,
+): void {
+  const patterns = root.extraDenyPatterns;
+  if (patterns === undefined) return;
+  if (patterns.length === 0) return;
+  compiled.set(
+    serverId + ':' + root.path,
+    compileExtraDenyPatterns(patterns),
+  );
+}
+
+function compileServerDenyRules(
+  compiled: Map<string, readonly DenyRule[]>,
+  server: SftpServerConfig,
+): void {
+  for (const root of server.roots) {
+    compileRootDenyRules(compiled, server.id, root);
+  }
+}
+
+function compileDenyRules(
+  config: SftpIndexerConfig,
+): Map<string, readonly DenyRule[]> {
+  const compiled = new Map<string, readonly DenyRule[]>();
+  for (const server of config.servers) {
+    compileServerDenyRules(compiled, server);
+  }
+  return compiled;
+}
+
+export function findConfiguredRoot(
+  server: SftpServerConfig,
+  remotePath: string,
+): SftpRootConfig | undefined {
+  return findContainingRoot(server, remotePath);
 }
 
 export function compileConfig(input: unknown): CompiledSftpIndexerConfig {
   const config = sftpIndexerConfigSchema.parse(input);
-  const extraDenyByRoot = new Map<string, readonly DenyRule[]>();
-  for (const server of config.servers) {
-    for (const root of server.roots) {
-      if (root.extraDenyPatterns !== undefined && root.extraDenyPatterns.length > 0) {
-        extraDenyByRoot.set(
-          `${server.id}:${root.path}`,
-          compileExtraDenyPatterns(root.extraDenyPatterns),
-        );
-      }
-    }
-  }
+  const extraDenyByRoot = compileDenyRules(config);
+  for (const server of config.servers) validateLiveServer(server, extraDenyByRoot);
   return { config, extraDenyByRoot };
 }

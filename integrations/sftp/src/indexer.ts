@@ -282,7 +282,7 @@ export class SftpIndexer {
       }
 
       const content = await client.readFile(filePath, this.maxFileBytes);
-      const prepared: PrepareOutcome = prepareDocumentText(content, this.maxFileBytes);
+      const prepared: PrepareOutcome = prepareDocumentText(content, this.maxFileBytes, filePath);
       if (!prepared.ok) {
         switch (prepared.skippedReason) {
           case 'binary': counters.skippedBinary += 1; break;
@@ -306,7 +306,13 @@ export class SftpIndexer {
           contentType: 'text/plain',
           title: posixPath.basename(filePath),
           sizeBytes: stat.size,
-          extra: { mtimeMs: stat.mtimeMs, serverId: this.serverId, remotePath: filePath },
+          extra: {
+            mtimeMs: stat.mtimeMs,
+            serverId: this.serverId,
+            remotePath: filePath,
+            redactedFields: prepared.redactedFields,
+            redactionCount: prepared.redactionCount,
+          },
         },
         parserVersion: PARSER_VERSION,
       };

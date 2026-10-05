@@ -25,7 +25,7 @@
  * implements the same `SftpClient` interface in memory.
  */
 
-import { createHash } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import posixPath from 'node:path/posix';
 import { Client } from 'ssh2';
 import type { ConnectConfig, SFTPWrapper } from 'ssh2';
@@ -93,6 +93,8 @@ export interface SshConnectOptions {
   host: string;
   port: number;
   readyTimeoutMs: number;
+  /** Optional pinned OpenSSH SHA256 host-key fingerprint. Required by live-source config. */
+  hostKeySha256?: string;
   credentials: SftpCredentialsProvider;
 }
 
@@ -109,6 +111,17 @@ export class SftpError extends Error {
       (this as { cause?: unknown }).cause = options.cause;
     }
   }
+}
+
+export function sha256HostKeyFingerprint(key: Buffer): string {
+  const digest = createHash('sha256').update(key).digest('base64').replace(/=+$/, '');
+  return 'SHA256:' + digest;
+}
+
+function verifyPinnedHostKey(key: Buffer, expected: string): boolean {
+  const actual = Buffer.from(sha256HostKeyFingerprint(key).replace(/=+$/, ''), 'utf8');
+  const normalizedExpected = Buffer.from(expected.replace(/=+$/, ''), 'utf8');
+  return actual.length === normalizedExpected.length && timingSafeEqual(actual, normalizedExpected);
 }
 
 // ---------------------------------------------------------------------------
@@ -242,54 +255,88 @@ export class Ssh2SftpClient implements SftpClient {
   }
 }
 
+async function resolveSftpCredentials(
+  options: SshConnectOptions,
+): Promise<SftpCredentials> {
+  try {
+    return await options.credentials();
+  } catch {
+    throw new SftpError('credential provider failed', options.serverId);
+  }
+}
+
+function applyHostVerifier(
+  config: ConnectConfig,
+  expected: string | undefined,
+): void {
+  if (expected === undefined) return;
+  config.hostVerifier = (key: Buffer) => verifyPinnedHostKey(key, expected);
+}
+
+function applyCredentialField(
+  config: ConnectConfig,
+  key: 'privateKey' | 'passphrase' | 'password',
+  value: string | undefined,
+): void {
+  if (value !== undefined) config[key] = value;
+}
+
+function buildConnectConfig(
+  options: SshConnectOptions,
+  credentials: SftpCredentials,
+): ConnectConfig {
+  const config: ConnectConfig = {
+    host: options.host,
+    port: options.port,
+    username: credentials.username,
+    readyTimeout: options.readyTimeoutMs,
+  };
+  applyHostVerifier(config, options.hostKeySha256);
+  applyCredentialField(config, 'privateKey', credentials.privateKey);
+  applyCredentialField(config, 'passphrase', credentials.passphrase);
+  applyCredentialField(config, 'password', credentials.password);
+  return config;
+}
+
+function openSftpSubsystem(
+  options: SshConnectOptions,
+  config: ConnectConfig,
+): Promise<Ssh2SftpClient> {
+  return new Promise((resolve, reject) => {
+    const client = new Client();
+    let settled = false;
+    const fail = (error: unknown): void => {
+      if (settled) return;
+      settled = true;
+      client.end();
+      reject(toSftpError(error, options.serverId));
+    };
+    const succeed = (sftp: SFTPWrapper): void => {
+      if (settled) return;
+      settled = true;
+      resolve(Ssh2SftpClient.wrap(client, sftp, options.serverId));
+    };
+
+    client.once('ready', () => {
+      client.sftp((error, sftp) => {
+        if (error) fail(error);
+        else succeed(sftp);
+      });
+    });
+    client.once('error', fail);
+    client.connect(config);
+  });
+}
+
 /**
  * Open an SFTP connection. Only the SFTP subsystem is requested; exec and
  * shell are never opened. Rejects on auth failure or timeout.
  */
-export function connectSftp(options: SshConnectOptions): Promise<Ssh2SftpClient> {
-  return new Promise((resolve, reject) => {
-    const finish = (err?: unknown, client?: Ssh2SftpClient): void => {
-      if (err !== undefined) {
-        reject(toSftpError(err, options.serverId));
-      } else {
-        resolve(client as Ssh2SftpClient);
-      }
-    };
-    let creds: SftpCredentials | Promise<SftpCredentials>;
-    try {
-      creds = options.credentials();
-    } catch {
-      reject(new SftpError('credential provider failed', options.serverId));
-      return;
-    }
-    Promise.resolve(creds).then(
-      (resolved) => {
-        const client = new Client();
-        client.once('ready', () => {
-          client.sftp((err, sftp) => {
-            if (err) {
-              client.end();
-              finish(err);
-              return;
-            }
-            finish(undefined, Ssh2SftpClient.wrap(client, sftp, options.serverId));
-          });
-        });
-        client.once('error', (err) => finish(err));
-        const connectConfig: ConnectConfig = {
-          host: options.host,
-          port: options.port,
-          username: resolved.username,
-          readyTimeout: options.readyTimeoutMs,
-        };
-        if (resolved.privateKey !== undefined) connectConfig.privateKey = resolved.privateKey;
-        if (resolved.passphrase !== undefined) connectConfig.passphrase = resolved.passphrase;
-        if (resolved.password !== undefined) connectConfig.password = resolved.password;
-        client.connect(connectConfig);
-      },
-      () => reject(new SftpError('credential provider failed', options.serverId)),
-    );
-  });
+export async function connectSftp(
+  options: SshConnectOptions,
+): Promise<Ssh2SftpClient> {
+  const credentials = await resolveSftpCredentials(options);
+  return openSftpSubsystem(options, buildConnectConfig(options, credentials));
 }
 
 // ---------------------------------------------------------------------------
