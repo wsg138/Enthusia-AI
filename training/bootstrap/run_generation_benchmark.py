@@ -110,7 +110,7 @@ def _clean_display_line(line: str) -> str:
 
 def _resolve_evidence(job: dict, parsed: dict) -> tuple[list[dict], str]:
     evidence = str(job.get("target_line", ""))
-    display = _clean_display_line(evidence)
+    display = _clean_display_line(evidence).rstrip(" ;,")
     if display and display[-1] not in ".!?":
         display += "."
     fact = {
@@ -222,7 +222,7 @@ def _question_is_grounded(job: dict, parsed: dict) -> bool:
             )
         )
     )
-    return matched / len(question_terms) >= 0.40
+    return matched / len(question_terms) >= 0.50
 
 
 def validate_output(job: dict, parsed: dict) -> list[str]:
