@@ -25,10 +25,19 @@ export {
 
 export {
   compileConfig,
+  findConfiguredRoot,
+  liveApprovedFileSchema,
+  liveConfigDirectorySchema,
+  livePluginDirectorySchema,
+  liveSourceSchema,
   sftpIndexerConfigSchema,
   sftpRootSchema,
   sftpServerSchema,
   type CompiledSftpIndexerConfig,
+  type LiveApprovedFileConfig,
+  type LiveConfigDirectoryConfig,
+  type LivePluginDirectoryConfig,
+  type LiveSourceConfig,
   type SftpIndexerConfig,
   type SftpRootConfig,
   type SftpServerConfig,
@@ -39,6 +48,7 @@ export {
   SftpError,
   Ssh2SftpClient,
   connectSftp,
+  sha256HostKeyFingerprint,
   type SftpClient,
   type SftpCredentials,
   type SftpCredentialsProvider,
@@ -86,3 +96,59 @@ export type {
   RetrievalEnginePort,
   StoredArtifact,
 } from './ports.js';
+
+
+export {
+  REDACTED_VALUE,
+  containsHighRiskSecretMaterial,
+  sanitizeModelVisibleText,
+  type SanitizeResult,
+  type SanitizedText,
+  type SecretContentDenied,
+} from './redaction.js';
+
+export {
+  parsePluginJar,
+  type JarBuildMetadata,
+  type ParsedPluginJar,
+  type PluginDescriptorKind,
+  type PluginMetadata,
+} from './jar-metadata.js';
+
+export {
+  LiveServerSourceGateway,
+  createConfiguredSftpClientFactory,
+  type ApprovedFileReadResult,
+  type ConfigDiscoveryItem,
+  type ConfigDiscoveryResult,
+  type DeploymentIdentity,
+  type LiveFileIdentity,
+  type LiveFileProvenance,
+  type LiveReadOptions,
+  type LiveServerIdentity,
+  type LiveSftpClientFactory,
+  type LiveSourceErrorCode,
+  type LiveSourceErrorInfo,
+  type LiveSourceResult,
+  type PluginInspectionResult,
+  type PluginListItem,
+  type PluginListResult,
+  type RuntimeCredentialMaterial,
+  type RuntimeCredentialRequest,
+  type RuntimeCredentialResolver,
+} from './live-source.js';
+
+
+export {
+  LiveServerSourceToolset,
+  createLiveServerSourceTools,
+} from './live-tools.js';
+
+export type {
+  Tool,
+  ToolCallContext,
+  ToolMetadata,
+  ToolParameterProperty,
+  ToolParametersSchema,
+  VerificationTier,
+} from './tool-adapter.js';

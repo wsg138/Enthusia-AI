@@ -25,7 +25,7 @@
  * implements the same `SftpClient` interface in memory.
  */
 
-import { createHash } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import posixPath from 'node:path/posix';
 import { Client } from 'ssh2';
 import type { ConnectConfig, SFTPWrapper } from 'ssh2';
@@ -93,6 +93,8 @@ export interface SshConnectOptions {
   host: string;
   port: number;
   readyTimeoutMs: number;
+  /** Optional pinned OpenSSH SHA256 host-key fingerprint. Required by live-source config. */
+  hostKeySha256?: string;
   credentials: SftpCredentialsProvider;
 }
 
@@ -109,6 +111,17 @@ export class SftpError extends Error {
       (this as { cause?: unknown }).cause = options.cause;
     }
   }
+}
+
+export function sha256HostKeyFingerprint(key: Buffer): string {
+  const digest = createHash('sha256').update(key).digest('base64').replace(/=+$/, '');
+  return 'SHA256:' + digest;
+}
+
+function verifyPinnedHostKey(key: Buffer, expected: string): boolean {
+  const actual = Buffer.from(sha256HostKeyFingerprint(key).replace(/=+$/, ''), 'utf8');
+  const normalizedExpected = Buffer.from(expected.replace(/=+$/, ''), 'utf8');
+  return actual.length === normalizedExpected.length && timingSafeEqual(actual, normalizedExpected);
 }
 
 // ---------------------------------------------------------------------------
@@ -282,6 +295,9 @@ export function connectSftp(options: SshConnectOptions): Promise<Ssh2SftpClient>
           username: resolved.username,
           readyTimeout: options.readyTimeoutMs,
         };
+        if (options.hostKeySha256 !== undefined) {
+          connectConfig.hostVerifier = (key: Buffer) => verifyPinnedHostKey(key, options.hostKeySha256 as string);
+        }
         if (resolved.privateKey !== undefined) connectConfig.privateKey = resolved.privateKey;
         if (resolved.passphrase !== undefined) connectConfig.passphrase = resolved.passphrase;
         if (resolved.password !== undefined) connectConfig.password = resolved.password;
