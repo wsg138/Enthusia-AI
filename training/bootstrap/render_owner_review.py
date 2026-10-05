@@ -105,7 +105,7 @@ def _render_attempt(index: int, result: dict) -> str:
         f"- **Question:** {_question(result)}",
         f"- **Proposed answer:** {_assistant(result)}",
         f"- **Visibility:** {result.get('visibility', '—')}",
-        f"- **Response mode / familiarity:** {result.get('response_mode', '—')} / "
+        f"- **Response mode / familiarity:** {result.get('response_mode', '—')} / " +
         f"{result.get('familiarity_profile', '—')}",
         f"- **Source:** {result.get('repository', '—')}/{result.get('path', '—')}",
         f"- **Source SHA/version:** {result.get('source_version', '—')}",
@@ -127,10 +127,10 @@ def render(results: list[dict]) -> str:
     header = [
         "# Enthusia AI — 10-Candidate Owner Review",
         "",
-        "> Review-only synthetic candidates. Nothing in this artifact is admitted to "
+        "> Review-only synthetic candidates. Nothing in this artifact is admitted to " +
         "W16 or training data.",
         "",
-        f"Accepted: **{counts['accepted']}** · Skipped: **{counts['skipped']}** · "
+        f"Accepted: **{counts['accepted']}** · Skipped: **{counts['skipped']}** · " +
         f"Rejected: **{counts['rejected']}**",
         "",
     ]

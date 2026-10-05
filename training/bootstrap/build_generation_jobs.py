@@ -19,7 +19,6 @@ try:
         build_evidence_window,
         context_for,
         contextual_visibility,
-        source_visibility,
     )
     from training.bootstrap.generation_prompt import build_prompt, profiles_for
 except ModuleNotFoundError:
@@ -32,7 +31,6 @@ except ModuleNotFoundError:
         build_evidence_window,
         context_for,
         contextual_visibility,
-        source_visibility,
     )
     from generation_prompt import build_prompt, profiles_for
 
@@ -317,20 +315,19 @@ def _job_from_candidate(
     digest = _job_digest(
         repo, record, line_index, target_line, profile, response_mode
     )
-    job = _job_payload(
-        score,
-        record,
-        line_index,
-        target_line,
-        profile,
-        response_mode,
-        evidence,
-        ranges,
-        evidence_text,
-        digest,
-        contextual_visibility(record, lines, line_index),
-        lines,
-    )
+    spec = {
+        "score": score,
+        "line_index": line_index,
+        "target_line": target_line,
+        "profile": profile,
+        "response_mode": response_mode,
+        "evidence": evidence,
+        "ranges": ranges,
+        "evidence_text": evidence_text,
+        "digest": digest,
+        "visibility": contextual_visibility(record, lines, line_index),
+    }
+    job = _job_payload(record, lines, spec)
     job["prompt"] = build_prompt(job)
     return job
 
@@ -351,44 +348,35 @@ def _job_digest(
 
 
 def _job_payload(
-    score: int,
     record: dict,
-    line_index: int,
-    target_line: str,
-    profile: str,
-    response_mode: str | None,
-    evidence: list[dict],
-    ranges: list[dict],
-    evidence_text: str,
-    digest: str,
-    visibility: str,
     lines: list[str],
+    spec: dict,
 ) -> dict:
     repo = record["repository"]
+    line_index = spec["line_index"]
     source_id = (
-        f'github:wsg138/{repo}@{record["commit_sha"]}:'
+        f'github:{record.get("owner", "wsg138")}/{repo}@{record["commit_sha"]}:'
         f'{record["path"]}#line-{line_index + 1}'
     )
     return {
-        "job_id": f"ground-{digest}",
+        "job_id": f'ground-{spec["digest"]}',
         "source_id": source_id,
         "source_version": record["commit_sha"],
         "repository": repo,
         "role": record.get("role"),
         "production_authority": production_authority_for(record),
-        "visibility": visibility,
-        "response_mode": response_mode,
-        "familiarity_profile": profile,
+        "visibility": spec["visibility"],
+        "response_mode": spec["response_mode"],
+        "familiarity_profile": spec["profile"],
         "path": record["path"],
         "line_number": line_index + 1,
-        "source_score": score,
-        "target_line": target_line,
-        "evidence": evidence,
-        "evidence_ranges": ranges,
-        "evidence_text": evidence_text,
+        "source_score": spec["score"],
+        "target_line": spec["target_line"],
+        "evidence": spec["evidence"],
+        "evidence_ranges": spec["ranges"],
+        "evidence_text": spec["evidence_text"],
         "context": context_for(lines, line_index),
     }
-
 
 def _jobs_for_candidate(
     score: int,

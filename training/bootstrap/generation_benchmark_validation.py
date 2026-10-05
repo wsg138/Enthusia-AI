@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 import urllib.parse
 
@@ -17,7 +16,7 @@ SECRET_PATTERNS = [
     re.compile(r"(?i)authorization\s*[:=]\s*bearer\s+[A-Za-z0-9._~+/-]{16,}"),
     re.compile(
         r"(?i)\b(?:password|passwd|pwd|secret|token|api[_-]?key)\b"
-        r"\s*[:=]\s*['\"]?([^\s'\"#]{12,})"
+        + r"\s*[:=]\s*['\"]?([^\s'\"#]{12,})"
     ),
 ]
 PERMISSION_NODE_RE = re.compile(r"\b[a-z][a-z0-9_-]+(?:\.[a-z0-9_-]+)+\b")
@@ -330,40 +329,101 @@ def _question_is_grounded(job: dict, parsed: dict) -> bool:
     )
 
 
+def _render_evidence_entries(entries: list[dict]) -> str:
+    return "\n".join(
+        f"L{entry.get('line_number')}: {entry.get('text', '')}"
+        for entry in entries
+    )
+
+
+def _validated_line_numbers(entries: list[dict]) -> list[int] | None:
+    numbers: list[int] = []
+    for entry in entries:
+        number = entry.get("line_number")
+        if not isinstance(number, int) or number < 1:
+            return None
+        numbers.append(number)
+    return numbers
+
+
+def _validate_evidence_size(
+    entries: list[dict], rendered: str, problems: list[str]
+) -> None:
+    if len(entries) > 12 or len(rendered) > 2400:
+        problems.append("evidence_window_too_large")
+
+
+def _validate_evidence_rendering(
+    job: dict, rendered: str, problems: list[str]
+) -> None:
+    explicit = job.get("evidence_text")
+    if explicit and explicit != rendered:
+        problems.append("evidence_text_mismatch")
+
+
+def _validate_evidence_lines(
+    job: dict, entries: list[dict], problems: list[str]
+) -> None:
+    numbers = _validated_line_numbers(entries)
+    if numbers is None or numbers != sorted(set(numbers)):
+        problems.append("invalid_evidence_lines")
+        return
+    if job.get("line_number") not in numbers:
+        problems.append("target_line_number_missing")
+
+
+def _validate_evidence_source(job: dict, problems: list[str]) -> None:
+    source_version = job.get("source_version")
+    if not isinstance(source_version, str) or not source_version:
+        problems.append("missing_source_sha")
+    path = job.get("path")
+    if not isinstance(path, str) or not path:
+        problems.append("missing_source_path")
+
+
+def _validate_evidence_target(
+    job: dict, entries: list[dict], problems: list[str]
+) -> None:
+    target = job.get("target_line")
+    evidence_lines = [str(entry.get("text", "")) for entry in entries]
+    if isinstance(target, str) and target not in evidence_lines:
+        problems.append("target_not_in_evidence")
+
+
+def _validate_evidence_visibility(
+    job: dict, entries: list[dict], problems: list[str]
+) -> None:
+    if job.get("visibility") != "public":
+        return
+    if any(entry.get("visibility") == "staff" for entry in entries):
+        problems.append("staff_evidence_in_public_window")
+
+
 def _validate_evidence_window(job: dict, problems: list[str]) -> None:
     entries = _evidence_entries(job)
     if not entries:
         problems.append("missing_evidence")
         return
-    rendered = "\n".join(
-        f"L{entry.get('line_number')}: {entry.get('text', '')}" for entry in entries
-    )
-    if len(entries) > 12 or len(rendered) > 2400:
-        problems.append("evidence_window_too_large")
-    if job.get("evidence_text") and job["evidence_text"] != rendered:
-        problems.append("evidence_text_mismatch")
-    numbers = [entry.get("line_number") for entry in entries]
-    if any(not isinstance(number, int) or number < 1 for number in numbers):
-        problems.append("invalid_evidence_lines")
-    elif numbers != sorted(set(numbers)):
-        problems.append("invalid_evidence_lines")
-    if job.get("line_number") not in numbers:
-        problems.append("target_line_number_missing")
-    if not isinstance(job.get("source_version"), str) or not job["source_version"]:
-        problems.append("missing_source_sha")
-    if not isinstance(job.get("path"), str) or not job["path"]:
-        problems.append("missing_source_path")
-    target = job.get("target_line")
-    if isinstance(target, str) and target not in [str(entry.get("text", "")) for entry in entries]:
-        problems.append("target_not_in_evidence")
-    if job.get("visibility") == "public" and any(entry.get("visibility") == "staff" for entry in entries):
-        problems.append("staff_evidence_in_public_window")
-
+    rendered = _render_evidence_entries(entries)
+    _validate_evidence_size(entries, rendered, problems)
+    _validate_evidence_rendering(job, rendered, problems)
+    _validate_evidence_lines(job, entries, problems)
+    _validate_evidence_source(job, problems)
+    _validate_evidence_target(job, entries, problems)
+    _validate_evidence_visibility(job, entries, problems)
 
 def _validate_required_fields(parsed: dict, problems: list[str]) -> None:
     for key in ("category", "scenario", "user", "assistant", "tags"):
         if key not in parsed:
             problems.append(f"missing:{key}")
+
+
+def _validate_generated_lengths(parsed: dict, problems: list[str]) -> None:
+    limits = (("scenario", 18), ("user", 30), ("assistant", 70))
+    for key, limit in limits:
+        value = parsed.get(key)
+        if isinstance(value, str) and len(value.split()) > limit:
+            problems.append(f"{key}_too_long")
 
 
 def _validate_generated_shape(parsed: dict, problems: list[str]) -> None:
@@ -376,14 +436,7 @@ def _validate_generated_shape(parsed: dict, problems: list[str]) -> None:
         problems.append("forbidden_generated_fields")
     if parsed.get("category") not in CATEGORIES:
         problems.append("bad_category")
-    if isinstance(parsed.get("scenario"), str) and len(parsed["scenario"].split()) > 18:
-        problems.append("scenario_too_long")
-    if isinstance(parsed.get("user"), str) and len(parsed["user"].split()) > 30:
-        problems.append("user_too_long")
-    assistant = parsed.get("assistant")
-    if isinstance(assistant, str) and len(assistant.split()) > 70:
-        problems.append("assistant_too_long")
-
+    _validate_generated_lengths(parsed, problems)
 
 def _validate_tags(parsed: dict, problems: list[str]) -> None:
     tags = parsed.get("tags")
@@ -408,23 +461,35 @@ def _validate_secrets(parsed: dict, problems: list[str]) -> None:
         problems.append("secret_pattern_in_output")
 
 
-def _critical_literals_supported(assistant: str, support: str, problems: list[str]) -> None:
-    support_commands = {command.lower() for command in COMMAND_RE.findall(support)}
-    support_numbers = set(NUMBER_RE.findall(support))
-    support_permissions = {node.lower() for node in PERMISSION_NODE_RE.findall(support)}
-    for command in set(COMMAND_RE.findall(assistant)):
-        if command.lower() not in support_commands:
-            problems.append("unsupported_command")
-            break
-    for number in set(NUMBER_RE.findall(assistant)):
-        if number not in support_numbers:
-            problems.append("unsupported_number")
-            break
-    for permission in set(PERMISSION_NODE_RE.findall(assistant)):
-        if permission.lower() not in support_permissions:
-            problems.append("unsupported_permission")
-            break
+def _literal_values(pattern: re.Pattern[str], text: str) -> set[str]:
+    return {value.lower() for value in pattern.findall(text)}
 
+
+def _append_unsupported_literal(
+    pattern: re.Pattern[str],
+    assistant: str,
+    support: str,
+    problem: str,
+    problems: list[str],
+) -> None:
+    available = _literal_values(pattern, support)
+    requested = _literal_values(pattern, assistant)
+    if requested - available:
+        problems.append(problem)
+
+
+def _critical_literals_supported(
+    assistant: str, support: str, problems: list[str]
+) -> None:
+    _append_unsupported_literal(
+        COMMAND_RE, assistant, support, "unsupported_command", problems
+    )
+    _append_unsupported_literal(
+        NUMBER_RE, assistant, support, "unsupported_number", problems
+    )
+    _append_unsupported_literal(
+        PERMISSION_NODE_RE, assistant, support, "unsupported_permission", problems
+    )
 
 def _requires_deployment_qualification(job: dict, support: str) -> bool:
     authority = str(job.get("production_authority", "")).lower()
@@ -497,6 +562,36 @@ def _validate_player_jargon(job: dict, parsed: dict, problems: list[str]) -> Non
         problems.append("unnecessary_backend_jargon")
 
 
+def _validate_owner_truth_negatives(
+    job: dict, assistant: str, problems: list[str]
+) -> None:
+    if re.search(r"(?i)\belite\b", assistant):
+        problems.append("forbidden_elite_rank")
+    if job.get("response_mode") == "player_support" and re.search(
+        r"(?i)(?:^|\s)/fly\b", assistant
+    ):
+        problems.append("forbidden_general_fly")
+
+
+def _validate_deployment_grounding(
+    job: dict, assistant: str, support: str, problems: list[str]
+) -> None:
+    if not _production_claim_supported(job, assistant, support):
+        problems.append("unsupported_production_claim")
+    if not _deployment_qualification_preserved(job, assistant, support):
+        problems.append("missing_deployment_qualification")
+
+
+def _validate_semantic_grounding(
+    job: dict, assistant: str, support: str, problems: list[str]
+) -> None:
+    is_boundary = job.get("response_mode") == "player_boundary"
+    if not is_boundary and not _answer_terms_supported(assistant, support):
+        problems.append("answer_not_fully_grounded")
+    if not _mechanism_supported(assistant, support):
+        problems.append("unsupported_mechanism_claim")
+
+
 def _validate_answer_grounding(job: dict, parsed: dict, problems: list[str]) -> None:
     assistant = parsed.get("assistant")
     if not isinstance(assistant, str) or not assistant.strip():
@@ -504,22 +599,9 @@ def _validate_answer_grounding(job: dict, parsed: dict, problems: list[str]) -> 
         return
     support = _evidence_text(job)
     _critical_literals_supported(assistant, support, problems)
-    if re.search(r"(?i)\belite\b", assistant):
-        problems.append("forbidden_elite_rank")
-    if job.get("response_mode") == "player_support" and re.search(r"(?i)(?:^|\s)/fly\b", assistant):
-        problems.append("forbidden_general_fly")
-    if not _production_claim_supported(job, assistant, support):
-        problems.append("unsupported_production_claim")
-    if not _deployment_qualification_preserved(job, assistant, support):
-        problems.append("missing_deployment_qualification")
-    if (
-        job.get("response_mode") != "player_boundary"
-        and not _answer_terms_supported(assistant, support)
-    ):
-        problems.append("answer_not_fully_grounded")
-    if not _mechanism_supported(assistant, support):
-        problems.append("unsupported_mechanism_claim")
-
+    _validate_owner_truth_negatives(job, assistant, problems)
+    _validate_deployment_grounding(job, assistant, support, problems)
+    _validate_semantic_grounding(job, assistant, support, problems)
 
 def _validate_generated_content(job: dict, parsed: dict, problems: list[str]) -> None:
     if not _question_is_grounded(job, parsed):
