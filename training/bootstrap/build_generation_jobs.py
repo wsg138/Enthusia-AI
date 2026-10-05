@@ -45,54 +45,99 @@ CODE_PREFIXES = (
     "return ", "throw ", "if (", "for (", "while (",
 )
 
+STAFF_PATH_TOKENS = (
+    "/src/", "/internal/", "/config/", "config.", "config-", "/audit",
+    "/admins/", "/admin/",
+)
+STAFF_LINE_TOKENS = (
+    "/punish", "/ban ", "/ban<", "/mute ", "/mute<", "/kick ",
+    "blacklist", "administrator", "admin permission",
+    ".admin", "staff-only", "staff only",
+)
+STAFF_LINE_PATTERNS = (
+    re.compile(r"(?:^|\s)/\S+\s+reload\b"),
+    re.compile(r"\b(?:reload|debug|admin|adminview|breakothers|freeze|unfreeze)\b"),
+    re.compile(
+        r"(?:^|\s)/(?:ee|estaff|startupguardian|gatekeeper|tppos|warzone|shopmarket|ekoth)\b"
+    ),
+    re.compile(r"(?:^|\s)/pearlglitchblocker\b"),
+    re.compile(r"(?:^|\s)/warzone\s+modifier\b"),
+)
+EXCLUDED_PATH_MARKERS = (
+    "test_rollout", "test-rollout", "/test_setup", "/test-setup",
+    "owner_retest", "owner-retest", "/retest", "acceptance-harness",
+    "acceptance_harness", "component-metadata", "wiki-maintenance",
+    "workspace-state", "codacy-evidence", "codacy_evidence",
+)
+EXCLUDED_ROOTED_PATHS = ("/legacy/", "/handoffs/", "/ai-agents/")
+EXCLUDED_PREFIXES = ("legacy/", "handoffs/", "ai-agents/")
+HIGH_VALUE_PATH_TOKENS = (
+    "/docs/", "/wiki/", "readme", "commands", "permissions", "rules",
+    "config", "plugin.yml", "paper-plugin.yml", "server.properties",
+    "messages", "help", "support", "link", "rank", "econom", "ticket",
+)
+CURRENT_SERVER_PREFIXES = tuple(
+    f"network-snapshot/{server}/current/"
+    for server in ("smp", "hub", "velocity", "sentinel")
+)
 
-def source_visibility(record: dict, line: str = "") -> str:
-    role = record.get("role")
-    if role in STAFF_SOURCE_ROLES:
-        return "staff"
 
-    path = str(record.get("path", "")).replace("\\", "/")
+def _path_is_staff(path: str) -> bool:
     lower = path.lower()
     ext = Path(path).suffix.lower()
     name = Path(path).name.lower()
-
-    # Implementation source and mutable/internal configuration are staff
-    # context even inside otherwise player-facing plugin repositories.
     if ext in SOURCE_EXTS:
-        return "staff"
+        return True
     if ext in CONFIG_EXTS and name not in {"plugin.yml", "paper-plugin.yml"}:
-        return "staff"
-    if any(token in lower for token in (
-        "/src/", "/internal/", "/config/", "config.", "config-", "/audit",
-        "/admins/", "/admin/",
-    )):
-        return "staff"
+        return True
+    return any(token in lower for token in STAFF_PATH_TOKENS)
 
-    line_lower = line.lower()
-    if any(token in line_lower for token in (
-        "/punish", "/ban ", "/ban<", "/mute ", "/mute<", "/kick ",
-        "blacklist", "administrator", "admin permission",
-        ".admin", "staff-only", "staff only",
-    )):
-        return "staff"
-    if re.search(r"(?:^|\s)/\S+\s+reload\b", line_lower):
-        return "staff"
-    if "/" in line_lower and re.search(
-        r"\b(?:reload|debug|admin|adminview|breakothers|freeze|unfreeze)\b",
-        line_lower,
-    ):
-        return "staff"
-    if re.search(
-        r"(?:^|\s)/(?:ee|estaff|startupguardian|gatekeeper|tppos|warzone|shopmarket|ekoth)\b",
-        line_lower,
-    ):
-        return "staff"
-    if re.search(r"(?:^|\s)/pearlglitchblocker\b", line_lower):
-        return "staff"
-    if re.search(r"(?:^|\s)/warzone\s+modifier\b", line_lower):
-        return "staff"
 
-    return "public"
+def _line_is_staff(line: str) -> bool:
+    lower = line.lower()
+    if any(token in lower for token in STAFF_LINE_TOKENS):
+        return True
+    if STAFF_LINE_PATTERNS[1].search(lower) and "/" not in lower:
+        return False
+    return any(pattern.search(lower) for pattern in STAFF_LINE_PATTERNS)
+
+
+def source_visibility(record: dict, line: str = "") -> str:
+    if record.get("role") in STAFF_SOURCE_ROLES:
+        return "staff"
+    path = str(record.get("path", "")).replace("\\", "/")
+    return "staff" if _path_is_staff(path) or _line_is_staff(line) else "public"
+
+
+def _path_is_excluded(lower_path: str) -> bool:
+    rooted = "/" + lower_path
+    if any(marker in lower_path for marker in EXCLUDED_PATH_MARKERS):
+        return True
+    if any(marker in rooted for marker in EXCLUDED_ROOTED_PATHS):
+        return True
+    return lower_path.startswith(EXCLUDED_PREFIXES)
+
+
+def _base_path_score(path: str) -> int:
+    ext = Path(path).suffix.lower()
+    if ext in DOC_EXTS:
+        return 50
+    if ext in CONFIG_EXTS:
+        return 35
+    return 10 if ext in SOURCE_EXTS else 0
+
+
+def _path_score_adjustment(record: dict, lower: str) -> int:
+    adjustment = 25 if any(token in lower for token in HIGH_VALUE_PATH_TOKENS) else 0
+    if record["repository"] == "Enthusia-Server" and lower.startswith(CURRENT_SERVER_PREFIXES):
+        adjustment += 30
+    if "/test/" in lower or "/tests/" in lower or lower.startswith("tests/"):
+        adjustment -= 45
+    if "/.github/" in "/" + lower or lower.startswith(".github/"):
+        adjustment -= 25
+    if "changelog" in lower:
+        adjustment -= 15
+    return adjustment
 
 
 def path_score(record: dict) -> int:
@@ -102,123 +147,88 @@ def path_score(record: dict) -> int:
         return -10_000
 
     path = record["path"].replace("\\", "/")
-    lower_path = path.lower()
-    if (
-        "/legacy/" in "/" + lower_path
-        or lower_path.startswith("legacy/")
-        or "test_rollout" in lower_path
-        or "test-rollout" in lower_path
-        or "/test_setup" in lower_path
-        or "/test-setup" in lower_path
-        or "owner_retest" in lower_path
-        or "owner-retest" in lower_path
-        or "/retest" in lower_path
-        or "acceptance-harness" in lower_path
-        or "acceptance_harness" in lower_path
-        or "component-metadata" in lower_path
-        or "wiki-maintenance" in lower_path
-        or "/handoffs/" in "/" + lower_path
-        or lower_path.startswith("handoffs/")
-        or "/ai-agents/" in "/" + lower_path
-        or lower_path.startswith("ai-agents/")
-        or "workspace-state" in lower_path
-        or "codacy-evidence" in lower_path
-        or "codacy_evidence" in lower_path
-    ):
-        return -10_000
     lower = path.lower()
-    ext = Path(path).suffix.lower()
-    score = 0
-
-    if ext in DOC_EXTS:
-        score += 50
-    elif ext in CONFIG_EXTS:
-        score += 35
-    elif ext in SOURCE_EXTS:
-        score += 10
-
-    if any(token in lower for token in (
-        "/docs/", "/wiki/", "readme", "commands", "permissions", "rules",
-        "config", "plugin.yml", "paper-plugin.yml", "server.properties",
-        "messages", "help", "support", "link", "rank", "econom", "ticket",
-    )):
-        score += 25
-
-    if record["repository"] == "Enthusia-Server" and any(
-        lower.startswith(f"network-snapshot/{server}/current/")
-        for server in ("smp", "hub", "velocity", "sentinel")
-    ):
-        score += 30
-
-    if "/test/" in lower or "/tests/" in lower or lower.startswith("tests/"):
-        score -= 45
+    if _path_is_excluded(lower):
+        return -10_000
     if "cinematic-review" in lower or "/assets/" in lower:
         return -10_000
     if "config-audit" in lower or lower.endswith("/implementation.md"):
         return -10_000
-    if "/.github/" in "/" + lower or lower.startswith(".github/"):
-        score -= 25
-    if "changelog" in lower:
-        score -= 15
-    return score
+    return _base_path_score(path) + _path_score_adjustment(record, lower)
 
 
 def clean_candidate_line(raw_line: str) -> str:
     return raw_line.rstrip("\r").strip()
 
 
+def _line_is_rejected(line: str, lower: str, ext: str) -> bool:
+    if not 15 <= len(line) <= 500:
+        return True
+    stripped = line.strip()
+    if stripped.endswith(":") and not stripped.startswith(("http://", "https://")):
+        return True
+    if "\ufffd" in line or ("shaded" in lower and "relocated" in lower):
+        return True
+    if ext in CONFIG_EXTS and line.lstrip().startswith("#"):
+        return True
+    if re.search(r"\b[A-Z][A-Z0-9_]{4,}_OK\b", line):
+        return True
+    if not re.search(r"[A-Za-z0-9]", line):
+        return True
+    return bool(re.fullmatch(r"[{}\[\](),:;<>/\\|\x60~*#=+_. -]+", line))
+
+
+def _source_line_adjustment(line: str, lower: str, ext: str) -> int:
+    if ext not in SOURCE_EXTS:
+        return 0
+    adjustment = -45 if lower.startswith(CODE_PREFIXES) else 0
+    return adjustment - 10 if re.search(r"[{};]$", line) else adjustment
+
+
+def _table_line_adjustment(line: str) -> int:
+    if not (line.startswith("|") and line.endswith("|")):
+        return 0
+    adjustment = 20
+    if re.search(r"/[A-Za-z][A-Za-z0-9_-]*", line):
+        adjustment += 45
+    if re.search(r"[a-z][a-z0-9_-]+(?:\.[a-z0-9_-]+){1,}", line):
+        adjustment += 30
+    return adjustment
+
+
+def _semantic_line_adjustment(line: str, lower: str) -> int:
+    adjustment = 0
+    if re.search(r"(^|\s)/[A-Za-z][A-Za-z0-9_-]*", line):
+        adjustment += 35
+    if re.search(r"[a-z][a-z0-9_-]+(?:\.[a-z0-9_-]+){1,}", line):
+        adjustment += 15
+    if any(term in lower for term in USEFUL_TERMS):
+        adjustment += 20
+    if lower.startswith(("# ", "## ", "### ")):
+        adjustment -= 15
+    if lower.startswith(("- ", "* ", "+ ")):
+        adjustment += 5
+    return adjustment
+
+
+def _length_adjustment(line: str) -> int:
+    if len(line) <= 220:
+        return 10
+    return -20 if len(line) > 350 else 0
+
+
 def line_score(record: dict, line: str, base_score: int) -> int:
     lower = line.lower()
     ext = Path(record["path"]).suffix.lower()
-    score = base_score
-
-    if not (15 <= len(line) <= 500):
+    if _line_is_rejected(line, lower, ext):
         return -10_000
-    stripped = line.strip()
-    if stripped.endswith(":") and not stripped.startswith(("http://", "https://")):
-        return -10_000
-    if "\ufffd" in line:
-        return -10_000
-    if ext in CONFIG_EXTS and line.lstrip().startswith("#"):
-        return -10_000
-    if "shaded" in lower and "relocated" in lower:
-        return -10_000
-    if re.search(r"\b[A-Z][A-Z0-9_]{4,}_OK\b", line):
-        return -10_000
-    if not re.search(r"[A-Za-z0-9]", line):
-        return -10_000
-    if re.fullmatch(r"[{}\[\](),:;<>/\\|\x60~*#=+_. -]+", line):
-        return -10_000
-
-    if ext in SOURCE_EXTS and lower.startswith(CODE_PREFIXES):
-        score -= 45
-    if ext in SOURCE_EXTS and re.search(r"[{};]$", line):
-        score -= 10
-
-    if line.startswith("|") and line.endswith("|"):
-        score += 20
-        if re.search(r"/[A-Za-z][A-Za-z0-9_-]*", line):
-            score += 45
-        if re.search(r"[a-z][a-z0-9_-]+(?:\.[a-z0-9_-]+){1,}", line):
-            score += 30
-
-    if re.search(r"(^|\s)/[A-Za-z][A-Za-z0-9_-]*", line):
-        score += 35
-    if re.search(r"[a-z][a-z0-9_-]+(?:\.[a-z0-9_-]+){1,}", line):
-        score += 15
-    if any(term in lower for term in USEFUL_TERMS):
-        score += 20
-
-    if lower.startswith(("# ", "## ", "### ")):
-        score -= 15
-    if lower.startswith(("- ", "* ", "+ ")):
-        score += 5
-    if len(line) <= 220:
-        score += 10
-    elif len(line) > 350:
-        score -= 20
-
-    return score
+    return (
+        base_score
+        + _source_line_adjustment(line, lower, ext)
+        + _table_line_adjustment(line)
+        + _semantic_line_adjustment(line, lower)
+        + _length_adjustment(line)
+    )
 
 
 def context_for(lines: list[str], target_index: int, radius: int = 2) -> str:
@@ -276,19 +286,9 @@ NEARBY_CONTEXT:
 """
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--input", required=True)
-    ap.add_argument("--output", required=True)
-    ap.add_argument("--manifest", required=True)
-    ap.add_argument("--max-jobs", type=int, default=1200)
-    ap.add_argument("--per-repo-cap", type=int, default=80)
-    args = ap.parse_args()
-
+def _load_candidates(input_path: str) -> list[tuple[int, dict, int, list[str]]]:
     candidates: list[tuple[int, dict, int, list[str]]] = []
-    source_files: set[tuple[str, str]] = set()
-
-    with gzip.open(args.input, "rt", encoding="utf-8") as fh:
+    with gzip.open(input_path, "rt", encoding="utf-8") as fh:
         for raw in fh:
             record = json.loads(raw)
             base = path_score(record)
@@ -300,10 +300,8 @@ def main() -> int:
             ]
             for index, line in enumerate(lines):
                 score = line_score(record, line, base)
-                if score <= 0:
-                    continue
-                candidates.append((score, record, index, lines))
-
+                if score > 0:
+                    candidates.append((score, record, index, lines))
     candidates.sort(
         key=lambda item: (
             -item[0],
@@ -312,69 +310,94 @@ def main() -> int:
             item[2],
         )
     )
+    return candidates
 
-    repo_counts = collections.Counter()
+
+def _job_from_candidate(
+    score: int,
+    record: dict,
+    line_index: int,
+    lines: list[str],
+) -> dict:
+    repo = record["repository"]
+    target_line = lines[line_index]
+    digest = hashlib.sha256(
+        (
+            f'{repo}\n{record["commit_sha"]}\n{record["path"]}\n'
+            f'{line_index}\n{target_line}'
+        ).encode("utf-8")
+    ).hexdigest()[:16]
+    source_id = (
+        f'github:wsg138/{repo}@{record["commit_sha"]}:'
+        f'{record["path"]}#line-{line_index + 1}'
+    )
+    job = {
+        "job_id": f"ground-{digest}",
+        "source_id": source_id,
+        "source_version": record["commit_sha"],
+        "repository": repo,
+        "role": record.get("role"),
+        "visibility": source_visibility(record, target_line),
+        "path": record["path"],
+        "line_number": line_index + 1,
+        "source_score": score,
+        "target_line": target_line,
+        "context": context_for(lines, line_index),
+    }
+    job["prompt"] = build_prompt(job)
+    return job
+
+
+def _select_jobs(
+    candidates: list[tuple[int, dict, int, list[str]]],
+    max_jobs: int,
+    per_repo_cap: int,
+) -> tuple[list[dict], collections.Counter, set[tuple[str, str]]]:
+    repo_counts: collections.Counter = collections.Counter()
     jobs: list[dict] = []
+    source_files: set[tuple[str, str]] = set()
     seen_content: set[tuple[str, str]] = set()
 
     for score, record, line_index, lines in candidates:
         repo = record["repository"]
-        if repo_counts[repo] >= args.per_repo_cap:
-            continue
-
         target_line = lines[line_index]
         dedupe_key = (repo, target_line)
-        if dedupe_key in seen_content:
+        if repo_counts[repo] >= per_repo_cap or dedupe_key in seen_content:
             continue
+
         seen_content.add(dedupe_key)
-
-        digest = hashlib.sha256(
-            (
-                f'{repo}\n{record["commit_sha"]}\n{record["path"]}\n'
-                f'{line_index}\n{target_line}'
-            ).encode("utf-8")
-        ).hexdigest()[:16]
-
-        source_id = (
-            f'github:wsg138/{repo}@{record["commit_sha"]}:'
-            f'{record["path"]}#line-{line_index + 1}'
-        )
-        job = {
-            "job_id": f"ground-{digest}",
-            "source_id": source_id,
-            "source_version": record["commit_sha"],
-            "repository": repo,
-            "role": record.get("role"),
-            "visibility": source_visibility(record, target_line),
-            "path": record["path"],
-            "line_number": line_index + 1,
-            "source_score": score,
-            "target_line": target_line,
-            "context": context_for(lines, line_index),
-        }
-        job["prompt"] = build_prompt(job)
-        jobs.append(job)
+        jobs.append(_job_from_candidate(score, record, line_index, lines))
         repo_counts[repo] += 1
         source_files.add((repo, record["path"]))
-
-        if len(jobs) >= args.max_jobs:
+        if len(jobs) >= max_jobs:
             break
+    return jobs, repo_counts, source_files
 
-    output = Path(args.output)
+
+def _write_jobs(output_path: str, jobs: list[dict]) -> None:
+    output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     with gzip.open(output, "wt", encoding="utf-8") as out:
         for job in jobs:
             out.write(json.dumps(job, ensure_ascii=False) + "\n")
 
-    manifest = {
+
+def _build_manifest(
+    jobs: list[dict],
+    source_files: set[tuple[str, str]],
+    repo_counts: collections.Counter,
+    max_jobs: int,
+    per_repo_cap: int,
+) -> dict:
+    return {
         "schema_version": 2,
         "selection": "deterministic-high-value-source-line",
         "job_count": len(jobs),
         "source_file_count": len(source_files),
         "repositories": len(repo_counts),
         "jobs_by_repository": dict(repo_counts.most_common()),
-        "max_jobs": args.max_jobs,
-        "per_repo_cap": args.per_repo_cap,
+        "max_jobs": max_jobs,
+        "per_repo_cap": per_repo_cap,
         "generator_contract": {
             "one_fixed_evidence_line_per_job": True,
             "model_does_not_write_answer": True,
@@ -384,10 +407,34 @@ def main() -> int:
             "chain_of_thought_forbidden": True,
         },
     }
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--input", required=True)
+    ap.add_argument("--output", required=True)
+    ap.add_argument("--manifest", required=True)
+    ap.add_argument("--max-jobs", type=int, default=1200)
+    ap.add_argument("--per-repo-cap", type=int, default=80)
+    args = ap.parse_args()
+
+    candidates = _load_candidates(args.input)
+    jobs, repo_counts, source_files = _select_jobs(
+        candidates,
+        args.max_jobs,
+        args.per_repo_cap,
+    )
+    _write_jobs(args.output, jobs)
+    manifest = _build_manifest(
+        jobs,
+        source_files,
+        repo_counts,
+        args.max_jobs,
+        args.per_repo_cap,
+    )
     Path(args.manifest).write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     print(json.dumps(manifest, indent=2))
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())
