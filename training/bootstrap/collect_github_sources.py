@@ -64,20 +64,23 @@ def validate_github_repository(value: object) -> str:
     return value
 
 
+def _invalid_branch_part(part: str) -> bool:
+    if part in {"", ".", ".."}:
+        return True
+    return part.startswith(".") or part.endswith(".lock")
+
+
+def _invalid_branch_shape(value: str) -> bool:
+    forbidden_marker = any(marker in value for marker in ("..", "@{"))
+    bad_ending = value.endswith((".", "/"))
+    bad_part = any(_invalid_branch_part(part) for part in value.split("/"))
+    return forbidden_marker or bad_ending or bad_part
+
+
 def validate_git_branch(value: object) -> str:
-    if not isinstance(value, str) or not SAFE_BRANCH_RE.fullmatch(value):
+    if not isinstance(value, str):
         raise ValueError("invalid Git branch")
-    if (
-        ".." in value
-        or "@{" in value
-        or value.endswith((".", "/"))
-        or any(
-            part in {"", ".", ".."}
-            or part.startswith(".")
-            or part.endswith(".lock")
-            for part in value.split("/")
-        )
-    ):
+    if not SAFE_BRANCH_RE.fullmatch(value) or _invalid_branch_shape(value):
         raise ValueError("invalid Git branch")
     return value
 
@@ -119,27 +122,37 @@ def _run_checked(
     return completed.stdout.strip()
 
 
-def allowed(actual_path: Path, relative_path: Path, max_bytes: int) -> tuple[bool, str]:
+def _path_policy_rejection(relative_path: Path) -> str | None:
     rel = PurePosixPath(relative_path.as_posix())
-    lower_parts = {part.lower() for part in rel.parts}
-    if lower_parts & DENY_PARTS:
-        return False, "denied_path"
+    if {part.lower() for part in rel.parts} & DENY_PARTS:
+        return "denied_path"
+
     name_lower = relative_path.name.lower()
     if name_lower in DENY_FILENAMES or name_lower.startswith(".env."):
-        return False, "denied_secret_filename"
+        return "denied_secret_filename"
     if relative_path.suffix.lower() in DENY_SUFFIXES:
-        return False, "denied_binary_or_secret_suffix"
-    if (
-        relative_path.name not in ALLOWED_FILENAMES
-        and relative_path.suffix.lower() not in TEXT_EXTENSIONS
-    ):
-        return False, "unsupported_extension"
+        return "denied_binary_or_secret_suffix"
+
+    supported = (
+        relative_path.name in ALLOWED_FILENAMES
+        or relative_path.suffix.lower() in TEXT_EXTENSIONS
+    )
+    return None if supported else "unsupported_extension"
+
+
+def allowed(
+    actual_path: Path,
+    relative_path: Path,
+    max_bytes: int,
+) -> tuple[bool, str]:
+    rejection = _path_policy_rejection(relative_path)
+    if rejection is not None:
+        return False, rejection
     try:
-        if actual_path.stat().st_size > max_bytes:
-            return False, "too_large"
+        too_large = actual_path.stat().st_size > max_bytes
     except OSError:
         return False, "stat_failed"
-    return True, "accepted"
+    return (False, "too_large") if too_large else (True, "accepted")
 
 
 def looks_sensitive(text: str) -> bool:
@@ -173,23 +186,28 @@ SENSITIVE_CONFIG_KEY = re.compile(
 )
 
 
-def config_has_sensitive_key(relative_path: Path, text: str) -> bool:
-    ext = relative_path.suffix.lower()
-    if ext not in CONFIG_EXTENSIONS and relative_path.name.lower() not in {
-        "server.properties", "plugin.yml", "paper-plugin.yml"
-    }:
-        return False
+def _sensitive_config_candidate(relative_path: Path) -> bool:
+    allowed_names = {"server.properties", "plugin.yml", "paper-plugin.yml"}
+    return (
+        relative_path.suffix.lower() in CONFIG_EXTENSIONS
+        or relative_path.name.lower() in allowed_names
+    )
 
-    # We intentionally reject the entire config document whenever it defines a
-    # sensitive credential-bearing key, even if the current value appears blank
-    # or templated. The AI does not need these files badly enough to justify
-    # risking credential ingestion.
+
+def _config_key(raw: str) -> str | None:
+    stripped = raw.strip()
+    if not stripped or stripped.startswith("#"):
+        return None
+    match = re.match(r'^\s*["\']?([^:="\']+)["\']?\s*[:=]', raw)
+    return match.group(1).strip() if match else None
+
+
+def config_has_sensitive_key(relative_path: Path, text: str) -> bool:
+    if not _sensitive_config_candidate(relative_path):
+        return False
     for raw in text.splitlines():
-        stripped = raw.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        match = re.match(r'^\s*["\']?([^:=\"\']+)["\']?\s*[:=]', raw)
-        if match and SENSITIVE_CONFIG_KEY.match(match.group(1).strip()):
+        key = _config_key(raw)
+        if key is not None and SENSITIVE_CONFIG_KEY.match(key):
             return True
     return False
 
