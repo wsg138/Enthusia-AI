@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
 import {
   SourceStatus,
   Visibility,
@@ -57,7 +57,6 @@ function contextWithSignal(actor: Actor, signal: AbortSignal): ToolCallContext {
 const STAFF: Actor = { id: 'staff-1', type: 'staff' };
 const PLAYER: Actor = { id: 'player-1', type: 'player' };
 
-describe('live server source tool contract', () => {
   it('exposes only typed operations and no arbitrary path parameter', () => {
     const gateway = new LiveServerSourceGateway(compiled(), async () => new MockSftpServer());
     const toolset = createLiveServerSourceTools(gateway);
@@ -171,4 +170,3 @@ describe('live server source tool contract', () => {
     expect(freshness['observedTime']).toBe('2026-10-04T20:00:00.000Z');
     expect(freshness['sourceStatus']).toBe(SourceStatus.CURRENT);
   });
-});

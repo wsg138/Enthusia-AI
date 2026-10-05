@@ -1,10 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
 import {
   REDACTED_VALUE,
   sanitizeModelVisibleText,
 } from '../src/redaction.js';
 
-describe('secret-aware model-visible redaction', () => {
   it('redacts common scalar credential fields while preserving useful config', () => {
     const out = sanitizeModelVisibleText(
       [
@@ -80,4 +79,3 @@ describe('secret-aware model-visible redaction', () => {
 
     expect(out).toEqual({ ok: false, reason: 'secret-content' });
   });
-});

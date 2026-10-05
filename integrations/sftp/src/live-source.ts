@@ -8,9 +8,7 @@
 
 import posixPath from 'node:path/posix';
 import {
-  findConfiguredRoot,
   type CompiledSftpIndexerConfig,
-  type LiveApprovedFileConfig,
   type LiveConfigDirectoryConfig,
   type LivePluginDirectoryConfig,
   type SftpServerConfig,
@@ -20,7 +18,8 @@ import {
   SecretDenyError,
   type DenyRule,
 } from './deny.js';
-import { parseDeploymentIdentity } from './deployment-identity.js';
+import { LiveApprovedFileReader } from './live-approved-reader.js';
+import { LiveConfigDiscovery } from './live-config-discovery.js';
 import {
   fail,
   LiveAbortError,
@@ -36,7 +35,7 @@ import {
   runtimePluginIdentity,
 } from './live-provenance.js';
 import { parsePluginJar } from './jar-metadata.js';
-import { prepareDocumentText } from './parsers.js';
+import { extraRulesFor } from './live-path-policy.js';
 import {
   connectSftp,
   DenyGuardSftpClient,
@@ -46,7 +45,6 @@ import {
 } from './sftp-client.js';
 import type {
   ApprovedFileReadResult,
-  ConfigDiscoveryItem,
   ConfigDiscoveryResult,
   LiveReadOptions,
   LiveServerIdentity,
@@ -139,16 +137,6 @@ function assertJarBasename(fileName: string): void {
   }
 }
 
-function extraRulesFor(
-  compiled: CompiledSftpIndexerConfig,
-  server: SftpServerConfig,
-  path: string,
-): readonly DenyRule[] {
-  const root = findConfiguredRoot(server, path);
-  if (root === undefined) throw new LiveBoundaryError('PATH_DENIED', false);
-  return compiled.extraDenyByRoot.get(server.id + ':' + root.path) ?? [];
-}
-
 function pluginWarning(error: unknown): string | undefined {
   if (error instanceof LiveBoundaryError && error.code === 'OVERSIZE') {
     return 'oversize-plugin-skipped';
@@ -197,11 +185,17 @@ export function createConfiguredSftpClientFactory(
 }
 
 export class LiveServerSourceGateway {
+  private readonly approvedReader: LiveApprovedFileReader;
+  private readonly configDiscovery: LiveConfigDiscovery;
+
   constructor(
     private readonly compiled: CompiledSftpIndexerConfig,
     private readonly makeClient: LiveSftpClientFactory,
     private readonly now: () => Date = () => new Date(),
-  ) {}
+  ) {
+    this.approvedReader = new LiveApprovedFileReader(compiled);
+    this.configDiscovery = new LiveConfigDiscovery(compiled);
+  }
 
   listServers(): LiveServerIdentity[] {
     return this.compiled.config.servers
@@ -269,7 +263,7 @@ export class LiveServerSourceGateway {
       serverId,
       options,
       (client, server, observedAt) =>
-        this.readApprovedOnServer(client, server, sourceId, observedAt),
+        this.approvedReader.read(client, server, sourceId, observedAt),
     );
   }
 
@@ -368,59 +362,10 @@ export class LiveServerSourceGateway {
     directoryId: string,
   ): Promise<ConfigDiscoveryResult> {
     const directory = this.configDirectory(server, directoryId);
-    const extra = extraRulesFor(this.compiled, server, directory.path);
-    const guarded = await DenyGuardSftpClient.forRoot(client, directory.path, extra);
-    const files: ConfigDiscoveryItem[] = [];
-    const warnings: string[] = [];
-
-    await this.walkConfigs(
-      guarded,
-      server,
-      directory,
-      directory.path,
-      0,
-      files,
-      warnings,
-      extra,
-    );
-    const maxResults = server.liveSource?.maxResults ?? 200;
-    return {
-      directoryId,
-      files: files.slice(0, maxResults),
-      truncated: files.length > maxResults,
-      warnings,
-    };
+    return this.configDiscovery.discover(client, server, directory);
   }
 
-  private async readApprovedOnServer(
-    client: SftpClient,
-    server: SftpServerConfig,
-    sourceId: string,
-    observedAt: string,
-  ): Promise<ApprovedFileReadResult> {
-    const source = this.approvedFile(server, sourceId);
-    const live = this.liveConfig(server);
-    const extra = extraRulesFor(this.compiled, server, source.path);
-    const root = findConfiguredRoot(server, source.path);
-    if (root === undefined) throw new LiveBoundaryError('PATH_DENIED', false);
-
-    const guarded = await DenyGuardSftpClient.forRoot(client, root.path, extra);
-    const stat = await guarded.stat(source.path);
-    this.assertReadableFile(stat.isFile, stat.size, live.maxConfigBytes);
-    const sha256 = await guarded.hashFile(source.path, live.maxConfigBytes);
-    const bytes = await guarded.readFile(source.path, live.maxConfigBytes);
-    const prepared = prepareDocumentText(bytes, live.maxConfigBytes, source.path);
-    if (!prepared.ok) throw this.prepareError(prepared.skippedReason);
-
-    const file = liveFileIdentity(source.path, stat, sha256);
-    return this.approvedResult(server, source, file, prepared, observedAt);
-  }
-
-  private approvedResult(
-    server: SftpServerConfig,
-    source: LiveApprovedFileConfig,
-    file: ReturnType<typeof liveFileIdentity>,
-    prepared: Extract<ReturnType<typeof prepareDocumentText>, { ok: true }>,
+>,
     observedAt: string,
   ): ApprovedFileReadResult {
     const result: ApprovedFileReadResult = {
@@ -441,13 +386,6 @@ export class LiveServerSourceGateway {
       result.content = prepared.text;
     }
     return result;
-  }
-
-  private prepareError(reason: string): LiveBoundaryError {
-    const code = reason === 'secret-content'
-      ? 'SECRET_CONTENT_DENIED'
-      : 'UNSUPPORTED_CONTENT';
-    return new LiveBoundaryError(code, false);
   }
 
   private assertReadableFile(
@@ -492,17 +430,6 @@ export class LiveServerSourceGateway {
     return found;
   }
 
-  private approvedFile(
-    server: SftpServerConfig,
-    sourceId: string,
-  ): LiveApprovedFileConfig {
-    const found = server.liveSource?.approvedFiles.find(
-      (source) => source.id === sourceId,
-    );
-    if (found === undefined) throw new LiveBoundaryError('SOURCE_NOT_CONFIGURED', false);
-    return found;
-  }
-
   private async pluginIdentity(
     client: SftpClient,
     server: SftpServerConfig,
@@ -518,115 +445,6 @@ export class LiveServerSourceGateway {
       directoryId: directory.id,
       visibility: directory.visibility,
       deployedFile: liveFileIdentity(path, stat, sha256),
-    };
-  }
-
-  private async walkConfigs(
-    client: SftpClient,
-    server: SftpServerConfig,
-    directory: LiveConfigDirectoryConfig,
-    path: string,
-    depth: number,
-    output: ConfigDiscoveryItem[],
-    warnings: string[],
-    extra: readonly DenyRule[],
-  ): Promise<void> {
-    const maxResults = this.liveConfig(server).maxResults;
-    if (output.length > maxResults) return;
-
-    for (const entry of await client.listDir(path)) {
-      if (output.length > maxResults) return;
-      if (isDeniedPath(entry.path, extra)) continue;
-      if (entry.isDirectory) {
-        await this.descendConfigDirectory(
-          client,
-          server,
-          directory,
-          entry.path,
-          depth,
-          output,
-          warnings,
-          extra,
-        );
-      } else {
-        await this.addConfigIdentity(client, server, directory, entry.path, output, warnings);
-      }
-    }
-  }
-
-  private async descendConfigDirectory(
-    client: SftpClient,
-    server: SftpServerConfig,
-    directory: LiveConfigDirectoryConfig,
-    path: string,
-    depth: number,
-    output: ConfigDiscoveryItem[],
-    warnings: string[],
-    extra: readonly DenyRule[],
-  ): Promise<void> {
-    if (depth >= directory.maxDepth) return;
-    await this.walkConfigs(
-      client,
-      server,
-      directory,
-      path,
-      depth + 1,
-      output,
-      warnings,
-      extra,
-    );
-  }
-
-  private async addConfigIdentity(
-    client: SftpClient,
-    server: SftpServerConfig,
-    directory: LiveConfigDirectoryConfig,
-    path: string,
-    output: ConfigDiscoveryItem[],
-    warnings: string[],
-  ): Promise<void> {
-    if (!this.configExtensionAllowed(directory, path)) return;
-    try {
-      const item = await this.configIdentity(client, server, directory, path);
-      if (item !== undefined) output.push(item);
-    } catch (error) {
-      if (error instanceof LiveBoundaryError && error.code === 'OVERSIZE') {
-        warnings.push('oversize-config-skipped');
-        return;
-      }
-      if (error instanceof SecretDenyError || error instanceof SftpPathEscapeError) {
-        warnings.push('denied-config-skipped');
-        return;
-      }
-      throw error;
-    }
-  }
-
-  private configExtensionAllowed(
-    directory: LiveConfigDirectoryConfig,
-    path: string,
-  ): boolean {
-    const extension = posixPath.extname(path).toLowerCase();
-    return directory.includeExtensions.some(
-      (allowed) => allowed.toLowerCase() === extension,
-    );
-  }
-
-  private async configIdentity(
-    client: SftpClient,
-    server: SftpServerConfig,
-    directory: LiveConfigDirectoryConfig,
-    path: string,
-  ): Promise<ConfigDiscoveryItem | undefined> {
-    const stat = await client.stat(path);
-    if (!stat.isFile) return undefined;
-    const maxBytes = this.liveConfig(server).maxConfigBytes;
-    if (stat.size > maxBytes) throw new LiveBoundaryError('OVERSIZE', false);
-    const sha256 = await client.hashFile(path, maxBytes);
-    return {
-      directoryId: directory.id,
-      visibility: directory.visibility,
-      file: liveFileIdentity(path, stat, sha256),
     };
   }
 
