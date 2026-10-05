@@ -79,3 +79,25 @@ import {
 
     expect(out).toEqual({ ok: false, reason: 'secret-content' });
   });
+
+
+it('emits deterministic sorted JSON keys while redacting secrets', () => {
+  const out = sanitizeModelVisibleText(
+    '{"z":1,"token":"TEST_ONLY_TOKEN","a":{"y":2,"x":1}}',
+    '/srv/plugin/config.json',
+  );
+
+  expect(out.ok).toBe(true);
+  if (!out.ok) return;
+  expect(out.text).toBe([
+    '{',
+    '  "a": {',
+    '    "x": 1,',
+    '    "y": 2',
+    '  },',
+    '  "token": "' + REDACTED_VALUE + '",',
+    '  "z": 1',
+    '}',
+  ].join('\n'));
+  expect(out.text).not.toContain('TEST_ONLY_TOKEN');
+});

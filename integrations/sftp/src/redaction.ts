@@ -133,22 +133,29 @@ function redactJsonArray(
   return values.map((entry) => redactJsonValue(entry, path, redactedFields));
 }
 
+function redactJsonEntry(
+  key: string,
+  child: unknown,
+  path: readonly string[],
+  redactedFields: Set<string>,
+): [string, unknown] {
+  const fieldPath = [...path, key];
+  if (child !== null && isSecretKey(path, key)) {
+    redactedFields.add(fieldPath.join('.'));
+    return [key, REDACTED_VALUE];
+  }
+  return [key, redactJsonValue(child, fieldPath, redactedFields)];
+}
+
 function redactJsonRecord(
   record: Record<string, unknown>,
   path: readonly string[],
   redactedFields: Set<string>,
 ): Record<string, unknown> {
-  const output: Record<string, unknown> = {};
-  for (const [key, child] of Object.entries(record)) {
-    const fieldPath = [...path, key];
-    if (child !== null && isSecretKey(path, key)) {
-      output[key] = REDACTED_VALUE;
-      redactedFields.add(fieldPath.join('.'));
-    } else {
-      output[key] = redactJsonValue(child, fieldPath, redactedFields);
-    }
-  }
-  return output;
+  const entries = Object.entries(record)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, child]) => redactJsonEntry(key, child, path, redactedFields));
+  return Object.fromEntries(entries) as Record<string, unknown>;
 }
 
 function redactJsonValue(
@@ -247,6 +254,15 @@ function redactProperties(text: string, redactedFields: Set<string>): string {
     .join('\n');
 }
 
+function capture(
+  match: RegExpExecArray,
+  index: number,
+  fallback: string,
+): string {
+  const value = match[index];
+  return value === undefined ? fallback : value;
+}
+
 function redactAssignmentLine(
   line: string,
   path: readonly string[],
@@ -254,11 +270,12 @@ function redactAssignmentLine(
 ): string {
   const match = /^(\s*)([A-Za-z0-9_.-]+)(\s*[:=]\s*)(.*)$/.exec(line);
   if (match === null) return line;
-  const key = match[2] ?? '';
+
+  const key = capture(match, 2, '');
   if (!isSecretKey(path, key)) return line;
 
   redactedFields.add([...path, key].join('.'));
-  return (match[1] ?? '') + key + (match[3] ?? '=') + REDACTED_VALUE;
+  return capture(match, 1, '') + key + capture(match, 3, '=') + REDACTED_VALUE;
 }
 
 function containsHighRiskSecret(text: string): boolean {
