@@ -6,7 +6,7 @@ import gzip
 import hashlib
 import json
 import os
-import subprocess
+import subprocess  # nosec B404 -- exception type and test patch surface only.
 from pathlib import Path
 
 try:
@@ -39,6 +39,16 @@ except ModuleNotFoundError:
         validate_github_owner,
         validate_github_repository,
     )
+
+# Compatibility exports retained for bootstrap security regression tests.
+__all__ = (
+    "_run_checked",
+    "allowed",
+    "config_has_sensitive_key",
+    "validate_git_branch",
+    "validate_github_owner",
+    "validate_github_repository",
+)
 
 def _initial_counts() -> dict[str, int]:
     return {
