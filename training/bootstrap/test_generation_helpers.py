@@ -15,6 +15,16 @@ mod = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(mod)
 
 
+
+BUILD_SPEC = importlib.util.spec_from_file_location(
+    "generation_jobs",
+    HERE / "build_generation_jobs.py",
+)
+assert BUILD_SPEC is not None and BUILD_SPEC.loader is not None
+jobs_mod = importlib.util.module_from_spec(BUILD_SPEC)
+BUILD_SPEC.loader.exec_module(jobs_mod)
+
+
 class FormatterTests(unittest.TestCase):
     def test_markdown_table_preserves_escaped_pipes(self) -> None:
         raw = (
@@ -123,6 +133,52 @@ class QuestionGroundingTests(unittest.TestCase):
             answer,
             "the configured permission, normally startupguardian.bypass.",
         )
+
+
+
+
+class SourceSelectionTests(unittest.TestCase):
+    def test_legacy_docs_are_excluded(self) -> None:
+        record = {
+            "role": "staff_system",
+            "repository": "EnthusiaStaff",
+            "path": "docs/wiki/legacy/old/Commands.md",
+        }
+        self.assertLess(jobs_mod.path_score(record), 0)
+
+    def test_test_rollout_docs_are_excluded(self) -> None:
+        record = {
+            "role": "support_system",
+            "repository": "enthusia-support-bot",
+            "path": "docs/ai/TEST_ROLLOUT.md",
+        }
+        self.assertLess(jobs_mod.path_score(record), 0)
+
+    def test_header_only_line_is_excluded(self) -> None:
+        record = {"path": "README.md"}
+        self.assertLess(
+            jobs_mod.line_score(record, "Enable uploads in config.yml:", 50),
+            0,
+        )
+
+    def test_admin_reload_line_is_staff_visibility(self) -> None:
+        record = {
+            "role": "minecraft_plugin",
+            "path": "README.md",
+        }
+        self.assertEqual(
+            jobs_mod.source_visibility(record, "/pearlglitchblocker reload"),
+            "staff",
+        )
+
+    def test_rule_question_requires_rule_evidence(self) -> None:
+        job = {
+            "target_line": "| **Gave Items/Money** | Fairly gave items or money |",
+            "repository": "EnthusiaCommend",
+            "path": "PLAYER_GUIDE.md",
+        }
+        parsed = {"user": "What does the Gave Items/Money rule mean?"}
+        self.assertFalse(mod._question_is_grounded(job, parsed))
 
 
 if __name__ == "__main__":
