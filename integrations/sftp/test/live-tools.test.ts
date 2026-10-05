@@ -62,6 +62,9 @@ const PLAYER: Actor = { id: 'player-1', type: 'player' };
     const toolset = createLiveServerSourceTools(gateway);
 
     expect(toolset.names).toEqual([
+      'server.current_plugin_deployment',
+      'server.current_target_freshness',
+      'server.current_plugin_interface',
       'server.list_plugins',
       'server.inspect_plugin',
       'server.discover_configs',

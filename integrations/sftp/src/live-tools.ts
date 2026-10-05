@@ -17,6 +17,11 @@ import {
   type LiveReadOptions,
   type LiveSourceResult,
 } from './live-source.js';
+import {
+  readCurrentPluginDeployment,
+  readCurrentPluginInterface,
+  readCurrentTargetFreshness,
+} from './current-intelligence.js';
 import type {
   Tool,
   ToolCallContext,
@@ -187,6 +192,63 @@ function meta(
 }
 
 const DEFINITIONS: readonly LiveToolDefinition[] = [
+  {
+    meta: meta(
+      'server.current_plugin_deployment',
+      'Return a compact current deployment identity for one deployed plugin JAR.',
+      {
+        serverId: 'Configured server identity.',
+        directoryId: 'Configured plugin-directory identity.',
+        fileName: 'JAR basename returned by server.list_plugins.',
+      },
+    ),
+    keys: ['serverId', 'directoryId', 'fileName'],
+    invoke: (gateway, params, options) => readCurrentPluginDeployment(
+      gateway,
+      params['serverId'] ?? '',
+      params['directoryId'] ?? '',
+      params['fileName'] ?? '',
+      options,
+    ),
+  },
+  {
+    meta: meta(
+      'server.current_target_freshness',
+      'Verify the live read path using one explicit deployed plugin JAR as an anchor.',
+      {
+        serverId: 'Configured server identity.',
+        directoryId: 'Configured plugin-directory identity.',
+        fileName: 'Known deployed JAR basename used as the freshness anchor.',
+      },
+    ),
+    keys: ['serverId', 'directoryId', 'fileName'],
+    invoke: (gateway, params, options) => readCurrentTargetFreshness(
+      gateway,
+      params['serverId'] ?? '',
+      params['directoryId'] ?? '',
+      params['fileName'] ?? '',
+      options,
+    ),
+  },
+  {
+    meta: meta(
+      'server.current_plugin_interface',
+      'Return declared command and permission keys from the currently deployed plugin JAR.',
+      {
+        serverId: 'Configured server identity.',
+        directoryId: 'Configured plugin-directory identity.',
+        fileName: 'JAR basename returned by server.list_plugins.',
+      },
+    ),
+    keys: ['serverId', 'directoryId', 'fileName'],
+    invoke: (gateway, params, options) => readCurrentPluginInterface(
+      gateway,
+      params['serverId'] ?? '',
+      params['directoryId'] ?? '',
+      params['fileName'] ?? '',
+      options,
+    ),
+  },
   {
     meta: meta(
       'server.list_plugins',
