@@ -163,7 +163,72 @@ Old information may remain for audit/history but must leave normal current retri
 
 Discord support, ticket support, future Minecraft /ai, staff tooling, and other future interfaces should use the same core intelligence platform rather than independent chatbot implementations.
 
+## 3.8 Adaptive support is a core product capability
+
+Adaptive support is not a future enhancement or optional layer. It is one of Enthusia AI's primary reasons to exist.
+
+The AI should adapt its investigation and answer to the actual person, surface, problem, and current server state. When relevant and authorized, support behavior should incorporate:
+
+- linked Minecraft/Discord identity;
+- current Discord roles;
+- current Minecraft rank/permissions;
+- current backend/server/world;
+- recent or active ticket context;
+- current account-link status;
+- current player-specific facts exposed through safe tools;
+- current structured player memory;
+- relevant historical memory, clearly distinguished from current truth;
+- known bugs and recent deployments;
+- the exact plugin/configuration/source responsible for the behavior being discussed.
+
+The system should not behave like a static FAQ bot that gives the same generic answer to every player.
+
+Examples:
+
+- If a player asks why /fly does not work, inspect their linked account, live rank/permission state, current server/world, relevant command/plugin configuration, and known deployment/bug state before explaining the likely cause.
+- If a player asks how to link Discord and they are already linked, do not repeat the basic linking tutorial; use current identity context and help with the actual next problem.
+- If a player asks about a feature affected by their rank, answer using their current rank/role when permitted rather than giving every rank's generic documentation.
+- If available evidence is insufficient or contradictory, say so and continue investigating or escalate instead of inventing a cause.
+
+Adaptive support must remain relevance-bounded: do not fetch unrelated private history merely because it exists.
+
+## 3.9 Ticket automation is a core product capability
+
+Ticket automation is also core scope, not a future idea.
+
+Within the Ticket Bot authority boundary, Enthusia AI should be able to:
+
+- understand the user's issue from the conversation;
+- inspect relevant identity/player/server/plugin context;
+- retrieve current evidence;
+- ask targeted follow-up questions;
+- avoid re-asking questions already answered by context or tools;
+- summarize the issue for staff;
+- identify likely causes;
+- propose next actions;
+- request approved ticket lifecycle actions through the Ticket Bot contract;
+- remember durable, evidence-backed information where appropriate;
+- escalate to human staff or OpenAI when the case exceeds local authority/capability.
+
+The goal is highly adaptive support that can resolve routine tickets end-to-end while keeping lifecycle authority, permissions, and irreversible actions outside unconstrained model control.
+
+## 3.10 Player-aware dynamic onboarding is a core behavior
+
+Onboarding should use the same player-context and memory architecture as support.
+
+When relevant and permitted, the AI may consider:
+
+- when the player joined;
+- whether their Discord/Minecraft account is linked;
+- current roles/ranks;
+- what onboarding steps are already complete;
+- previous verified help/context;
+- whether the player is new to a particular server/system rather than new to Enthusia overall.
+
+The AI should avoid repetitive generic onboarding when current context shows that a step is already complete.
+
 ---
+
 
 # 4. Explicit non-goals
 
@@ -3499,21 +3564,36 @@ Current Enthusia-owned sources should normally outrank generic web pages.
 
 # 100. Server-wide AI future
 
-Long-term, Enthusia AI may power:
+The following are long-term expansion areas built on the same shared intelligence platform.
 
-- Discord support;
-- Minecraft support;
-- staff assistant;
-- ticket assistant;
-- bug triage;
-- documentation;
-- deployment explanations;
-- player onboarding;
-- event help;
-- moderation support;
-- coding escalation.
+Already-core capabilities such as adaptive support, ticket automation, player-context-aware onboarding, memory, evidence verification, Discord support, staff assistance, and Minecraft /ai should not be deferred merely because they appear in broader server-wide AI discussions.
 
-The architecture should remain one shared intelligence platform.
+Future expansion areas include:
+
+- economy intelligence and anomaly analysis;
+- AI-assisted server operations and diagnostics;
+- an Enthusia Doctor successor/overhaul using the shared AI platform;
+- event recommendation/orchestration;
+- richer NPC/world interaction;
+- personalized activity recommendations;
+- proactive incident correlation;
+- natural-language operational queries;
+- deployment/health explanations;
+- coding escalation and automated engineering handoff;
+- additional plugin decision-support APIs.
+
+Future plugin integrations should expose typed capabilities and structured decision contracts rather than giving the language model arbitrary plugin internals or unrestricted mutation access.
+
+The preferred expansion pattern is:
+
+1. plugin/service exposes a typed read or decision-support capability;
+2. Enthusia AI gathers only relevant authorized context;
+3. the model returns a structured recommendation/decision;
+4. deterministic policy code validates permissions, invariants, cooldowns, bounds, and current state;
+5. only approved/reversible actions execute automatically;
+6. high-impact actions require explicit staff/owner approval.
+
+See `docs/FUTURE-EXPANSION-ROADMAP.md`.
 
 ---
 

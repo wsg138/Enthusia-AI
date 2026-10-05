@@ -22,7 +22,13 @@ Desired learned behaviors:
 - avoid inventing commands/features;
 - update current memory when verified facts change;
 - keep historical memory separate;
-- respect visibility and authorization.
+- respect visibility and authorization;
+- adapt support to the actual player/account/server context instead of giving generic FAQ answers;
+- use linked identity, current roles/rank/permissions, relevant memory, and current server/plugin evidence when the question calls for them;
+- avoid retrieving unrelated private context for simple questions;
+- understand ticket conversations, ask only missing follow-up questions, summarize evidence, and choose the correct ticket-support next step;
+- personalize onboarding based on what is already known/verified about the player rather than repeating completed steps;
+- distinguish a durable behavioral lesson from a volatile fact that belongs in live retrieval.
 
 Current server facts should remain source-backed and retrievable.
 
@@ -43,7 +49,12 @@ The project plan includes:
 - corrected AI responses;
 - escalation cases;
 - code-investigation examples;
-- privacy/security negative examples.
+- privacy/security negative examples;
+- adaptive support scenarios with identity/rank/permission/server context;
+- ticket automation scenarios including triage, targeted follow-up, investigation, summarization, and lifecycle action requests;
+- dynamic onboarding scenarios where prior/current player context changes the correct response.
+
+Synthetic/support training data should deliberately include paired cases where the same apparent user question has a different correct investigation or answer because the player's current context differs. This is necessary to teach adaptive support rather than static FAQ behavior.
 
 The historical ticket corpus is an owner-directed planned data source. Before the extraction/training job is executed, create a documented governance/compliance checkpoint covering source, authorization, applicable platform/data obligations, retention, exclusions, and handling.
 
