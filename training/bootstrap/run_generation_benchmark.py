@@ -180,6 +180,10 @@ def _question_is_grounded(job: dict, parsed: dict) -> bool:
         return False
     if "cooldown" in q_lower and "cooldown" not in support_lower:
         return False
+    if re.search(r"\brules?\b", q_lower) and not re.search(
+        r"\brules?\b", support_lower
+    ):
+        return False
 
     # Permission questions require either the word itself or a permission node.
     asks_permission = bool(re.search(r"\bpermissions?\b", q_lower))
