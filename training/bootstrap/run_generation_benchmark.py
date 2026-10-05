@@ -62,10 +62,26 @@ def _clean_display_line(line: str) -> str:
     # factual values. Exact raw evidence remains stored separately.
     if text.startswith("|") and text.endswith("|"):
         cells = _split_markdown_table_row(text)
-        if len(cells) >= 3 and cells[0].startswith("/"):
-            rendered = f"{cells[0]}: {cells[1]} Permission: {cells[2]}"
-            if len(cells) > 3:
-                rendered += " " + " ".join(cells[3:])
+        if len(cells) >= 2 and cells[0].startswith("/"):
+            command = cells[0]
+            rest = list(cells[1:])
+            permission = None
+            for index, cell in enumerate(rest):
+                if re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+)+", cell):
+                    permission = rest.pop(index)
+                    break
+
+            rendered = command
+            if rest:
+                rendered += f": {rest[0]}"
+                rest = rest[1:]
+            if permission:
+                rendered += f" Permission: {permission}"
+            for extra in rest:
+                if extra.startswith("/"):
+                    rendered += f" Example: {extra}"
+                else:
+                    rendered += f" Details: {extra}"
             return rendered.strip()
         if len(cells) == 2:
             return f"{cells[0]}: {cells[1]}"
@@ -83,7 +99,11 @@ def _clean_display_line(line: str) -> str:
         return f"{command_comment.group(1).strip()}: {command_comment.group(2).strip()}"
 
     if text.lower().startswith("usage:"):
-        text = "Usage:" + text[6:]
+        value = text[6:].strip().strip('"').strip("'")
+        value = re.sub(r"&[0-9A-FK-ORa-fk-or]", "", value)
+        if value.lower().startswith("usage:"):
+            value = value[6:].strip()
+        text = f"Usage: {value}"
     if text.lower().startswith("aliases:"):
         text = "Aliases:" + text[8:]
     return text.strip()
