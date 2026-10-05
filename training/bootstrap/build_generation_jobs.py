@@ -46,7 +46,7 @@ CODE_PREFIXES = (
 )
 
 
-def source_visibility(record: dict) -> str:
+def source_visibility(record: dict, line: str = "") -> str:
     role = record.get("role")
     if role in STAFF_SOURCE_ROLES:
         return "staff"
@@ -67,6 +67,14 @@ def source_visibility(record: dict) -> str:
     )):
         return "staff"
 
+    line_lower = line.lower()
+    if any(token in line_lower for token in (
+        "/punish", "/ban ", "/ban<", "/mute ", "/mute<", "/kick ",
+        "/reload", "blacklist", "administrator", "admin permission",
+        ".admin", "staff-only", "staff only",
+    )):
+        return "staff"
+
     return "public"
 
 
@@ -77,6 +85,16 @@ def path_score(record: dict) -> int:
         return -10_000
 
     path = record["path"].replace("\\", "/")
+    lower_path = path.lower()
+    if (
+        "/legacy/" in "/" + lower_path
+        or lower_path.startswith("legacy/")
+        or "test_rollout" in lower_path
+        or "test-rollout" in lower_path
+        or "/test_setup" in lower_path
+        or "/test-setup" in lower_path
+    ):
+        return -10_000
     lower = path.lower()
     ext = Path(path).suffix.lower()
     score = 0
@@ -124,6 +142,9 @@ def line_score(record: dict, line: str, base_score: int) -> int:
     score = base_score
 
     if not (15 <= len(line) <= 500):
+        return -10_000
+    stripped = line.strip()
+    if stripped.endswith(":") and not stripped.startswith(("http://", "https://")):
         return -10_000
     if "\ufffd" in line:
         return -10_000
@@ -293,7 +314,7 @@ def main() -> int:
             "source_version": record["commit_sha"],
             "repository": repo,
             "role": record.get("role"),
-            "visibility": source_visibility(record),
+            "visibility": source_visibility(record, target_line),
             "path": record["path"],
             "line_number": line_index + 1,
             "source_score": score,
