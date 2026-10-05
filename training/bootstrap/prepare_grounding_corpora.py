@@ -239,31 +239,30 @@ def _summarize(records: list[dict], path: Path) -> dict:
     }
 
 
+def _report_section(
+    records: list[dict],
+    path: Path,
+    rejections: collections.Counter,
+    dedup: dict,
+) -> dict:
+    return {
+        **_summarize(records, path),
+        "rejections": dict(rejections),
+        **dedup,
+    }
+
+
 def _build_report(
     input_count: int,
-    rag_records: list[dict],
-    rag_path: Path,
-    rejected_rag: collections.Counter,
-    rag_dedup: dict,
-    synthetic_records: list[dict],
-    synth_path: Path,
-    rejected_synthetic: collections.Counter,
-    synth_dedup: dict,
+    rag_section: dict,
+    synthetic_section: dict,
     repository_manifest: str | None,
 ) -> dict:
     return {
         "schema_version": 1,
         "input_files": input_count,
-        "rag": {
-            **_summarize(rag_records, rag_path),
-            "rejections": dict(rejected_rag),
-            **rag_dedup,
-        },
-        "synthetic_grounding": {
-            **_summarize(synthetic_records, synth_path),
-            "rejections": dict(rejected_synthetic),
-            **synth_dedup,
-        },
+        "rag": rag_section,
+        "synthetic_grounding": synthetic_section,
         "policy": {
             # Boolean policy evidence, not a credential literal.
             "all_second_pass_secret_pattern_files_excluded": True,  # nosec B105  # nosemgrep
@@ -305,16 +304,22 @@ def main() -> int:
     write_gzip(rag_path, rag_records)
     write_gzip(synth_path, synthetic_records)
 
-    report = _build_report(
-        input_count,
+    rag_section = _report_section(
         rag_records,
         rag_path,
         rejected_rag,
         rag_dedup,
+    )
+    synthetic_section = _report_section(
         synthetic_records,
         synth_path,
         rejected_synthetic,
         synth_dedup,
+    )
+    report = _build_report(
+        input_count,
+        rag_section,
+        synthetic_section,
         args.repository_manifest,
     )
     Path(args.report).write_text(json.dumps(report, indent=2), encoding="utf-8")
