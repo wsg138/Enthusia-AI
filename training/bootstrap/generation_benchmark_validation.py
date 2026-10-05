@@ -4,19 +4,14 @@ import re
 import urllib.parse
 
 try:
-    from training.bootstrap.generation_benchmark_formatting import (
-        PERMISSION_NODE_RE,
-        _clean_display_line,
-        _split_markdown_table_row,
-        strip_code_fence,
-    )
+    from training.bootstrap import generation_benchmark_formatting as _formatting
 except ModuleNotFoundError:
-    from generation_benchmark_formatting import (
-        PERMISSION_NODE_RE,
-        _clean_display_line,
-        _split_markdown_table_row,
-        strip_code_fence,
-    )
+    import generation_benchmark_formatting as _formatting
+
+PERMISSION_NODE_RE = _formatting.PERMISSION_NODE_RE
+_clean_display_line = _formatting._clean_display_line
+_split_markdown_table_row = _formatting._split_markdown_table_row
+strip_code_fence = _formatting.strip_code_fence
 
 CATEGORIES = {
     "onboarding", "commands", "permissions", "rank", "economy", "tickets",
