@@ -171,6 +171,19 @@ class SourceSelectionTests(unittest.TestCase):
             "staff",
         )
 
+    def test_mixed_usage_with_reload_debug_is_staff_visibility(self) -> None:
+        record = {
+            "role": "minecraft_plugin",
+            "path": "src/main/resources/plugin.yml",
+        }
+        self.assertEqual(
+            jobs_mod.source_visibility(
+                record,
+                "usage: /enthusiadonors <reload|refresh|status|top|debug>",
+            ),
+            "staff",
+        )
+
     def test_rule_question_requires_rule_evidence(self) -> None:
         job = {
             "target_line": "| **Gave Items/Money** | Fairly gave items or money |",
