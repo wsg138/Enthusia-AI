@@ -108,13 +108,16 @@ function encodeFreshness(version: string, observedAt: string): string {
   });
 }
 
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === 'object'
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
 function provenanceVersion(result: unknown): string | undefined {
-  if (result === null || typeof result !== 'object') return undefined;
-  const provenance = (result as Record<string, unknown>)['provenance'];
-  if (provenance === null || typeof provenance !== 'object') return undefined;
-  const file = (provenance as Record<string, unknown>)['file'];
-  if (file === null || typeof file !== 'object') return undefined;
-  const version = (file as Record<string, unknown>)['version'];
+  const provenance = asRecord(result)?.['provenance'];
+  const file = asRecord(provenance)?.['file'];
+  const version = asRecord(file)?.['version'];
   return typeof version === 'string' ? version : undefined;
 }
 

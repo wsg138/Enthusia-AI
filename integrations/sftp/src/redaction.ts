@@ -63,6 +63,16 @@ const CONNECTION_KEYS = new Set([
   'databaseurl',
 ]);
 
+const SECRET_KEY_FRAGMENTS = [
+  'password',
+  'passwd',
+  'apikey',
+  'privatekey',
+  'credential',
+] as const;
+
+const SECRET_KEY_SUFFIXES = ['token', 'secret'] as const;
+
 const HIGH_RISK_SECRET_PATTERNS: readonly RegExp[] = [
   /-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----/,
   /-----BEGIN ENCRYPTED PRIVATE KEY-----/,
@@ -99,13 +109,19 @@ function isDatabaseParent(path: readonly string[]): boolean {
   return path.some((part) => DATABASE_PARENTS.has(normalizeKey(part)));
 }
 
+function containsSecretFragment(key: string): boolean {
+  return SECRET_KEY_FRAGMENTS.some((fragment) => key.includes(fragment));
+}
+
+function hasSecretSuffix(key: string): boolean {
+  return SECRET_KEY_SUFFIXES.some((suffix) => key.endsWith(suffix));
+}
+
 function isSecretKey(path: readonly string[], key: string): boolean {
   const normalized = normalizeKey(key);
   if (DIRECT_SECRET_KEYS.has(normalized)) return true;
-  if (normalized.includes('password') || normalized.includes('passwd')) return true;
-  if (normalized.includes('apikey') || normalized.includes('privatekey')) return true;
-  if (normalized.includes('credential')) return true;
-  if (normalized.endsWith('token') || normalized.endsWith('secret')) return true;
+  if (containsSecretFragment(normalized)) return true;
+  if (hasSecretSuffix(normalized)) return true;
   return CONNECTION_KEYS.has(normalized) && isDatabaseParent(path);
 }
 
@@ -183,7 +199,8 @@ function redactYamlField(
 
   redactedFields.add([...path, field.key].join('.'));
   if (field.value.trim().length === 0) state.redactedBlockIndent = field.indent;
-  return field.prefix + field.rawKey + ':' + field.separator + REDACTED_VALUE;
+  const separator = field.separator.length === 0 ? ' ' : field.separator;
+  return field.prefix + field.rawKey + ':' + separator + REDACTED_VALUE;
 }
 
 function redactYamlLine(

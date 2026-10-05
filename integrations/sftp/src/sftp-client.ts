@@ -255,57 +255,75 @@ export class Ssh2SftpClient implements SftpClient {
   }
 }
 
+async function resolveSftpCredentials(
+  options: SshConnectOptions,
+): Promise<SftpCredentials> {
+  try {
+    return await options.credentials();
+  } catch {
+    throw new SftpError('credential provider failed', options.serverId);
+  }
+}
+
+function buildConnectConfig(
+  options: SshConnectOptions,
+  credentials: SftpCredentials,
+): ConnectConfig {
+  const config: ConnectConfig = {
+    host: options.host,
+    port: options.port,
+    username: credentials.username,
+    readyTimeout: options.readyTimeoutMs,
+  };
+  if (options.hostKeySha256 !== undefined) {
+    const expected = options.hostKeySha256;
+    config.hostVerifier = (key: Buffer) => verifyPinnedHostKey(key, expected);
+  }
+  if (credentials.privateKey !== undefined) config.privateKey = credentials.privateKey;
+  if (credentials.passphrase !== undefined) config.passphrase = credentials.passphrase;
+  if (credentials.password !== undefined) config.password = credentials.password;
+  return config;
+}
+
+function openSftpSubsystem(
+  options: SshConnectOptions,
+  config: ConnectConfig,
+): Promise<Ssh2SftpClient> {
+  return new Promise((resolve, reject) => {
+    const client = new Client();
+    let settled = false;
+    const fail = (error: unknown): void => {
+      if (settled) return;
+      settled = true;
+      client.end();
+      reject(toSftpError(error, options.serverId));
+    };
+    const succeed = (sftp: SFTPWrapper): void => {
+      if (settled) return;
+      settled = true;
+      resolve(Ssh2SftpClient.wrap(client, sftp, options.serverId));
+    };
+
+    client.once('ready', () => {
+      client.sftp((error, sftp) => {
+        if (error) fail(error);
+        else succeed(sftp);
+      });
+    });
+    client.once('error', fail);
+    client.connect(config);
+  });
+}
+
 /**
  * Open an SFTP connection. Only the SFTP subsystem is requested; exec and
  * shell are never opened. Rejects on auth failure or timeout.
  */
-export function connectSftp(options: SshConnectOptions): Promise<Ssh2SftpClient> {
-  return new Promise((resolve, reject) => {
-    const finish = (err?: unknown, client?: Ssh2SftpClient): void => {
-      if (err !== undefined) {
-        reject(toSftpError(err, options.serverId));
-      } else {
-        resolve(client as Ssh2SftpClient);
-      }
-    };
-    let creds: SftpCredentials | Promise<SftpCredentials>;
-    try {
-      creds = options.credentials();
-    } catch {
-      reject(new SftpError('credential provider failed', options.serverId));
-      return;
-    }
-    Promise.resolve(creds).then(
-      (resolved) => {
-        const client = new Client();
-        client.once('ready', () => {
-          client.sftp((err, sftp) => {
-            if (err) {
-              client.end();
-              finish(err);
-              return;
-            }
-            finish(undefined, Ssh2SftpClient.wrap(client, sftp, options.serverId));
-          });
-        });
-        client.once('error', (err) => finish(err));
-        const connectConfig: ConnectConfig = {
-          host: options.host,
-          port: options.port,
-          username: resolved.username,
-          readyTimeout: options.readyTimeoutMs,
-        };
-        if (options.hostKeySha256 !== undefined) {
-          connectConfig.hostVerifier = (key: Buffer) => verifyPinnedHostKey(key, options.hostKeySha256 as string);
-        }
-        if (resolved.privateKey !== undefined) connectConfig.privateKey = resolved.privateKey;
-        if (resolved.passphrase !== undefined) connectConfig.passphrase = resolved.passphrase;
-        if (resolved.password !== undefined) connectConfig.password = resolved.password;
-        client.connect(connectConfig);
-      },
-      () => reject(new SftpError('credential provider failed', options.serverId)),
-    );
-  });
+export async function connectSftp(
+  options: SshConnectOptions,
+): Promise<Ssh2SftpClient> {
+  const credentials = await resolveSftpCredentials(options);
+  return openSftpSubsystem(options, buildConnectConfig(options, credentials));
 }
 
 // ---------------------------------------------------------------------------

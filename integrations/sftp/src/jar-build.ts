@@ -95,6 +95,14 @@ function metadataMaps(entries: Map<string, string>): Map<string, string>[] {
   return maps;
 }
 
+function assignBuildField(
+  target: JarBuildMetadata,
+  key: keyof JarBuildMetadata,
+  value: string | undefined,
+): void {
+  if (value !== undefined) target[key] = value;
+}
+
 export function parseBuildMetadata(entries: Map<string, string>): JarBuildMetadata {
   const maps = metadataMaps(entries);
   const build: JarBuildMetadata = {};
@@ -110,12 +118,17 @@ export function parseBuildMetadata(entries: Map<string, string>): JarBuildMetada
     ? rawGit.toLowerCase()
     : undefined;
 
-  const version = firstValue(maps, ['implementation-version', 'build-version', 'version']);
-  const buildId = firstValue(maps, ['build-number', 'build-id']);
-  const timestamp = firstValue(maps, ['build-time', 'build-timestamp', 'git.build.time']);
-  if (git !== undefined) build.gitSourceSha = git;
-  if (version !== undefined) build.buildVersion = version;
-  if (buildId !== undefined) build.buildId = buildId;
-  if (timestamp !== undefined) build.buildTimestamp = timestamp;
+  assignBuildField(build, 'gitSourceSha', git);
+  assignBuildField(
+    build,
+    'buildVersion',
+    firstValue(maps, ['implementation-version', 'build-version', 'version']),
+  );
+  assignBuildField(build, 'buildId', firstValue(maps, ['build-number', 'build-id']));
+  assignBuildField(
+    build,
+    'buildTimestamp',
+    firstValue(maps, ['build-time', 'build-timestamp', 'git.build.time']),
+  );
   return build;
 }

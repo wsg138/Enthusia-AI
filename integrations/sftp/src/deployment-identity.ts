@@ -54,24 +54,39 @@ function firstValue(
 }
 
 function validGitSha(value: string | undefined): string | undefined {
-  if (value === undefined || value.length < 7 || value.length > 64) return undefined;
-  return /^[0-9a-f]+$/i.test(value) ? value.toLowerCase() : undefined;
+  return value !== undefined && /^[0-9a-f]{7,64}$/i.test(value)
+    ? value.toLowerCase()
+    : undefined;
+}
+
+function assignIfPresent(
+  target: DeploymentIdentity,
+  key: keyof DeploymentIdentity,
+  value: string | undefined,
+): void {
+  if (value !== undefined) target[key] = value;
 }
 
 export function parseDeploymentIdentity(text: string): DeploymentIdentity {
   const values = jsonValues(text) ?? propertyValues(text);
   const result: DeploymentIdentity = {};
 
-  const deploymentId = firstValue(values, ['deploymentid', 'releaseid']);
-  const runtimeVersion = firstValue(values, ['runtimeversion', 'version', 'releaseversion']);
-  const gitSha = validGitSha(firstValue(values, ['gitsha', 'gitcommit', 'commitsha', 'revision']));
-  const buildId = firstValue(values, ['buildid', 'buildnumber']);
-  const deployedAt = firstValue(values, ['deployedat', 'deploymenttime', 'releasedat']);
-
-  if (deploymentId !== undefined) result.deploymentId = deploymentId;
-  if (runtimeVersion !== undefined) result.runtimeVersion = runtimeVersion;
-  if (gitSha !== undefined) result.gitSha = gitSha;
-  if (buildId !== undefined) result.buildId = buildId;
-  if (deployedAt !== undefined) result.deployedAt = deployedAt;
+  assignIfPresent(result, 'deploymentId', firstValue(values, ['deploymentid', 'releaseid']));
+  assignIfPresent(
+    result,
+    'runtimeVersion',
+    firstValue(values, ['runtimeversion', 'version', 'releaseversion']),
+  );
+  assignIfPresent(
+    result,
+    'gitSha',
+    validGitSha(firstValue(values, ['gitsha', 'gitcommit', 'commitsha', 'revision'])),
+  );
+  assignIfPresent(result, 'buildId', firstValue(values, ['buildid', 'buildnumber']));
+  assignIfPresent(
+    result,
+    'deployedAt',
+    firstValue(values, ['deployedat', 'deploymenttime', 'releasedat']),
+  );
   return result;
 }
