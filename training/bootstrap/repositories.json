@@ -126,7 +126,7 @@
       "production_authority": "requires_deployment_verification"
     },
     {
-      "owner": "wsg138",
+      "owner": "BadgersMC",
       "name": "LumaGuilds",
       "default_branch": "main",
       "role": "minecraft_plugin",
@@ -134,7 +134,8 @@
       "use_for_rag": true,
       "use_for_synthetic_grounding": true,
       "direct_sft": false,
-      "production_authority": "requires_deployment_verification"
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Canonical upstream verified against current Enthusia production; replaces stale wsg138 fork for current-source grounding."
     },
     {
       "owner": "wsg138",
@@ -238,7 +239,7 @@
       "policy_note": "Private experimental Enthusia project not present in current production plugin snapshot; retain for development RAG only."
     },
     {
-      "owner": "wsg138",
+      "owner": "BadgersMC",
       "name": "EnthusiaMarket",
       "default_branch": "main",
       "role": "minecraft_plugin",
@@ -246,7 +247,8 @@
       "use_for_rag": true,
       "use_for_synthetic_grounding": true,
       "direct_sft": false,
-      "production_authority": "requires_deployment_verification"
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Canonical upstream release v1.0.52 matches the current production JAR byte-for-byte; replaces stale wsg138 fork."
     },
     {
       "owner": "wsg138",
@@ -395,7 +397,7 @@
       "production_authority": "requires_deployment_verification"
     },
     {
-      "owner": "wsg138",
+      "owner": "FainNeito",
       "name": "Enthusia-Express",
       "default_branch": "main",
       "role": "minecraft_plugin",
@@ -403,7 +405,8 @@
       "use_for_rag": true,
       "use_for_synthetic_grounding": true,
       "direct_sft": false,
-      "production_authority": "requires_deployment_verification"
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Canonical upstream build matches the current production JAR byte-for-byte; replaces stale wsg138 fork."
     },
     {
       "owner": "wsg138",
@@ -449,6 +452,77 @@
       "use_for_synthetic_grounding": true,
       "direct_sft": false,
       "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "BadgersMC",
+      "name": "EnthusiaAdvancements",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Canonical ecosystem source identified by the live production plugin audit; current deployment still requires live/hash verification when answering volatile runtime questions."
+    },
+    {
+      "owner": "BadgersMC",
+      "name": "EnthusiaBiomes",
+      "default_branch": "master",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Canonical ecosystem source identified by the live production plugin audit; current deployment still requires live/hash verification when answering volatile runtime questions."
+    },
+    {
+      "owner": "BadgersMC",
+      "name": "EnthusiaGiveaway",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Canonical ecosystem source identified by the live production plugin audit; current deployment still requires live/hash verification when answering volatile runtime questions."
+    },
+    {
+      "owner": "BadgersMC",
+      "name": "LumaTrivia",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Canonical ecosystem source identified by the live production plugin audit; current deployment still requires live/hash verification when answering volatile runtime questions."
+    }
+  ],
+  "unresolved_sources": [
+    {
+      "plugin": "EnthusiaDisplay",
+      "production_artifact": "EnthusiaDisplay-0.1.8-test.jar",
+      "main_class": "net.enthusia.display.EnthusiaDisplayPlugin",
+      "status": "source_unresolved",
+      "include_in_github_collection": false,
+      "use_for_rag": false,
+      "use_for_synthetic_grounding": false,
+      "reason": "No accessible canonical repository was found under wsg138, BadgersMC, FainNeito, or NotBorlyn, and local/global source search did not resolve the plugin. Use verified live deployment/config evidence only until provenance is resolved."
+    },
+    {
+      "plugin": "EnthusiaMapShields",
+      "production_artifact": "EnthusiaMapShields-0.1.4.jar",
+      "maven_coordinates": "info.enthusia:EnthusiaMapShields:0.1.4",
+      "main_class": "info.enthusia.mapshields.infrastructure.EnthusiaMapShieldsPlugin",
+      "status": "source_unresolved",
+      "include_in_github_collection": false,
+      "use_for_rag": false,
+      "use_for_synthetic_grounding": false,
+      "reason": "No accessible canonical repository was found under wsg138, BadgersMC, FainNeito, or NotBorlyn, and local/global source search did not resolve the plugin. Use verified live deployment/config evidence only until provenance is resolved."
     }
   ],
   "excluded_repositories": [
