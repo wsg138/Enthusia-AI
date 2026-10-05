@@ -82,6 +82,24 @@ interface PluginEntryOutcome {
   warning?: string;
 }
 
+function appendPluginOutcome(
+  outcome: PluginEntryOutcome,
+  plugins: PluginListItem[],
+  warnings: string[],
+): void {
+  if (outcome.item !== undefined) plugins.push(outcome.item);
+  if (outcome.warning !== undefined) warnings.push(outcome.warning);
+}
+
+function pluginListTruncated(
+  entryCount: number,
+  pluginCount: number,
+  maxResults: number,
+): boolean {
+  if (pluginCount < maxResults) return false;
+  return entryCount > pluginCount;
+}
+
 function withDeadline<T>(
   promise: Promise<T>,
   timeoutMs: number,
@@ -122,19 +140,25 @@ async function safeClose(client: SftpClient | undefined): Promise<void> {
   }
 }
 
+function validJarLength(fileName: string): boolean {
+  if (fileName.length === 0) return false;
+  return fileName.length <= 255;
+}
+
+function singlePathSegment(fileName: string): boolean {
+  if (fileName.includes('\0')) return false;
+  if (fileName.includes('\\')) return false;
+  return posixPath.basename(fileName) === fileName;
+}
+
+function hasJarExtension(fileName: string): boolean {
+  return posixPath.extname(fileName).toLowerCase() === '.jar';
+}
+
 function assertJarBasename(fileName: string): void {
-  if (fileName.length === 0 || fileName.length > 255) {
-    throw new LiveBoundaryError('INVALID_REQUEST', false);
-  }
-  if (fileName.includes('\0') || fileName.includes('\\')) {
-    throw new LiveBoundaryError('INVALID_REQUEST', false);
-  }
-  if (posixPath.basename(fileName) !== fileName) {
-    throw new LiveBoundaryError('INVALID_REQUEST', false);
-  }
-  if (posixPath.extname(fileName).toLowerCase() !== '.jar') {
-    throw new LiveBoundaryError('INVALID_REQUEST', false);
-  }
+  if (!validJarLength(fileName)) throw new LiveBoundaryError('INVALID_REQUEST', false);
+  if (!singlePathSegment(fileName)) throw new LiveBoundaryError('INVALID_REQUEST', false);
+  if (!hasJarExtension(fileName)) throw new LiveBoundaryError('INVALID_REQUEST', false);
 }
 
 function pluginWarning(error: unknown): string | undefined {
@@ -289,13 +313,12 @@ export class LiveServerSourceGateway {
         entry,
         extra,
       );
-      if (outcome.item !== undefined) plugins.push(outcome.item);
-      if (outcome.warning !== undefined) warnings.push(outcome.warning);
+      appendPluginOutcome(outcome, plugins, warnings);
     }
     return {
       directoryId,
       plugins,
-      truncated: entries.length > plugins.length && plugins.length >= maxResults,
+      truncated: pluginListTruncated(entries.length, plugins.length, maxResults),
       warnings,
     };
   }
@@ -307,7 +330,8 @@ export class LiveServerSourceGateway {
     entry: { path: string; name: string; isDirectory: boolean },
     extra: readonly DenyRule[],
   ): Promise<PluginEntryOutcome> {
-    if (entry.isDirectory || posixPath.extname(entry.name).toLowerCase() !== '.jar') return {};
+    if (entry.isDirectory) return {};
+    if (posixPath.extname(entry.name).toLowerCase() !== '.jar') return {};
     if (isDeniedPath(entry.path, extra)) return {};
 
     try {

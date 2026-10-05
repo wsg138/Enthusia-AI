@@ -75,28 +75,54 @@ function parseCentralEntry(
   };
 }
 
-function parseDirectory(buffer: Buffer): ZipEntry[] {
+interface DirectoryHeader {
+  totalEntries: number;
+  centralSize: number;
+  centralOffset: number;
+}
+
+function directoryHeader(buffer: Buffer): DirectoryHeader {
   const eocd = findEocd(buffer);
   assertRange(buffer, eocd, 22);
-  const totalEntries = buffer.readUInt16LE(eocd + 10);
-  const centralSize = buffer.readUInt32LE(eocd + 12);
-  const centralOffset = buffer.readUInt32LE(eocd + 16);
+  return {
+    totalEntries: buffer.readUInt16LE(eocd + 10),
+    centralSize: buffer.readUInt32LE(eocd + 12),
+    centralOffset: buffer.readUInt32LE(eocd + 16),
+  };
+}
 
-  if (totalEntries === 0xffff || centralOffset === 0xffffffff || centralSize === 0xffffffff) {
-    throw new Error('zip64 metadata is not supported');
+function isZip64(header: DirectoryHeader): boolean {
+  if (header.totalEntries === 0xffff) return true;
+  if (header.centralOffset === 0xffffffff) return true;
+  return header.centralSize === 0xffffffff;
+}
+
+function assertDirectoryHeader(buffer: Buffer, header: DirectoryHeader): void {
+  if (isZip64(header)) throw new Error('zip64 metadata is not supported');
+  if (header.totalEntries > MAX_ARCHIVE_ENTRIES) {
+    throw new Error('archive entry limit exceeded');
   }
-  if (totalEntries > MAX_ARCHIVE_ENTRIES) throw new Error('archive entry limit exceeded');
-  assertRange(buffer, centralOffset, centralSize);
+  assertRange(buffer, header.centralOffset, header.centralSize);
+}
 
+function readCentralEntries(buffer: Buffer, header: DirectoryHeader): ZipEntry[] {
   const entries: ZipEntry[] = [];
-  let cursor = centralOffset;
-  for (let index = 0; index < totalEntries; index += 1) {
+  let cursor = header.centralOffset;
+  for (let index = 0; index < header.totalEntries; index += 1) {
     const parsed = parseCentralEntry(buffer, cursor);
     entries.push(parsed.entry);
     cursor = parsed.next;
   }
-  if (cursor > centralOffset + centralSize) throw new Error('central directory overflow');
+  if (cursor > header.centralOffset + header.centralSize) {
+    throw new Error('central directory overflow');
+  }
   return entries;
+}
+
+function parseDirectory(buffer: Buffer): ZipEntry[] {
+  const header = directoryHeader(buffer);
+  assertDirectoryHeader(buffer, header);
+  return readCentralEntries(buffer, header);
 }
 
 function assertCompressionBudget(entry: ZipEntry, maxBytes: number): void {

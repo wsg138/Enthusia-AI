@@ -125,27 +125,41 @@ function isSecretKey(path: readonly string[], key: string): boolean {
   return CONNECTION_KEYS.has(normalized) && isDatabaseParent(path);
 }
 
+function redactJsonArray(
+  values: readonly unknown[],
+  path: readonly string[],
+  redactedFields: Set<string>,
+): unknown[] {
+  return values.map((entry) => redactJsonValue(entry, path, redactedFields));
+}
+
+function redactJsonRecord(
+  record: Record<string, unknown>,
+  path: readonly string[],
+  redactedFields: Set<string>,
+): Record<string, unknown> {
+  const output: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(record)) {
+    const fieldPath = [...path, key];
+    if (child !== null && isSecretKey(path, key)) {
+      output[key] = REDACTED_VALUE;
+      redactedFields.add(fieldPath.join('.'));
+    } else {
+      output[key] = redactJsonValue(child, fieldPath, redactedFields);
+    }
+  }
+  return output;
+}
+
 function redactJsonValue(
   value: unknown,
   path: readonly string[],
   redactedFields: Set<string>,
 ): unknown {
-  if (Array.isArray(value)) {
-    return value.map((entry) => redactJsonValue(entry, path, redactedFields));
-  }
-  if (value === null || typeof value !== 'object') return value;
-
-  const output: Record<string, unknown> = {};
-  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-    const fieldPath = [...path, key];
-    if (isSecretKey(path, key) && child !== null) {
-      output[key] = REDACTED_VALUE;
-      redactedFields.add(fieldPath.join('.'));
-      continue;
-    }
-    output[key] = redactJsonValue(child, fieldPath, redactedFields);
-  }
-  return output;
+  if (Array.isArray(value)) return redactJsonArray(value, path, redactedFields);
+  if (value === null) return value;
+  if (typeof value !== 'object') return value;
+  return redactJsonRecord(value as Record<string, unknown>, path, redactedFields);
 }
 
 function redactJson(text: string, redactedFields: Set<string>): string | undefined {

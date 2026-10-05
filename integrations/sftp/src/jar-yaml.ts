@@ -98,14 +98,25 @@ function parseInlineList(value: string): string[] {
     .filter((item) => item.length > 0);
 }
 
+interface ListLine {
+  stop: boolean;
+  value?: string;
+}
+
+function listLine(line: string): ListLine {
+  const trimmed = line.trim();
+  if (trimmed.length === 0 || trimmed.startsWith('#')) return { stop: false };
+  if (leadingWhitespace(line) === 0) return { stop: true };
+  if (!trimmed.startsWith('- ')) return { stop: false };
+  return { stop: false, value: cleanScalar(trimmed.slice(2)) };
+}
+
 function indentedList(lines: readonly string[], start: number): string[] {
   const values: string[] = [];
   for (let index = start + 1; index < lines.length; index += 1) {
-    const line = lines[index] ?? '';
-    if (line.trim().length === 0 || line.trimStart().startsWith('#')) continue;
-    if (leadingWhitespace(line) === 0) break;
-    const trimmed = line.trim();
-    if (trimmed.startsWith('- ')) values.push(cleanScalar(trimmed.slice(2)));
+    const parsed = listLine(lines[index] ?? '');
+    if (parsed.stop) break;
+    if (parsed.value !== undefined) values.push(parsed.value);
   }
   return values;
 }
@@ -117,20 +128,37 @@ function topLevelList(lines: readonly string[], key: string): string[] {
   return inline.length > 0 ? inline : indentedList(lines, found.index);
 }
 
+interface SectionField {
+  stop: boolean;
+  childIndent: number | undefined;
+  key?: string;
+}
+
+function classifySectionField(
+  field: YamlField | undefined,
+  childIndent: number | undefined,
+): SectionField {
+  if (field === undefined) return { stop: false, childIndent };
+  if (field.indent === 0) return { stop: true, childIndent };
+  const resolvedIndent = childIndent ?? field.indent;
+  if (field.indent !== resolvedIndent) {
+    return { stop: false, childIndent: resolvedIndent };
+  }
+  return { stop: false, childIndent: resolvedIndent, key: field.key };
+}
+
 function sectionKeys(lines: readonly string[], section: string): string[] {
   const found = topLevelField(lines, section);
-  if (found === undefined || found.field.value.length > 0) return [];
+  if (found === undefined) return [];
+  if (found.field.value.length > 0) return [];
 
   let childIndent: number | undefined;
   const result: string[] = [];
   for (let index = found.index + 1; index < lines.length; index += 1) {
-    const line = lines[index] ?? '';
-    if (line.trim().length === 0 || line.trimStart().startsWith('#')) continue;
-    const field = yamlField(line);
-    if (field === undefined) continue;
-    if (field.indent === 0) break;
-    childIndent ??= field.indent;
-    if (field.indent === childIndent) result.push(field.key);
+    const parsed = classifySectionField(yamlField(lines[index] ?? ''), childIndent);
+    childIndent = parsed.childIndent;
+    if (parsed.stop) break;
+    if (parsed.key !== undefined) result.push(parsed.key);
   }
   return result;
 }
