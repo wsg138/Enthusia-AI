@@ -182,10 +182,12 @@ def _question_is_grounded(job: dict, parsed: dict) -> bool:
         return False
 
     # Permission questions require either the word itself or a permission node.
-    if re.search(r"\bpermissions?\b", q_lower) and not (
+    asks_permission = bool(re.search(r"\bpermissions?\b", q_lower))
+    has_permission_evidence = bool(
         re.search(r"\bpermissions?\b", support_lower)
         or re.search(r"\b[a-z][a-z0-9_-]+(?:\.[a-z0-9_-]+)+\b", support_lower)
-    ):
+    )
+    if asks_permission and not has_permission_evidence:
         return False
 
     # Version questions require explicit version evidence.
@@ -197,6 +199,8 @@ def _question_is_grounded(job: dict, parsed: dict) -> bool:
 
     # "speed" is a safe paraphrase for explicit cadence/rate evidence.
     semantic_support = support_lower
+    if asks_permission and has_permission_evidence:
+        semantic_support += " permission required needed"
     if "speed" in q_lower and re.search(
         r"(?:per second|per tick|every tick|interval|cps|rate)", support_lower
     ):
