@@ -8,43 +8,41 @@ from pathlib import Path
 GENERATOR = "qwen3.5-35b-a3b-q4_k_m-retrieval-grounded-v2"
 KNOWLEDGE_TOOL = "knowledge.search"
 
-def convert(result: dict) -> dict | None:
-    if result.get("request_error"):
-        return None
-    if result.get("validation_problems"):
-        return None
-    parsed = result.get("parsed")
-    if not isinstance(parsed, dict) or parsed.get("skip") is True:
-        return None
-
-    facts = []
+def _facts(parsed: dict) -> list[dict]:
+    facts: list[dict] = []
     for fact in parsed.get("facts", []):
-        facts.append({
+        converted = {
             "claim": fact["claim"],
             "source": fact["source"],
             "source_version": fact["source_version"],
             "evidence": fact.get("evidence", ""),
-            **(
-                {"line_number": fact["line_number"]}
-                if fact.get("line_number") is not None
-                else {}
-            ),
-        })
+        }
+        if fact.get("line_number") is not None:
+            converted["line_number"] = fact["line_number"]
+        facts.append(converted)
+    return facts
 
-    if not facts:
-        return None
 
-    expected_actions = [f"tool:{KNOWLEDGE_TOOL}"]
-    tools = [KNOWLEDGE_TOOL]
-    tags = list(dict.fromkeys([
-        parsed.get("category", "unknown"),
-        "grounded",
-        "retrieval-grounded",
-        "github-source",
-        *[tag for tag in parsed.get("tags", []) if isinstance(tag, str)],
-    ]))
+def _tags(parsed: dict) -> list[str]:
+    return list(
+        dict.fromkeys(
+            [
+                parsed.get("category", "unknown"),
+                "grounded",
+                "retrieval-grounded",
+                "github-source",
+                *[
+                    tag
+                    for tag in parsed.get("tags", [])
+                    if isinstance(tag, str)
+                ],
+            ]
+        )
+    )
 
-    source_result = {
+
+def _source_result(result: dict) -> dict:
+    return {
         "source": result.get("source_id"),
         "source_version": result.get("source_version"),
         "repository": result.get("repository"),
@@ -52,13 +50,32 @@ def convert(result: dict) -> dict | None:
         "line_number": result.get("line_number"),
         "evidence": result.get("target_line"),
     }
-    tool_message = {
+
+
+def _tool_message(result: dict) -> dict:
+    return {
         "role": "tool",
-        "content": json.dumps({
-            "tool": KNOWLEDGE_TOOL,
-            "result": source_result,
-        }, ensure_ascii=False, sort_keys=True),
+        "content": json.dumps(
+            {
+                "tool": KNOWLEDGE_TOOL,
+                "result": _source_result(result),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        ),
     }
+
+
+def convert(result: dict) -> dict | None:
+    if result.get("request_error") or result.get("validation_problems"):
+        return None
+    parsed = result.get("parsed")
+    if not isinstance(parsed, dict) or parsed.get("skip") is True:
+        return None
+
+    facts = _facts(parsed)
+    if not facts:
+        return None
 
     job_id = result["job_id"]
     return {
@@ -72,14 +89,14 @@ def convert(result: dict) -> dict | None:
                 "role": "assistant",
                 "content": "I'll verify that against the current indexed source.",
             },
-            tool_message,
+            _tool_message(result),
             {"role": "assistant", "content": parsed["assistant"]},
         ],
-        "tools": tools,
-        "expected_actions": expected_actions,
+        "tools": [KNOWLEDGE_TOOL],
+        "expected_actions": [f"tool:{KNOWLEDGE_TOOL}"],
         "expected_answer": parsed["assistant"],
         "facts": facts,
-        "tags": tags,
+        "tags": _tags(parsed),
         "quality": None,
         "template_id": f"grounded:{job_id}",
         "generator": GENERATOR,
@@ -90,25 +107,21 @@ def convert(result: dict) -> dict | None:
         "generation_latency_seconds": result.get("latency_seconds"),
     }
 
-def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--input", required=True)
-    ap.add_argument("--output", required=True)
-    ap.add_argument("--manifest", required=True)
-    args = ap.parse_args()
 
-    records = []
+def _load_converted(input_path: str) -> tuple[list[dict], int, int, int]:
+    records: list[dict] = []
     skipped = 0
     invalid = 0
     total = 0
-    with open(args.input, encoding="utf-8") as fh:
+    with open(input_path, encoding="utf-8") as fh:
         for line in fh:
             total += 1
             result = json.loads(line)
             if result.get("validation_problems") or result.get("request_error"):
                 invalid += 1
                 continue
-            if result.get("parsed", {}).get("skip") is True:
+            parsed = result.get("parsed")
+            if isinstance(parsed, dict) and parsed.get("skip") is True:
                 skipped += 1
                 continue
             record = convert(result)
@@ -116,14 +129,19 @@ def main() -> int:
                 invalid += 1
                 continue
             records.append(record)
+    return records, skipped, invalid, total
 
-    out = Path(args.output)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with out.open("w", encoding="utf-8") as fh:
+
+def _write_records(output_path: str, records: list[dict]) -> None:
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("w", encoding="utf-8") as fh:
         for record in records:
             fh.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
 
-    manifest = {
+
+def _manifest(total: int, records: list[dict], skipped: int, invalid: int) -> dict:
+    return {
         "schema_version": 1,
         "generator": GENERATOR,
         "input_results": total,
@@ -139,6 +157,18 @@ def main() -> int:
             "unconditioned QA."
         ),
     }
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--input", required=True)
+    ap.add_argument("--output", required=True)
+    ap.add_argument("--manifest", required=True)
+    args = ap.parse_args()
+
+    records, skipped, invalid, total = _load_converted(args.input)
+    _write_records(args.output, records)
+    manifest = _manifest(total, records, skipped, invalid)
     Path(args.manifest).write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     print(json.dumps(manifest, indent=2))
     return 0
