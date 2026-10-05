@@ -37,18 +37,36 @@ def strip_code_fence(text: str) -> str:
             text = text.rstrip()[:-3]
     return text.strip()
 
-def _validated_endpoint(endpoint: str) -> str:
-    parsed = urllib.parse.urlsplit(endpoint)
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+def _require_http_endpoint(parsed: urllib.parse.SplitResult) -> None:
+    if parsed.scheme not in {"http", "https"}:
         raise ValueError("--endpoint must use http:// or https:// with a host")
+    if not parsed.hostname:
+        raise ValueError("--endpoint must use http:// or https:// with a host")
+
+
+def _reject_endpoint_credentials(parsed: urllib.parse.SplitResult) -> None:
     if parsed.username is not None or parsed.password is not None:
         raise ValueError("--endpoint must not contain embedded credentials")
+
+
+def _reject_endpoint_suffix(parsed: urllib.parse.SplitResult) -> None:
     if parsed.query or parsed.fragment:
         raise ValueError("--endpoint must not contain a query string or fragment")
+
+
+def _validate_endpoint_port(parsed: urllib.parse.SplitResult) -> None:
     try:
         parsed.port
     except ValueError as exc:
         raise ValueError("--endpoint contains an invalid port") from exc
+
+
+def _validated_endpoint(endpoint: str) -> str:
+    parsed = urllib.parse.urlsplit(endpoint)
+    _require_http_endpoint(parsed)
+    _reject_endpoint_credentials(parsed)
+    _reject_endpoint_suffix(parsed)
+    _validate_endpoint_port(parsed)
     return endpoint.rstrip("/")
 
 
@@ -280,42 +298,44 @@ def _long_terms_supported(
     )
 
 
-def _question_is_grounded(job: dict, parsed: dict) -> bool:
+def _question_support(
+    job: dict,
+    parsed: dict,
+) -> tuple[str, str] | None:
     question = parsed.get("user")
     line = job.get("target_line")
     if not isinstance(question, str) or not isinstance(line, str):
-        return False
-
-    question_lower = question.lower()
-    support_lower = " ".join(
+        return None
+    support = " ".join(
         [
             line,
             str(job.get("repository", "")),
             str(job.get("path", "")),
         ]
-    ).lower()
-    if not _semantic_scope_supported(question_lower, support_lower):
-        return False
+    )
+    return question.lower(), support.lower()
 
+
+def _grounding_prerequisites(
+    question: str,
+    support: str,
+) -> tuple[bool, bool, bool]:
     asks_permission, has_permission_evidence = _permission_support(
-        question_lower,
-        support_lower,
+        question,
+        support,
     )
-    if asks_permission and not has_permission_evidence:
-        return False
-    if not _version_supported(question_lower, support_lower):
-        return False
+    checks = (
+        _semantic_scope_supported(question, support),
+        not asks_permission or has_permission_evidence,
+        _version_supported(question, support),
+    )
+    return all(checks), asks_permission, has_permission_evidence
 
-    semantic_support = _semantic_support(
-        question_lower,
-        support_lower,
-        asks_permission,
-        has_permission_evidence,
-    )
+
+def _grounding_terms_match(question: str, semantic_support: str) -> bool:
     question_terms = _lexemes(question)
     if not question_terms:
         return True
-
     support_terms = _lexemes(semantic_support)
     if not _long_terms_supported(question_terms, support_terms):
         return False
@@ -323,6 +343,26 @@ def _question_is_grounded(job: dict, parsed: dict) -> bool:
         1 for term in question_terms if _term_supported(term, support_terms)
     )
     return matched / len(question_terms) >= 0.50
+
+
+def _question_is_grounded(job: dict, parsed: dict) -> bool:
+    context = _question_support(job, parsed)
+    if context is None:
+        return False
+    question, support = context
+    valid, asks_permission, has_permission_evidence = _grounding_prerequisites(
+        question,
+        support,
+    )
+    if not valid:
+        return False
+    semantic_support = _semantic_support(
+        question,
+        support,
+        asks_permission,
+        has_permission_evidence,
+    )
+    return _grounding_terms_match(question, semantic_support)
 
 
 def _validate_required_fields(parsed: dict, problems: list[str]) -> None:
