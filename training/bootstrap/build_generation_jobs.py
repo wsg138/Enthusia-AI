@@ -81,6 +81,15 @@ def source_visibility(record: dict, line: str = "") -> str:
         line_lower,
     ):
         return "staff"
+    if re.search(
+        r"(?:^|\s)/(?:ee|estaff|startupguardian|gatekeeper|tppos)\b",
+        line_lower,
+    ):
+        return "staff"
+    if re.search(r"(?:^|\s)/pearlglitchblocker\b", line_lower):
+        return "staff"
+    if re.search(r"(?:^|\s)/warzone\s+modifier\b", line_lower):
+        return "staff"
 
     return "public"
 
@@ -100,6 +109,13 @@ def path_score(record: dict) -> int:
         or "test-rollout" in lower_path
         or "/test_setup" in lower_path
         or "/test-setup" in lower_path
+        or "owner_retest" in lower_path
+        or "owner-retest" in lower_path
+        or "/retest" in lower_path
+        or "acceptance-harness" in lower_path
+        or "acceptance_harness" in lower_path
+        or "component-metadata" in lower_path
+        or "wiki-maintenance" in lower_path
     ):
         return -10_000
     lower = path.lower()
