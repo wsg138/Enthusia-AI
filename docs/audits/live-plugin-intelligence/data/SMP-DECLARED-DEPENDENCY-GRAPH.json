@@ -1,0 +1,3418 @@
+{
+  "snapshotCommit": "b5bd154c4d28a3e935239778ca8999b8ca74e83a",
+  "edgeCount": 341,
+  "hardEdgeCount": 32,
+  "softEdgeCount": 309,
+  "edges": [
+    {
+      "source": "AutomaticBroadcast",
+      "sourceFile": "AutomaticBroadcast-1.10.3.jar",
+      "kind": "soft",
+      "declaredTarget": "PlaceHolderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "AxiomPaper",
+      "sourceFile": "AxiomPaperPlugin-6.0.1-for-MC26.2.jar",
+      "kind": "soft",
+      "declaredTarget": "CoreProtect",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "CoreProtect",
+      "resolvedFile": "CoreProtect-24.1.jar"
+    },
+    {
+      "source": "AxiomPaper",
+      "sourceFile": "AxiomPaperPlugin-6.0.1-for-MC26.2.jar",
+      "kind": "soft",
+      "declaredTarget": "ViaVersion",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ViaVersion",
+      "resolvedFile": "ViaVersion-5.12.0.jar"
+    },
+    {
+      "source": "AxiomPaper",
+      "sourceFile": "AxiomPaperPlugin-6.0.1-for-MC26.2.jar",
+      "kind": "soft",
+      "declaredTarget": "WorldGuard",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "WorldGuard",
+      "resolvedFile": "worldguard-bukkit-7.0.19.jar"
+    },
+    {
+      "source": "AxiomPaper",
+      "sourceFile": "AxiomPaperPlugin-6.0.1-for-MC26.2.jar",
+      "kind": "soft",
+      "declaredTarget": "PlotSquared",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "WindChargeGuard",
+      "sourceFile": "BedrockWindChargeFix-1.0.0.jar",
+      "kind": "soft",
+      "declaredTarget": "WorldGuard",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "WorldGuard",
+      "resolvedFile": "worldguard-bukkit-7.0.19.jar"
+    },
+    {
+      "source": "WindChargeGuard",
+      "sourceFile": "BedrockWindChargeFix-1.0.0.jar",
+      "kind": "soft",
+      "declaredTarget": "Floodgate",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "floodgate",
+      "resolvedFile": "floodgate-spigot.jar"
+    },
+    {
+      "source": "Chunky",
+      "sourceFile": "Chunky-Bukkit-1.5.3.jar",
+      "kind": "soft",
+      "declaredTarget": "dynmap",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "Chunky",
+      "sourceFile": "Chunky-Bukkit-1.5.3.jar",
+      "kind": "soft",
+      "declaredTarget": "BlueMap",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "Chunky",
+      "sourceFile": "Chunky-Bukkit-1.5.3.jar",
+      "kind": "soft",
+      "declaredTarget": "squaremap",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "Chunky",
+      "sourceFile": "Chunky-Bukkit-1.5.3.jar",
+      "kind": "soft",
+      "declaredTarget": "WorldBorder",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "hard",
+      "declaredTarget": "BlueSlimeCore",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "BlueSlimeCore",
+      "resolvedFile": "BlueSlimeCore-2.9.8.504.jar"
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "AngelChest",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "ASkyBlock",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "BentoBox",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "Citizens",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "CMI",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "CrackShot",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "CrashClaim",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "Essentials",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "FabledSkyBlock",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "FeatherBoard",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "FlagWar",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "GriefDefender",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "GriefPrevention",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "HuskHomes",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "HuskSync",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "HuskTowns",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "iDisguise",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "IridiumSkyblock",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "Kingdoms",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "Konquest",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "Lands",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "LibsDisguises",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "MarriageMaster",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "MCPets",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "MythicMobs",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "PlayerParticles",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "PreciousStones",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "PremiumVanish",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "ProtectionStones",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "ProtocolLib",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ProtocolLib",
+      "resolvedFile": "ProtocolLib-26.2-dev.jar"
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "RedProtect",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "Residence",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "Sentinel",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "SuperiorSkyblock2",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "SuperVanish",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "Towny",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "UltimateClaims",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "uSkyBlock",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "VanishNoPacket",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "CombatLogX",
+      "sourceFile": "CombatLogX.jar",
+      "kind": "soft",
+      "declaredTarget": "WorldGuard",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "WorldGuard",
+      "resolvedFile": "worldguard-bukkit-7.0.19.jar"
+    },
+    {
+      "source": "CommandWhitelist",
+      "sourceFile": "CommandWhitelist-Bukkit-2.12.0.jar",
+      "kind": "soft",
+      "declaredTarget": "ProtocolLib",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ProtocolLib",
+      "resolvedFile": "ProtocolLib-26.2-dev.jar"
+    },
+    {
+      "source": "CoreProtect",
+      "sourceFile": "CoreProtect-24.1.jar",
+      "kind": "soft",
+      "declaredTarget": "WorldEdit",
+      "installed": true,
+      "satisfiedViaProvides": true,
+      "resolvedTarget": "FastAsyncWorldEdit",
+      "resolvedFile": "FastAsyncWorldEdit-Paper-2.15.4.jar"
+    },
+    {
+      "source": "CrownCore",
+      "sourceFile": "CrownCore-1.8.0.jar",
+      "kind": "soft",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "CrownCore",
+      "sourceFile": "CrownCore-1.8.0.jar",
+      "kind": "soft",
+      "declaredTarget": "Vault",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Vault",
+      "resolvedFile": "Vault.jar"
+    },
+    {
+      "source": "CrownCore",
+      "sourceFile": "CrownCore-1.8.0.jar",
+      "kind": "soft",
+      "declaredTarget": "floodgate",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "floodgate",
+      "resolvedFile": "floodgate-spigot.jar"
+    },
+    {
+      "source": "CrownCore",
+      "sourceFile": "CrownCore-1.8.0.jar",
+      "kind": "soft",
+      "declaredTarget": "WorldGuard",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "WorldGuard",
+      "resolvedFile": "worldguard-bukkit-7.0.19.jar"
+    },
+    {
+      "source": "CrownCore",
+      "sourceFile": "CrownCore-1.8.0.jar",
+      "kind": "soft",
+      "declaredTarget": "LuckPerms",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "LuckPerms",
+      "resolvedFile": "LuckPerms-Bukkit-5.5.85.jar"
+    },
+    {
+      "source": "CrownStoreData",
+      "sourceFile": "CrownStoreData-2.9.5.jar",
+      "kind": "hard",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "CrownStoreData",
+      "sourceFile": "CrownStoreData-2.9.5.jar",
+      "kind": "hard",
+      "declaredTarget": "CrownCore",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "CrownCore",
+      "resolvedFile": "CrownCore-1.8.0.jar"
+    },
+    {
+      "source": "CrownStoreData",
+      "sourceFile": "CrownStoreData-2.9.5.jar",
+      "kind": "soft",
+      "declaredTarget": "floodgate",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "floodgate",
+      "resolvedFile": "floodgate-spigot.jar"
+    },
+    {
+      "source": "DeluxeMenus",
+      "sourceFile": "DeluxeMenus-1.14.1-Release.jar",
+      "kind": "soft",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "DeluxeMenus",
+      "sourceFile": "DeluxeMenus-1.14.1-Release.jar",
+      "kind": "soft",
+      "declaredTarget": "Vault",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Vault",
+      "resolvedFile": "Vault.jar"
+    },
+    {
+      "source": "DeluxeMenus",
+      "sourceFile": "DeluxeMenus-1.14.1-Release.jar",
+      "kind": "soft",
+      "declaredTarget": "HeadDatabase",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "DeluxeMenus",
+      "sourceFile": "DeluxeMenus-1.14.1-Release.jar",
+      "kind": "soft",
+      "declaredTarget": "ItemsAdder",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "DeluxeMenus",
+      "sourceFile": "DeluxeMenus-1.14.1-Release.jar",
+      "kind": "soft",
+      "declaredTarget": "Nexo",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Nexo",
+      "resolvedFile": "nexo-1.28.jar"
+    },
+    {
+      "source": "DeluxeMenus",
+      "sourceFile": "DeluxeMenus-1.14.1-Release.jar",
+      "kind": "soft",
+      "declaredTarget": "Oraxen",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "DeluxeMenus",
+      "sourceFile": "DeluxeMenus-1.14.1-Release.jar",
+      "kind": "soft",
+      "declaredTarget": "ExecutableItems",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "DeluxeMenus",
+      "sourceFile": "DeluxeMenus-1.14.1-Release.jar",
+      "kind": "soft",
+      "declaredTarget": "ExecutableBlocks",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "DeluxeMenus",
+      "sourceFile": "DeluxeMenus-1.14.1-Release.jar",
+      "kind": "soft",
+      "declaredTarget": "Score",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "DeluxeMenus",
+      "sourceFile": "DeluxeMenus-1.14.1-Release.jar",
+      "kind": "soft",
+      "declaredTarget": "SimpleItemGenerator",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "DeluxeMenus",
+      "sourceFile": "DeluxeMenus-1.14.1-Release.jar",
+      "kind": "soft",
+      "declaredTarget": "MMOItems",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "DiaryKeeper",
+      "sourceFile": "DiaryKeeper-1.4.11.jar",
+      "kind": "soft",
+      "declaredTarget": "Plan",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "DiaryKeeper",
+      "sourceFile": "DiaryKeeper-1.4.11.jar",
+      "kind": "soft",
+      "declaredTarget": "Nexo",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Nexo",
+      "resolvedFile": "nexo-1.28.jar"
+    },
+    {
+      "source": "DiaryKeeper",
+      "sourceFile": "DiaryKeeper-1.4.11.jar",
+      "kind": "soft",
+      "declaredTarget": "floodgate",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "floodgate",
+      "resolvedFile": "floodgate-spigot.jar"
+    },
+    {
+      "source": "DiscordSRV",
+      "sourceFile": "DiscordSRV-Build-1.30.5.jar",
+      "kind": "soft",
+      "declaredTarget": "Chatty",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "DiscordSRV",
+      "sourceFile": "DiscordSRV-Build-1.30.5.jar",
+      "kind": "soft",
+      "declaredTarget": "FancyChat",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "DiscordSRV",
+      "sourceFile": "DiscordSRV-Build-1.30.5.jar",
+      "kind": "soft",
+      "declaredTarget": "Herochat",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "DiscordSRV",
+      "sourceFile": "DiscordSRV-Build-1.30.5.jar",
+      "kind": "soft",
+      "declaredTarget": "Legendchat",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "DiscordSRV",
+      "sourceFile": "DiscordSRV-Build-1.30.5.jar",
+      "kind": "soft",
+      "declaredTarget": "LunaChat",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "DiscordSRV",
+      "sourceFile": "DiscordSRV-Build-1.30.5.jar",
+      "kind": "soft",
+      "declaredTarget": "nChat",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "DiscordSRV",
+      "sourceFile": "DiscordSRV-Build-1.30.5.jar",
+      "kind": "soft",
+      "declaredTarget": "TownyChat",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "DiscordSRV",
+      "sourceFile": "DiscordSRV-Build-1.30.5.jar",
+      "kind": "soft",
+      "declaredTarget": "VentureChat",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "DiscordSRV",
+      "sourceFile": "DiscordSRV-Build-1.30.5.jar",
+      "kind": "soft",
+      "declaredTarget": "Essentials",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "DiscordSRV",
+      "sourceFile": "DiscordSRV-Build-1.30.5.jar",
+      "kind": "soft",
+      "declaredTarget": "PhantomAdmin",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "DiscordSRV",
+      "sourceFile": "DiscordSRV-Build-1.30.5.jar",
+      "kind": "soft",
+      "declaredTarget": "SuperVanish",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "DiscordSRV",
+      "sourceFile": "DiscordSRV-Build-1.30.5.jar",
+      "kind": "soft",
+      "declaredTarget": "Multiverse-Core",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Multiverse-Core",
+      "resolvedFile": "multiverse-core-5.8.1.jar"
+    },
+    {
+      "source": "DiscordSRV",
+      "sourceFile": "DiscordSRV-Build-1.30.5.jar",
+      "kind": "soft",
+      "declaredTarget": "Vault",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Vault",
+      "resolvedFile": "Vault.jar"
+    },
+    {
+      "source": "DiscordSRV",
+      "sourceFile": "DiscordSRV-Build-1.30.5.jar",
+      "kind": "soft",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "DiscordSRV",
+      "sourceFile": "DiscordSRV-Build-1.30.5.jar",
+      "kind": "soft",
+      "declaredTarget": "mcMMO",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "DiscordSRV",
+      "sourceFile": "DiscordSRV-Build-1.30.5.jar",
+      "kind": "soft",
+      "declaredTarget": "LuckPerms",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "LuckPerms",
+      "resolvedFile": "LuckPerms-Bukkit-5.5.85.jar"
+    },
+    {
+      "source": "DiscordSRV",
+      "sourceFile": "DiscordSRV-Build-1.30.5.jar",
+      "kind": "soft",
+      "declaredTarget": "dynmap",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "DiscordSRV",
+      "sourceFile": "DiscordSRV-Build-1.30.5.jar",
+      "kind": "soft",
+      "declaredTarget": "Skript",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Skript",
+      "resolvedFile": "Skript-2.16.2.jar"
+    },
+    {
+      "source": "EnthusiaAdvancements",
+      "sourceFile": "EnthusiaAdvancements-pilot.6-discord-test.3.jar",
+      "kind": "hard",
+      "declaredTarget": "UltimateAdvancementAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "UltimateAdvancementAPI",
+      "resolvedFile": "UltimateAdvancementAPI-Plugin-2.8.1-loading-guard-test.1.jar"
+    },
+    {
+      "source": "EnthusiaAdvancements",
+      "sourceFile": "EnthusiaAdvancements-pilot.6-discord-test.3.jar",
+      "kind": "soft",
+      "declaredTarget": "DiscordSRV",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "DiscordSRV",
+      "resolvedFile": "DiscordSRV-Build-1.30.5.jar"
+    },
+    {
+      "source": "EnthusiaAdvancements",
+      "sourceFile": "EnthusiaAdvancements-pilot.6-discord-test.3.jar",
+      "kind": "soft",
+      "declaredTarget": "InteractiveChat",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "InteractiveChat",
+      "resolvedFile": "InteractiveChat-2026.1.1.0 (1).jar"
+    },
+    {
+      "source": "EnthusiaAdvancements",
+      "sourceFile": "EnthusiaAdvancements-pilot.6-discord-test.3.jar",
+      "kind": "soft",
+      "declaredTarget": "InteractiveChatDiscordSrvAddon",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "InteractiveChatDiscordSrvAddon",
+      "resolvedFile": "InteractiveChatDiscordSrvAddon-2026.1.1.0 (1).jar"
+    },
+    {
+      "source": "EnthusiaCommend",
+      "sourceFile": "EnthusiaCommend-2.14.0-advancement-evidence-test.1.jar",
+      "kind": "hard",
+      "declaredTarget": "Vault",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Vault",
+      "resolvedFile": "Vault.jar"
+    },
+    {
+      "source": "EnthusiaCommend",
+      "sourceFile": "EnthusiaCommend-2.14.0-advancement-evidence-test.1.jar",
+      "kind": "soft",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "EnthusiaCommend",
+      "sourceFile": "EnthusiaCommend-2.14.0-advancement-evidence-test.1.jar",
+      "kind": "soft",
+      "declaredTarget": "EnthusiaTeleport",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "EnthusiaTeleport",
+      "resolvedFile": "EnthusiaTeleport-1.2.9.jar"
+    },
+    {
+      "source": "EnthusiaCommend",
+      "sourceFile": "EnthusiaCommend-2.14.0-advancement-evidence-test.1.jar",
+      "kind": "soft",
+      "declaredTarget": "ProtocolLib",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ProtocolLib",
+      "resolvedFile": "ProtocolLib-26.2-dev.jar"
+    },
+    {
+      "source": "EnthusiaCommend",
+      "sourceFile": "EnthusiaCommend-2.14.0-advancement-evidence-test.1.jar",
+      "kind": "soft",
+      "declaredTarget": "WarzoneDuels",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "WarzoneDuels",
+      "resolvedFile": "WarzoneDuels-1.0.4.jar"
+    },
+    {
+      "source": "EnthusiaCommend",
+      "sourceFile": "EnthusiaCommend-2.14.0-advancement-evidence-test.1.jar",
+      "kind": "soft",
+      "declaredTarget": "Plan",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "EnthusiaCurrency",
+      "sourceFile": "EnthusiaCurrency-1.4.4-moderation-api.jar",
+      "kind": "hard",
+      "declaredTarget": "Vault",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Vault",
+      "resolvedFile": "Vault.jar"
+    },
+    {
+      "source": "EnthusiaCurrency",
+      "sourceFile": "EnthusiaCurrency-1.4.4-moderation-api.jar",
+      "kind": "soft",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "EnthusiaCurrency",
+      "sourceFile": "EnthusiaCurrency-1.4.4-moderation-api.jar",
+      "kind": "soft",
+      "declaredTarget": "Plan",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "EnthusiaDisplay",
+      "sourceFile": "EnthusiaDisplay-0.1.8-test.jar",
+      "kind": "hard",
+      "declaredTarget": "UnlimitedNameTags",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "UnlimitedNameTags",
+      "resolvedFile": "UnlimitedNametags-2.0.2-rendering-fix.2.jar"
+    },
+    {
+      "source": "EnthusiaDisplay",
+      "sourceFile": "EnthusiaDisplay-0.1.8-test.jar",
+      "kind": "hard",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "EnthusiaDisplay",
+      "sourceFile": "EnthusiaDisplay-0.1.8-test.jar",
+      "kind": "soft",
+      "declaredTarget": "RoseChat",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "RoseChat",
+      "resolvedFile": "RoseChat-RC-4.jar"
+    },
+    {
+      "source": "EnthusiaDonorNPCs",
+      "sourceFile": "EnthusiaDonorNPCs-1.0.16.jar",
+      "kind": "hard",
+      "declaredTarget": "FancyNpcs",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "FancyNpcs",
+      "resolvedFile": "FancyNpcs-2.12.1.jar"
+    },
+    {
+      "source": "EnthusiaDonorNPCs",
+      "sourceFile": "EnthusiaDonorNPCs-1.0.16.jar",
+      "kind": "hard",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "EnthusiaDonors",
+      "sourceFile": "EnthusiaDonors-1.1.0-test.15.jar",
+      "kind": "soft",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "EnthusiaExpress",
+      "sourceFile": "EnthusiaExpress-1.2.1.jar",
+      "kind": "soft",
+      "declaredTarget": "CombatLogX",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "CombatLogX",
+      "resolvedFile": "CombatLogX.jar"
+    },
+    {
+      "source": "EnthusiaExpress",
+      "sourceFile": "EnthusiaExpress-1.2.1.jar",
+      "kind": "soft",
+      "declaredTarget": "Vault",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Vault",
+      "resolvedFile": "Vault.jar"
+    },
+    {
+      "source": "EnthusiaExpress",
+      "sourceFile": "EnthusiaExpress-1.2.1.jar",
+      "kind": "soft",
+      "declaredTarget": "EnthusiaCurrency",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "EnthusiaCurrency",
+      "resolvedFile": "EnthusiaCurrency-1.4.4-moderation-api.jar"
+    },
+    {
+      "source": "EnthusiaExpress",
+      "sourceFile": "EnthusiaExpress-1.2.1.jar",
+      "kind": "soft",
+      "declaredTarget": "Nexo",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Nexo",
+      "resolvedFile": "nexo-1.28.jar"
+    },
+    {
+      "source": "EnthusiaLoreItems",
+      "sourceFile": "EnthusiaLoreItems-1.0.2-tps-test.2.jar",
+      "kind": "soft",
+      "declaredTarget": "floodgate",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "floodgate",
+      "resolvedFile": "floodgate-spigot.jar"
+    },
+    {
+      "source": "EnthusiaMapShields",
+      "sourceFile": "EnthusiaMapShields-0.1.4.jar",
+      "kind": "soft",
+      "declaredTarget": "Nexo",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Nexo",
+      "resolvedFile": "nexo-1.28.jar"
+    },
+    {
+      "source": "EnthusiaPlaytime",
+      "sourceFile": "EnthusiaPlaytime-3.7.2-discord-sync-test3.jar",
+      "kind": "soft",
+      "declaredTarget": "Plan",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "EnthusiaPlaytime",
+      "sourceFile": "EnthusiaPlaytime-3.7.2-discord-sync-test3.jar",
+      "kind": "soft",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "EnthusiaPlaytime",
+      "sourceFile": "EnthusiaPlaytime-3.7.2-discord-sync-test3.jar",
+      "kind": "soft",
+      "declaredTarget": "ProtocolLib",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ProtocolLib",
+      "resolvedFile": "ProtocolLib-26.2-dev.jar"
+    },
+    {
+      "source": "EnthusiaPlaytime",
+      "sourceFile": "EnthusiaPlaytime-3.7.2-discord-sync-test3.jar",
+      "kind": "soft",
+      "declaredTarget": "DiscordSRV",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "DiscordSRV",
+      "resolvedFile": "DiscordSRV-Build-1.30.5.jar"
+    },
+    {
+      "source": "EnthusiaPlaytime",
+      "sourceFile": "EnthusiaPlaytime-3.7.2-discord-sync-test3.jar",
+      "kind": "soft",
+      "declaredTarget": "floodgate",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "floodgate",
+      "resolvedFile": "floodgate-spigot.jar"
+    },
+    {
+      "source": "EnthusiaPlaytime",
+      "sourceFile": "EnthusiaPlaytime-3.7.2-discord-sync-test3.jar",
+      "kind": "soft",
+      "declaredTarget": "Geyser-Spigot",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "EnthusiaServerAutoClicker",
+      "sourceFile": "EnthusiaServerAutoClicker.jar",
+      "kind": "soft",
+      "declaredTarget": "CombatX",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "EnthusiaStaffAuthorityBridge",
+      "sourceFile": "EnthusiaStaff-AuthorityBridge.jar",
+      "kind": "hard",
+      "declaredTarget": "LuckPerms",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "LuckPerms",
+      "resolvedFile": "LuckPerms-Bukkit-5.5.85.jar"
+    },
+    {
+      "source": "EnthusiaStaffAuthorityBridge",
+      "sourceFile": "EnthusiaStaff-AuthorityBridge.jar",
+      "kind": "soft",
+      "declaredTarget": "DiscordSRV",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "DiscordSRV",
+      "resolvedFile": "DiscordSRV-Build-1.30.5.jar"
+    },
+    {
+      "source": "EnthusiaStaff",
+      "sourceFile": "EnthusiaStaff-Paper.jar",
+      "kind": "soft",
+      "declaredTarget": "voicechat",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "voicechat",
+      "resolvedFile": "voicechat-bukkit-2.6.24.jar"
+    },
+    {
+      "source": "EnthusiaStaff",
+      "sourceFile": "EnthusiaStaff-Paper.jar",
+      "kind": "soft",
+      "declaredTarget": "ViaVersion",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ViaVersion",
+      "resolvedFile": "ViaVersion-5.12.0.jar"
+    },
+    {
+      "source": "EnthusiaStaff",
+      "sourceFile": "EnthusiaStaff-Paper.jar",
+      "kind": "soft",
+      "declaredTarget": "floodgate",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "floodgate",
+      "resolvedFile": "floodgate-spigot.jar"
+    },
+    {
+      "source": "EnthusiaStaff",
+      "sourceFile": "EnthusiaStaff-Paper.jar",
+      "kind": "soft",
+      "declaredTarget": "Geyser-Spigot",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "EnthusiaStaff",
+      "sourceFile": "EnthusiaStaff-Paper.jar",
+      "kind": "soft",
+      "declaredTarget": "CombatLogX",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "CombatLogX",
+      "resolvedFile": "CombatLogX.jar"
+    },
+    {
+      "source": "EnthusiaStaff",
+      "sourceFile": "EnthusiaStaff-Paper.jar",
+      "kind": "soft",
+      "declaredTarget": "PolarLoader",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PolarLoader",
+      "resolvedFile": "PolarLoader.jar"
+    },
+    {
+      "source": "EnthusiaStaff",
+      "sourceFile": "EnthusiaStaff-Paper.jar",
+      "kind": "soft",
+      "declaredTarget": "ProtocolLib",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ProtocolLib",
+      "resolvedFile": "ProtocolLib-26.2-dev.jar"
+    },
+    {
+      "source": "EnthusiaStaff",
+      "sourceFile": "EnthusiaStaff-Paper.jar",
+      "kind": "soft",
+      "declaredTarget": "DiscordSRV",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "DiscordSRV",
+      "resolvedFile": "DiscordSRV-Build-1.30.5.jar"
+    },
+    {
+      "source": "EnthusiaStaff",
+      "sourceFile": "EnthusiaStaff-Paper.jar",
+      "kind": "soft",
+      "declaredTarget": "LuckPerms",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "LuckPerms",
+      "resolvedFile": "LuckPerms-Bukkit-5.5.85.jar"
+    },
+    {
+      "source": "EnthusiaStaff",
+      "sourceFile": "EnthusiaStaff-Paper.jar",
+      "kind": "soft",
+      "declaredTarget": "EnthusiaCurrency",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "EnthusiaCurrency",
+      "resolvedFile": "EnthusiaCurrency-1.4.4-moderation-api.jar"
+    },
+    {
+      "source": "EnthusiaStaff",
+      "sourceFile": "EnthusiaStaff-Paper.jar",
+      "kind": "soft",
+      "declaredTarget": "EnthusiaMarket",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "EnthusiaMarket",
+      "resolvedFile": "EnthusiaMarket-1.0.52.jar"
+    },
+    {
+      "source": "EnthusiaStaff",
+      "sourceFile": "EnthusiaStaff-Paper.jar",
+      "kind": "soft",
+      "declaredTarget": "EnthusiaCommend",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "EnthusiaCommend",
+      "resolvedFile": "EnthusiaCommend-2.14.0-advancement-evidence-test.1.jar"
+    },
+    {
+      "source": "EnthusiaStaff",
+      "sourceFile": "EnthusiaStaff-Paper.jar",
+      "kind": "soft",
+      "declaredTarget": "EnthusiaTeleport",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "EnthusiaTeleport",
+      "resolvedFile": "EnthusiaTeleport-1.2.9.jar"
+    },
+    {
+      "source": "EnthusiaStaff",
+      "sourceFile": "EnthusiaStaff-Paper.jar",
+      "kind": "soft",
+      "declaredTarget": "EnthusiaPlaytime",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "EnthusiaPlaytime",
+      "resolvedFile": "EnthusiaPlaytime-3.7.2-discord-sync-test3.jar"
+    },
+    {
+      "source": "EnthusiaStaff",
+      "sourceFile": "EnthusiaStaff-Paper.jar",
+      "kind": "soft",
+      "declaredTarget": "InventoryRollbackPlus",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "InventoryRollbackPlus",
+      "resolvedFile": "InventoryRollbackPlus-1.8.5.jar"
+    },
+    {
+      "source": "EnthusiaStaff",
+      "sourceFile": "EnthusiaStaff-Paper.jar",
+      "kind": "soft",
+      "declaredTarget": "EnthusiaServerAutoClicker",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "EnthusiaServerAutoClicker",
+      "resolvedFile": "EnthusiaServerAutoClicker.jar"
+    },
+    {
+      "source": "EnthusiaTags",
+      "sourceFile": "EnthusiaTags-2.2.2-unique-mail-test.1.jar",
+      "kind": "soft",
+      "declaredTarget": "WarzoneDuels",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "WarzoneDuels",
+      "resolvedFile": "WarzoneDuels-1.0.4.jar"
+    },
+    {
+      "source": "EnthusiaTags",
+      "sourceFile": "EnthusiaTags-2.2.2-unique-mail-test.1.jar",
+      "kind": "soft",
+      "declaredTarget": "EnthusiaCommend",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "EnthusiaCommend",
+      "resolvedFile": "EnthusiaCommend-2.14.0-advancement-evidence-test.1.jar"
+    },
+    {
+      "source": "EnthusiaTags",
+      "sourceFile": "EnthusiaTags-2.2.2-unique-mail-test.1.jar",
+      "kind": "soft",
+      "declaredTarget": "EnthusiaExpress",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "EnthusiaExpress",
+      "resolvedFile": "EnthusiaExpress-1.2.1.jar"
+    },
+    {
+      "source": "EnthusiaTags",
+      "sourceFile": "EnthusiaTags-2.2.2-unique-mail-test.1.jar",
+      "kind": "soft",
+      "declaredTarget": "DiaryKeeper",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "DiaryKeeper",
+      "resolvedFile": "DiaryKeeper-1.4.11.jar"
+    },
+    {
+      "source": "EnthusiaTags",
+      "sourceFile": "EnthusiaTags-2.2.2-unique-mail-test.1.jar",
+      "kind": "soft",
+      "declaredTarget": "EnthusiaAdvancements",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "EnthusiaAdvancements",
+      "resolvedFile": "EnthusiaAdvancements-pilot.6-discord-test.3.jar"
+    },
+    {
+      "source": "EnthusiaTags",
+      "sourceFile": "EnthusiaTags-2.2.2-unique-mail-test.1.jar",
+      "kind": "soft",
+      "declaredTarget": "RoseChat",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "RoseChat",
+      "resolvedFile": "RoseChat-RC-4.jar"
+    },
+    {
+      "source": "EnthusiaTags",
+      "sourceFile": "EnthusiaTags-2.2.2-unique-mail-test.1.jar",
+      "kind": "soft",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "EnthusiaTags",
+      "sourceFile": "EnthusiaTags-2.2.2-unique-mail-test.1.jar",
+      "kind": "soft",
+      "declaredTarget": "LuckPerms",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "LuckPerms",
+      "resolvedFile": "LuckPerms-Bukkit-5.5.85.jar"
+    },
+    {
+      "source": "EnthusiaTags",
+      "sourceFile": "EnthusiaTags-2.2.2-unique-mail-test.1.jar",
+      "kind": "soft",
+      "declaredTarget": "UnlimitedNametags",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "UnlimitedNameTags",
+      "resolvedFile": "UnlimitedNametags-2.0.2-rendering-fix.2.jar"
+    },
+    {
+      "source": "EnthusiaTags",
+      "sourceFile": "EnthusiaTags-2.2.2-unique-mail-test.1.jar",
+      "kind": "soft",
+      "declaredTarget": "Vault",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Vault",
+      "resolvedFile": "Vault.jar"
+    },
+    {
+      "source": "EnthusiaTags",
+      "sourceFile": "EnthusiaTags-2.2.2-unique-mail-test.1.jar",
+      "kind": "soft",
+      "declaredTarget": "EnthusiaCurrency",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "EnthusiaCurrency",
+      "resolvedFile": "EnthusiaCurrency-1.4.4-moderation-api.jar"
+    },
+    {
+      "source": "EnthusiaTags",
+      "sourceFile": "EnthusiaTags-2.2.2-unique-mail-test.1.jar",
+      "kind": "soft",
+      "declaredTarget": "EnthusiaPlaytime",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "EnthusiaPlaytime",
+      "resolvedFile": "EnthusiaPlaytime-3.7.2-discord-sync-test3.jar"
+    },
+    {
+      "source": "EnthusiaTags",
+      "sourceFile": "EnthusiaTags-2.2.2-unique-mail-test.1.jar",
+      "kind": "soft",
+      "declaredTarget": "EnthusiaLoreItems",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "EnthusiaLoreItems",
+      "resolvedFile": "EnthusiaLoreItems-1.0.2-tps-test.2.jar"
+    },
+    {
+      "source": "EnthusiaTeleport",
+      "sourceFile": "EnthusiaTeleport-1.2.9.jar",
+      "kind": "hard",
+      "declaredTarget": "CombatLogX",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "CombatLogX",
+      "resolvedFile": "CombatLogX.jar"
+    },
+    {
+      "source": "EnthusiaTeleport",
+      "sourceFile": "EnthusiaTeleport-1.2.9.jar",
+      "kind": "soft",
+      "declaredTarget": "NewPlayerProtection",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "EnthusiaToiletFlush",
+      "sourceFile": "EnthusiaToiletFlush-PaperCompanion-9.8.8.jar",
+      "kind": "soft",
+      "declaredTarget": "CheckHacks",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "FastAsyncWorldEdit",
+      "sourceFile": "FastAsyncWorldEdit-Paper-2.15.4.jar",
+      "kind": "soft",
+      "declaredTarget": "Vault",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Vault",
+      "resolvedFile": "Vault.jar"
+    },
+    {
+      "source": "GSit",
+      "sourceFile": "GSit-3.7.0.jar",
+      "kind": "soft",
+      "declaredTarget": "GriefPrevention",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "GSit",
+      "sourceFile": "GSit-3.7.0.jar",
+      "kind": "soft",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "GSit",
+      "sourceFile": "GSit-3.7.0.jar",
+      "kind": "soft",
+      "declaredTarget": "PlotSquared",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "GSit",
+      "sourceFile": "GSit-3.7.0.jar",
+      "kind": "soft",
+      "declaredTarget": "WorldGuard",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "WorldGuard",
+      "resolvedFile": "worldguard-bukkit-7.0.19.jar"
+    },
+    {
+      "source": "ImageFrame",
+      "sourceFile": "ImageFrame-2026.1.5.0.jar",
+      "kind": "soft",
+      "declaredTarget": "ViaVersion",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ViaVersion",
+      "resolvedFile": "ViaVersion-5.12.0.jar"
+    },
+    {
+      "source": "ImageFrame",
+      "sourceFile": "ImageFrame-2026.1.5.0.jar",
+      "kind": "soft",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "InteractiveChat",
+      "sourceFile": "InteractiveChat-2026.1.1.0 (1).jar",
+      "kind": "hard",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "InteractiveChat",
+      "sourceFile": "InteractiveChat-2026.1.1.0 (1).jar",
+      "kind": "hard",
+      "declaredTarget": "Vault",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Vault",
+      "resolvedFile": "Vault.jar"
+    },
+    {
+      "source": "InteractiveChat",
+      "sourceFile": "InteractiveChat-2026.1.1.0 (1).jar",
+      "kind": "soft",
+      "declaredTarget": "Essentials",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "InteractiveChat",
+      "sourceFile": "InteractiveChat-2026.1.1.0 (1).jar",
+      "kind": "soft",
+      "declaredTarget": "EssentialsDiscord",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "InteractiveChat",
+      "sourceFile": "InteractiveChat-2026.1.1.0 (1).jar",
+      "kind": "soft",
+      "declaredTarget": "EssentialsChat",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "InteractiveChat",
+      "sourceFile": "InteractiveChat-2026.1.1.0 (1).jar",
+      "kind": "soft",
+      "declaredTarget": "DeluxeChat",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "InteractiveChat",
+      "sourceFile": "InteractiveChat-2026.1.1.0 (1).jar",
+      "kind": "soft",
+      "declaredTarget": "CMI",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "InteractiveChat",
+      "sourceFile": "InteractiveChat-2026.1.1.0 (1).jar",
+      "kind": "soft",
+      "declaredTarget": "SuperVanish",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "InteractiveChat",
+      "sourceFile": "InteractiveChat-2026.1.1.0 (1).jar",
+      "kind": "soft",
+      "declaredTarget": "PremiumVanish",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "InteractiveChat",
+      "sourceFile": "InteractiveChat-2026.1.1.0 (1).jar",
+      "kind": "soft",
+      "declaredTarget": "VentureChat",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "InteractiveChat",
+      "sourceFile": "InteractiveChat-2026.1.1.0 (1).jar",
+      "kind": "soft",
+      "declaredTarget": "DiscordSRV",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "DiscordSRV",
+      "resolvedFile": "DiscordSRV-Build-1.30.5.jar"
+    },
+    {
+      "source": "InteractiveChat",
+      "sourceFile": "InteractiveChat-2026.1.1.0 (1).jar",
+      "kind": "soft",
+      "declaredTarget": "dynmap",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "InteractiveChat",
+      "sourceFile": "InteractiveChat-2026.1.1.0 (1).jar",
+      "kind": "soft",
+      "declaredTarget": "eco",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "InteractiveChat",
+      "sourceFile": "InteractiveChat-2026.1.1.0 (1).jar",
+      "kind": "soft",
+      "declaredTarget": "ViaVersion",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ViaVersion",
+      "resolvedFile": "ViaVersion-5.12.0.jar"
+    },
+    {
+      "source": "InteractiveChat",
+      "sourceFile": "InteractiveChat-2026.1.1.0 (1).jar",
+      "kind": "soft",
+      "declaredTarget": "ProtocolSupport",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "InteractiveChat",
+      "sourceFile": "InteractiveChat-2026.1.1.0 (1).jar",
+      "kind": "soft",
+      "declaredTarget": "LuckPerms",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "LuckPerms",
+      "resolvedFile": "LuckPerms-Bukkit-5.5.85.jar"
+    },
+    {
+      "source": "InteractiveChat",
+      "sourceFile": "InteractiveChat-2026.1.1.0 (1).jar",
+      "kind": "soft",
+      "declaredTarget": "MysqlPlayerDataBridge",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "InteractiveChat",
+      "sourceFile": "InteractiveChat-2026.1.1.0 (1).jar",
+      "kind": "soft",
+      "declaredTarget": "ChatControlRed",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "InteractiveChat",
+      "sourceFile": "InteractiveChat-2026.1.1.0 (1).jar",
+      "kind": "soft",
+      "declaredTarget": "floodgate",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "floodgate",
+      "resolvedFile": "floodgate-spigot.jar"
+    },
+    {
+      "source": "InteractiveChat",
+      "sourceFile": "InteractiveChat-2026.1.1.0 (1).jar",
+      "kind": "soft",
+      "declaredTarget": "ExcellentEnchants",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "InteractiveChat",
+      "sourceFile": "InteractiveChat-2026.1.1.0 (1).jar",
+      "kind": "soft",
+      "declaredTarget": "ProtocolLib",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ProtocolLib",
+      "resolvedFile": "ProtocolLib-26.2-dev.jar"
+    },
+    {
+      "source": "InteractiveChat",
+      "sourceFile": "InteractiveChat-2026.1.1.0 (1).jar",
+      "kind": "soft",
+      "declaredTarget": "CraftEngine",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "InteractiveChatDiscordSrvAddon",
+      "sourceFile": "InteractiveChatDiscordSrvAddon-2026.1.1.0 (1).jar",
+      "kind": "hard",
+      "declaredTarget": "InteractiveChat",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "InteractiveChat",
+      "resolvedFile": "InteractiveChat-2026.1.1.0 (1).jar"
+    },
+    {
+      "source": "InteractiveChatDiscordSrvAddon",
+      "sourceFile": "InteractiveChatDiscordSrvAddon-2026.1.1.0 (1).jar",
+      "kind": "hard",
+      "declaredTarget": "DiscordSRV",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "DiscordSRV",
+      "resolvedFile": "DiscordSRV-Build-1.30.5.jar"
+    },
+    {
+      "source": "InteractiveChatDiscordSrvAddon",
+      "sourceFile": "InteractiveChatDiscordSrvAddon-2026.1.1.0 (1).jar",
+      "kind": "soft",
+      "declaredTarget": "ItemsAdder",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "InteractiveChatDiscordSrvAddon",
+      "sourceFile": "InteractiveChatDiscordSrvAddon-2026.1.1.0 (1).jar",
+      "kind": "soft",
+      "declaredTarget": "ImageFrame",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ImageFrame",
+      "resolvedFile": "ImageFrame-2026.1.5.0.jar"
+    },
+    {
+      "source": "InteractiveChatDiscordSrvAddon",
+      "sourceFile": "InteractiveChatDiscordSrvAddon-2026.1.1.0 (1).jar",
+      "kind": "soft",
+      "declaredTarget": "CraftEngine",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "ItemSignature",
+      "sourceFile": "ItemSignature-1.1.0.jar",
+      "kind": "soft",
+      "declaredTarget": "DiaryKeeper",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "DiaryKeeper",
+      "resolvedFile": "DiaryKeeper-1.4.11.jar"
+    },
+    {
+      "source": "ItemSignature",
+      "sourceFile": "ItemSignature-1.1.0.jar",
+      "kind": "soft",
+      "declaredTarget": "EnthusiaLoreItems",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "EnthusiaLoreItems",
+      "resolvedFile": "EnthusiaLoreItems-1.0.2-tps-test.2.jar"
+    },
+    {
+      "source": "ItemSignature",
+      "sourceFile": "ItemSignature-1.1.0.jar",
+      "kind": "soft",
+      "declaredTarget": "Nexo",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Nexo",
+      "resolvedFile": "nexo-1.28.jar"
+    },
+    {
+      "source": "LPX",
+      "sourceFile": "LPX (1).jar",
+      "kind": "soft",
+      "declaredTarget": "ProtocolLib",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ProtocolLib",
+      "resolvedFile": "ProtocolLib-26.2-dev.jar"
+    },
+    {
+      "source": "LPX",
+      "sourceFile": "LPX (1).jar",
+      "kind": "soft",
+      "declaredTarget": "ProtocolSupport",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "LPX",
+      "sourceFile": "LPX (1).jar",
+      "kind": "soft",
+      "declaredTarget": "ViaVersion",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ViaVersion",
+      "resolvedFile": "ViaVersion-5.12.0.jar"
+    },
+    {
+      "source": "LPX",
+      "sourceFile": "LPX (1).jar",
+      "kind": "soft",
+      "declaredTarget": "ViaBackwards",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ViaBackwards",
+      "resolvedFile": "ViaBackwards-5.12.0.jar"
+    },
+    {
+      "source": "LPX",
+      "sourceFile": "LPX (1).jar",
+      "kind": "soft",
+      "declaredTarget": "ViaRewind",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "LPX",
+      "sourceFile": "LPX (1).jar",
+      "kind": "soft",
+      "declaredTarget": "Geyser-Spigot",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "LuckPerms",
+      "sourceFile": "LuckPerms-Bukkit-5.5.85.jar",
+      "kind": "soft",
+      "declaredTarget": "LilyPad-Connect",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "LuckPerms",
+      "sourceFile": "LuckPerms-Bukkit-5.5.85.jar",
+      "kind": "soft",
+      "declaredTarget": "ViaVersion",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ViaVersion",
+      "resolvedFile": "ViaVersion-5.12.0.jar"
+    },
+    {
+      "source": "LumaGuilds",
+      "sourceFile": "LumaGuilds-3.0.20.jar",
+      "kind": "hard",
+      "declaredTarget": "RoseChat",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "RoseChat",
+      "resolvedFile": "RoseChat-RC-4.jar"
+    },
+    {
+      "source": "LumaGuilds",
+      "sourceFile": "LumaGuilds-3.0.20.jar",
+      "kind": "soft",
+      "declaredTarget": "Vault",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Vault",
+      "resolvedFile": "Vault.jar"
+    },
+    {
+      "source": "LumaGuilds",
+      "sourceFile": "LumaGuilds-3.0.20.jar",
+      "kind": "soft",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "LumaGuilds",
+      "sourceFile": "LumaGuilds-3.0.20.jar",
+      "kind": "soft",
+      "declaredTarget": "AxKoth",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "LumaGuilds",
+      "sourceFile": "LumaGuilds-3.0.20.jar",
+      "kind": "soft",
+      "declaredTarget": "LiteBans",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "LumaGuilds",
+      "sourceFile": "LumaGuilds-3.0.20.jar",
+      "kind": "soft",
+      "declaredTarget": "EnthusiaPlaytime",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "EnthusiaPlaytime",
+      "resolvedFile": "EnthusiaPlaytime-3.7.2-discord-sync-test3.jar"
+    },
+    {
+      "source": "LumaGuilds",
+      "sourceFile": "LumaGuilds-3.0.20.jar",
+      "kind": "soft",
+      "declaredTarget": "Nexo",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Nexo",
+      "resolvedFile": "nexo-1.28.jar"
+    },
+    {
+      "source": "LumaGuilds",
+      "sourceFile": "LumaGuilds-3.0.20.jar",
+      "kind": "soft",
+      "declaredTarget": "packetevents",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "packetevents",
+      "resolvedFile": "packetevents-spigot-2.14.0.jar"
+    },
+    {
+      "source": "LumaGuilds",
+      "sourceFile": "LumaGuilds-3.0.20.jar",
+      "kind": "soft",
+      "declaredTarget": "DiscordSRV",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "DiscordSRV",
+      "resolvedFile": "DiscordSRV-Build-1.30.5.jar"
+    },
+    {
+      "source": "NotBounties",
+      "sourceFile": "NotBounties-1.22.37.jar",
+      "kind": "soft",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "NotBounties",
+      "sourceFile": "NotBounties-1.22.37.jar",
+      "kind": "soft",
+      "declaredTarget": "HeadDataBase",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "NotBounties",
+      "sourceFile": "NotBounties-1.22.37.jar",
+      "kind": "soft",
+      "declaredTarget": "Vault",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Vault",
+      "resolvedFile": "Vault.jar"
+    },
+    {
+      "source": "NotBounties",
+      "sourceFile": "NotBounties-1.22.37.jar",
+      "kind": "soft",
+      "declaredTarget": "LiteBans",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "NotBounties",
+      "sourceFile": "NotBounties-1.22.37.jar",
+      "kind": "soft",
+      "declaredTarget": "SkinsRestorer",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "NotBounties",
+      "sourceFile": "NotBounties-1.22.37.jar",
+      "kind": "soft",
+      "declaredTarget": "BetterTeams",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "NotBounties",
+      "sourceFile": "NotBounties-1.22.37.jar",
+      "kind": "soft",
+      "declaredTarget": "Towny",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "NotBounties",
+      "sourceFile": "NotBounties-1.22.37.jar",
+      "kind": "soft",
+      "declaredTarget": "Geyser-Spigot",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "NotBounties",
+      "sourceFile": "NotBounties-1.22.37.jar",
+      "kind": "soft",
+      "declaredTarget": "floodgate",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "floodgate",
+      "resolvedFile": "floodgate-spigot.jar"
+    },
+    {
+      "source": "NotBounties",
+      "sourceFile": "NotBounties-1.22.37.jar",
+      "kind": "soft",
+      "declaredTarget": "Kingdoms",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "NotBounties",
+      "sourceFile": "NotBounties-1.22.37.jar",
+      "kind": "soft",
+      "declaredTarget": "Lands",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "NotBounties",
+      "sourceFile": "NotBounties-1.22.37.jar",
+      "kind": "soft",
+      "declaredTarget": "WorldGuard",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "WorldGuard",
+      "resolvedFile": "worldguard-bukkit-7.0.19.jar"
+    },
+    {
+      "source": "NotBounties",
+      "sourceFile": "NotBounties-1.22.37.jar",
+      "kind": "soft",
+      "declaredTarget": "Factions",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "NotBounties",
+      "sourceFile": "NotBounties-1.22.37.jar",
+      "kind": "soft",
+      "declaredTarget": "Essentials",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "NotBounties",
+      "sourceFile": "NotBounties-1.22.37.jar",
+      "kind": "soft",
+      "declaredTarget": "MythicLib",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "NotBounties",
+      "sourceFile": "NotBounties-1.22.37.jar",
+      "kind": "soft",
+      "declaredTarget": "Duels",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "NotBounties",
+      "sourceFile": "NotBounties-1.22.37.jar",
+      "kind": "soft",
+      "declaredTarget": "SimpleClans",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "NotBounties",
+      "sourceFile": "NotBounties-1.22.37.jar",
+      "kind": "soft",
+      "declaredTarget": "packetevents",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "packetevents",
+      "resolvedFile": "packetevents-spigot-2.14.0.jar"
+    },
+    {
+      "source": "NotBounties",
+      "sourceFile": "NotBounties-1.22.37.jar",
+      "kind": "soft",
+      "declaredTarget": "Skript",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Skript",
+      "resolvedFile": "Skript-2.16.2.jar"
+    },
+    {
+      "source": "NotBounties",
+      "sourceFile": "NotBounties-1.22.37.jar",
+      "kind": "soft",
+      "declaredTarget": "Konquest",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "NotBounties",
+      "sourceFile": "NotBounties-1.22.37.jar",
+      "kind": "soft",
+      "declaredTarget": "EconomyShopGUI",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "NotBounties",
+      "sourceFile": "NotBounties-1.22.37.jar",
+      "kind": "soft",
+      "declaredTarget": "EconomyShopGUI-Premium",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "NotBounties",
+      "sourceFile": "NotBounties-1.22.37.jar",
+      "kind": "soft",
+      "declaredTarget": "CMI",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "NotBounties",
+      "sourceFile": "NotBounties-1.22.37.jar",
+      "kind": "soft",
+      "declaredTarget": "SimpleClaimSystem",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "OreAnnouncer",
+      "sourceFile": "OreAnnouncer-2.8.5.jar",
+      "kind": "soft",
+      "declaredTarget": "DiscordSRV",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "DiscordSRV",
+      "resolvedFile": "DiscordSRV-Build-1.30.5.jar"
+    },
+    {
+      "source": "OreAnnouncer",
+      "sourceFile": "OreAnnouncer-2.8.5.jar",
+      "kind": "soft",
+      "declaredTarget": "ItemMods",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "OreAnnouncer",
+      "sourceFile": "OreAnnouncer-2.8.5.jar",
+      "kind": "soft",
+      "declaredTarget": "LastLoginAPI",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "OreAnnouncer",
+      "sourceFile": "OreAnnouncer-2.8.5.jar",
+      "kind": "soft",
+      "declaredTarget": "MMOItems",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "OreAnnouncer",
+      "sourceFile": "OreAnnouncer-2.8.5.jar",
+      "kind": "soft",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "PAPIProxyBridge",
+      "sourceFile": "PAPIProxyBridge-Bukkit-1.8.4-72367f6.jar",
+      "kind": "hard",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "PieCloak",
+      "sourceFile": "PieCloak-1.21.11-visibility-test.3-3084a56.jar",
+      "kind": "hard",
+      "declaredTarget": "packetevents",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "packetevents",
+      "resolvedFile": "packetevents-spigot-2.14.0.jar"
+    },
+    {
+      "source": "PieCloak",
+      "sourceFile": "PieCloak-1.21.11-visibility-test.3-3084a56.jar",
+      "kind": "soft",
+      "declaredTarget": "FancyNpcs",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "FancyNpcs",
+      "resolvedFile": "FancyNpcs-2.12.1.jar"
+    },
+    {
+      "source": "PieCloak",
+      "sourceFile": "PieCloak-1.21.11-visibility-test.3-3084a56.jar",
+      "kind": "soft",
+      "declaredTarget": "FancyHolograms",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "FancyHolograms",
+      "resolvedFile": "FancyHolograms-2.12.0.jar"
+    },
+    {
+      "source": "PieCloak",
+      "sourceFile": "PieCloak-1.21.11-visibility-test.3-3084a56.jar",
+      "kind": "soft",
+      "declaredTarget": "WorldGuard",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "WorldGuard",
+      "resolvedFile": "worldguard-bukkit-7.0.19.jar"
+    },
+    {
+      "source": "PolarLoader",
+      "sourceFile": "PolarLoader.jar",
+      "kind": "soft",
+      "declaredTarget": "ProtocolLib",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ProtocolLib",
+      "resolvedFile": "ProtocolLib-26.2-dev.jar"
+    },
+    {
+      "source": "PolarLoader",
+      "sourceFile": "PolarLoader.jar",
+      "kind": "soft",
+      "declaredTarget": "ProtocolSupport",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "PolarLoader",
+      "sourceFile": "PolarLoader.jar",
+      "kind": "soft",
+      "declaredTarget": "ViaVersion",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ViaVersion",
+      "resolvedFile": "ViaVersion-5.12.0.jar"
+    },
+    {
+      "source": "PolarLoader",
+      "sourceFile": "PolarLoader.jar",
+      "kind": "soft",
+      "declaredTarget": "ViaBackwards",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ViaBackwards",
+      "resolvedFile": "ViaBackwards-5.12.0.jar"
+    },
+    {
+      "source": "PolarLoader",
+      "sourceFile": "PolarLoader.jar",
+      "kind": "soft",
+      "declaredTarget": "ViaRewind",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "PolarLoader",
+      "sourceFile": "PolarLoader.jar",
+      "kind": "soft",
+      "declaredTarget": "Geyser-Spigot",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "PolarLoader",
+      "sourceFile": "PolarLoader.jar",
+      "kind": "soft",
+      "declaredTarget": "floodgate",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "floodgate",
+      "resolvedFile": "floodgate-spigot.jar"
+    },
+    {
+      "source": "PolarLogs",
+      "sourceFile": "PolarLogs-2.7.1.jar",
+      "kind": "hard",
+      "declaredTarget": "PolarLoader",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PolarLoader",
+      "resolvedFile": "PolarLoader.jar"
+    },
+    {
+      "source": "PoseProbe",
+      "sourceFile": "PoseProbe-0.1.0-local-diagnostic.jar",
+      "kind": "hard",
+      "declaredTarget": "ProtocolLib",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ProtocolLib",
+      "resolvedFile": "ProtocolLib-26.2-dev.jar"
+    },
+    {
+      "source": "RoseChat",
+      "sourceFile": "RoseChat-RC-4.jar",
+      "kind": "soft",
+      "declaredTarget": "Vault",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Vault",
+      "resolvedFile": "Vault.jar"
+    },
+    {
+      "source": "RoseChat",
+      "sourceFile": "RoseChat-RC-4.jar",
+      "kind": "soft",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "RoseChat",
+      "sourceFile": "RoseChat-RC-4.jar",
+      "kind": "soft",
+      "declaredTarget": "DiscordSRV",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "DiscordSRV",
+      "resolvedFile": "DiscordSRV-Build-1.30.5.jar"
+    },
+    {
+      "source": "RoseChat",
+      "sourceFile": "RoseChat-RC-4.jar",
+      "kind": "soft",
+      "declaredTarget": "ProtocolLib",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ProtocolLib",
+      "resolvedFile": "ProtocolLib-26.2-dev.jar"
+    },
+    {
+      "source": "RoseChat",
+      "sourceFile": "RoseChat-RC-4.jar",
+      "kind": "soft",
+      "declaredTarget": "Essentials",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "RoseChat",
+      "sourceFile": "RoseChat-RC-4.jar",
+      "kind": "soft",
+      "declaredTarget": "LuckPerms",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "LuckPerms",
+      "resolvedFile": "LuckPerms-Bukkit-5.5.85.jar"
+    },
+    {
+      "source": "RoseChat",
+      "sourceFile": "RoseChat-RC-4.jar",
+      "kind": "soft",
+      "declaredTarget": "Towny",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "RoseChat",
+      "sourceFile": "RoseChat-RC-4.jar",
+      "kind": "soft",
+      "declaredTarget": "mcMMO",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "RoseChat",
+      "sourceFile": "RoseChat-RC-4.jar",
+      "kind": "soft",
+      "declaredTarget": "WorldGuard",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "WorldGuard",
+      "resolvedFile": "worldguard-bukkit-7.0.19.jar"
+    },
+    {
+      "source": "RoseChat",
+      "sourceFile": "RoseChat-RC-4.jar",
+      "kind": "soft",
+      "declaredTarget": "WorldEdit",
+      "installed": true,
+      "satisfiedViaProvides": true,
+      "resolvedTarget": "FastAsyncWorldEdit",
+      "resolvedFile": "FastAsyncWorldEdit-Paper-2.15.4.jar"
+    },
+    {
+      "source": "RoseChat",
+      "sourceFile": "RoseChat-RC-4.jar",
+      "kind": "soft",
+      "declaredTarget": "SimpleClans",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "RoseChat",
+      "sourceFile": "RoseChat-RC-4.jar",
+      "kind": "soft",
+      "declaredTarget": "Factions",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "RoseChat",
+      "sourceFile": "RoseChat-RC-4.jar",
+      "kind": "soft",
+      "declaredTarget": "Kingdoms",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "RoseChat",
+      "sourceFile": "RoseChat-RC-4.jar",
+      "kind": "soft",
+      "declaredTarget": "BentoBox",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "RoseChat",
+      "sourceFile": "RoseChat-RC-4.jar",
+      "kind": "soft",
+      "declaredTarget": "SuperiorSkyblock2",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "RoseChat",
+      "sourceFile": "RoseChat-RC-4.jar",
+      "kind": "soft",
+      "declaredTarget": "IridiumSkyblock",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "RoseChat",
+      "sourceFile": "RoseChat-RC-4.jar",
+      "kind": "soft",
+      "declaredTarget": "FabledSkyblock",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "RoseChat",
+      "sourceFile": "RoseChat-RC-4.jar",
+      "kind": "soft",
+      "declaredTarget": "MarriageMaster",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "RoseChat",
+      "sourceFile": "RoseChat-RC-4.jar",
+      "kind": "soft",
+      "declaredTarget": "InteractiveChat",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "InteractiveChat",
+      "resolvedFile": "InteractiveChat-2026.1.1.0 (1).jar"
+    },
+    {
+      "source": "RoseChat",
+      "sourceFile": "RoseChat-RC-4.jar",
+      "kind": "soft",
+      "declaredTarget": "HuskTowns",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "Skript",
+      "sourceFile": "Skript-2.16.2.jar",
+      "kind": "soft",
+      "declaredTarget": "SQLibrary",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "Skript",
+      "sourceFile": "Skript-2.16.2.jar",
+      "kind": "soft",
+      "declaredTarget": "Vault",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Vault",
+      "resolvedFile": "Vault.jar"
+    },
+    {
+      "source": "Skript",
+      "sourceFile": "Skript-2.16.2.jar",
+      "kind": "soft",
+      "declaredTarget": "WorldGuard",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "WorldGuard",
+      "resolvedFile": "worldguard-bukkit-7.0.19.jar"
+    },
+    {
+      "source": "Skript",
+      "sourceFile": "Skript-2.16.2.jar",
+      "kind": "soft",
+      "declaredTarget": "Residence",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "Skript",
+      "sourceFile": "Skript-2.16.2.jar",
+      "kind": "soft",
+      "declaredTarget": "PreciousStones",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "Skript",
+      "sourceFile": "Skript-2.16.2.jar",
+      "kind": "soft",
+      "declaredTarget": "GriefPrevention",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "TAB",
+      "sourceFile": "TAB v6.2.0.jar",
+      "kind": "soft",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "TAB",
+      "sourceFile": "TAB v6.2.0.jar",
+      "kind": "soft",
+      "declaredTarget": "LuckPerms",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "LuckPerms",
+      "resolvedFile": "LuckPerms-Bukkit-5.5.85.jar"
+    },
+    {
+      "source": "TAB",
+      "sourceFile": "TAB v6.2.0.jar",
+      "kind": "soft",
+      "declaredTarget": "LibsDisguises",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "TAB",
+      "sourceFile": "TAB v6.2.0.jar",
+      "kind": "soft",
+      "declaredTarget": "ViaVersion",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ViaVersion",
+      "resolvedFile": "ViaVersion-5.12.0.jar"
+    },
+    {
+      "source": "TAB",
+      "sourceFile": "TAB v6.2.0.jar",
+      "kind": "soft",
+      "declaredTarget": "ViaRewind",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "TAB",
+      "sourceFile": "TAB v6.2.0.jar",
+      "kind": "soft",
+      "declaredTarget": "floodgate",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "floodgate",
+      "resolvedFile": "floodgate-spigot.jar"
+    },
+    {
+      "source": "TAB",
+      "sourceFile": "TAB v6.2.0.jar",
+      "kind": "soft",
+      "declaredTarget": "Vault",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Vault",
+      "resolvedFile": "Vault.jar"
+    },
+    {
+      "source": "TotemGuard",
+      "sourceFile": "TotemGuard-2.1.4.jar",
+      "kind": "hard",
+      "declaredTarget": "packetevents",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "packetevents",
+      "resolvedFile": "packetevents-spigot-2.14.0.jar"
+    },
+    {
+      "source": "UnlimitedNameTags",
+      "sourceFile": "UnlimitedNametags-2.0.2-rendering-fix.2.jar",
+      "kind": "hard",
+      "declaredTarget": "packetevents",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "packetevents",
+      "resolvedFile": "packetevents-spigot-2.14.0.jar"
+    },
+    {
+      "source": "UnlimitedNameTags",
+      "sourceFile": "UnlimitedNametags-2.0.2-rendering-fix.2.jar",
+      "kind": "soft",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "UnlimitedNameTags",
+      "sourceFile": "UnlimitedNametags-2.0.2-rendering-fix.2.jar",
+      "kind": "soft",
+      "declaredTarget": "ProtocolLib",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ProtocolLib",
+      "resolvedFile": "ProtocolLib-26.2-dev.jar"
+    },
+    {
+      "source": "UnlimitedNameTags",
+      "sourceFile": "UnlimitedNametags-2.0.2-rendering-fix.2.jar",
+      "kind": "soft",
+      "declaredTarget": "ProtocolSupport",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "UnlimitedNameTags",
+      "sourceFile": "UnlimitedNametags-2.0.2-rendering-fix.2.jar",
+      "kind": "soft",
+      "declaredTarget": "ViaVersion",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ViaVersion",
+      "resolvedFile": "ViaVersion-5.12.0.jar"
+    },
+    {
+      "source": "UnlimitedNameTags",
+      "sourceFile": "UnlimitedNametags-2.0.2-rendering-fix.2.jar",
+      "kind": "soft",
+      "declaredTarget": "ViaBackwards",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ViaBackwards",
+      "resolvedFile": "ViaBackwards-5.12.0.jar"
+    },
+    {
+      "source": "UnlimitedNameTags",
+      "sourceFile": "UnlimitedNametags-2.0.2-rendering-fix.2.jar",
+      "kind": "soft",
+      "declaredTarget": "ViaRewind",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "UnlimitedNameTags",
+      "sourceFile": "UnlimitedNametags-2.0.2-rendering-fix.2.jar",
+      "kind": "soft",
+      "declaredTarget": "Oraxen",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "UnlimitedNameTags",
+      "sourceFile": "UnlimitedNametags-2.0.2-rendering-fix.2.jar",
+      "kind": "soft",
+      "declaredTarget": "Nexo",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Nexo",
+      "resolvedFile": "nexo-1.28.jar"
+    },
+    {
+      "source": "UnlimitedNameTags",
+      "sourceFile": "UnlimitedNametags-2.0.2-rendering-fix.2.jar",
+      "kind": "soft",
+      "declaredTarget": "HMCCosmetics",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "ViaBackwards",
+      "sourceFile": "ViaBackwards-5.12.0.jar",
+      "kind": "hard",
+      "declaredTarget": "ViaVersion",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ViaVersion",
+      "resolvedFile": "ViaVersion-5.12.0.jar"
+    },
+    {
+      "source": "VoiceChatPlaceholders",
+      "sourceFile": "VoiceChatPlaceholders.jar",
+      "kind": "hard",
+      "declaredTarget": "voicechat",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "voicechat",
+      "resolvedFile": "voicechat-bukkit-2.6.24.jar"
+    },
+    {
+      "source": "VoiceChatPlaceholders",
+      "sourceFile": "VoiceChatPlaceholders.jar",
+      "kind": "hard",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "WarzoneDuels",
+      "sourceFile": "WarzoneDuels-1.0.4.jar",
+      "kind": "soft",
+      "declaredTarget": "Vault",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Vault",
+      "resolvedFile": "Vault.jar"
+    },
+    {
+      "source": "WarzoneDuels",
+      "sourceFile": "WarzoneDuels-1.0.4.jar",
+      "kind": "soft",
+      "declaredTarget": "EnthusiaTeleport",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "EnthusiaTeleport",
+      "resolvedFile": "EnthusiaTeleport-1.2.9.jar"
+    },
+    {
+      "source": "WarzoneDuels",
+      "sourceFile": "WarzoneDuels-1.0.4.jar",
+      "kind": "soft",
+      "declaredTarget": "EnthusiaTags",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "EnthusiaTags",
+      "resolvedFile": "EnthusiaTags-2.2.2-unique-mail-test.1.jar"
+    },
+    {
+      "source": "WarzoneDuels",
+      "sourceFile": "WarzoneDuels-1.0.4.jar",
+      "kind": "soft",
+      "declaredTarget": "NotBounties",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "NotBounties",
+      "resolvedFile": "NotBounties-1.22.37.jar"
+    },
+    {
+      "source": "WarzoneDuels",
+      "sourceFile": "WarzoneDuels-1.0.4.jar",
+      "kind": "soft",
+      "declaredTarget": "CombatLogX",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "CombatLogX",
+      "resolvedFile": "CombatLogX.jar"
+    },
+    {
+      "source": "WarzoneDuels",
+      "sourceFile": "WarzoneDuels-1.0.4.jar",
+      "kind": "soft",
+      "declaredTarget": "Plan",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "WorldGuardExtraFlags",
+      "sourceFile": "WorldGuardExtraFlags.jar",
+      "kind": "hard",
+      "declaredTarget": "WorldGuard",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "WorldGuard",
+      "resolvedFile": "worldguard-bukkit-7.0.19.jar"
+    },
+    {
+      "source": "WorldGuardExtraFlags",
+      "sourceFile": "WorldGuardExtraFlags.jar",
+      "kind": "soft",
+      "declaredTarget": "ProtocolLib",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ProtocolLib",
+      "resolvedFile": "ProtocolLib-26.2-dev.jar"
+    },
+    {
+      "source": "WorldGuardInvisibleRegions",
+      "sourceFile": "WorldGuardInvisibleRegions-1.0.1.jar",
+      "kind": "hard",
+      "declaredTarget": "WorldGuard",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "WorldGuard",
+      "resolvedFile": "worldguard-bukkit-7.0.19.jar"
+    },
+    {
+      "source": "XMMForceFairPlay",
+      "sourceFile": "XMMForceFairPlay-1.1.0.jar",
+      "kind": "hard",
+      "declaredTarget": "packetevents",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "packetevents",
+      "resolvedFile": "packetevents-spigot-2.14.0.jar"
+    },
+    {
+      "source": "aNewbie",
+      "sourceFile": "aNewbie-1.9.3.jar",
+      "kind": "soft",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "aNewbie",
+      "sourceFile": "aNewbie-1.9.3.jar",
+      "kind": "soft",
+      "declaredTarget": "WorldGuard",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "WorldGuard",
+      "resolvedFile": "worldguard-bukkit-7.0.19.jar"
+    },
+    {
+      "source": "aNewbie",
+      "sourceFile": "aNewbie-1.9.3.jar",
+      "kind": "soft",
+      "declaredTarget": "Vault",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Vault",
+      "resolvedFile": "Vault.jar"
+    },
+    {
+      "source": "EnthusiaKOTH",
+      "sourceFile": "enthusiakoth-0.1.0-SNAPSHOT.jar",
+      "kind": "soft",
+      "declaredTarget": "Vault",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Vault",
+      "resolvedFile": "Vault.jar"
+    },
+    {
+      "source": "EnthusiaKOTH",
+      "sourceFile": "enthusiakoth-0.1.0-SNAPSHOT.jar",
+      "kind": "soft",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "EnthusiaKOTH",
+      "sourceFile": "enthusiakoth-0.1.0-SNAPSHOT.jar",
+      "kind": "soft",
+      "declaredTarget": "LumaGuilds",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "LumaGuilds",
+      "resolvedFile": "LumaGuilds-3.0.20.jar"
+    },
+    {
+      "source": "JukeBox",
+      "sourceFile": "jukebox-1.20.15.jar",
+      "kind": "hard",
+      "declaredTarget": "NoteBlockAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "NoteBlockAPI",
+      "resolvedFile": "NoteBlockAPI-1.7.0.jar"
+    },
+    {
+      "source": "JukeBox",
+      "sourceFile": "jukebox-1.20.15.jar",
+      "kind": "soft",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "MaceGuard",
+      "sourceFile": "maceguard-6.1.8-water-riptide-test.8.jar",
+      "kind": "hard",
+      "declaredTarget": "WorldGuard",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "WorldGuard",
+      "resolvedFile": "worldguard-bukkit-7.0.19.jar"
+    },
+    {
+      "source": "MaceGuard",
+      "sourceFile": "maceguard-6.1.8-water-riptide-test.8.jar",
+      "kind": "soft",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "MaceGuard",
+      "sourceFile": "maceguard-6.1.8-water-riptide-test.8.jar",
+      "kind": "soft",
+      "declaredTarget": "CombatLogX",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "CombatLogX",
+      "resolvedFile": "CombatLogX.jar"
+    },
+    {
+      "source": "Multiverse-Core",
+      "sourceFile": "multiverse-core-5.8.1.jar",
+      "kind": "soft",
+      "declaredTarget": "Vault",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Vault",
+      "resolvedFile": "Vault.jar"
+    },
+    {
+      "source": "Multiverse-Core",
+      "sourceFile": "multiverse-core-5.8.1.jar",
+      "kind": "soft",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "packetevents",
+      "sourceFile": "packetevents-spigot-2.14.0.jar",
+      "kind": "soft",
+      "declaredTarget": "ProtocolLib",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ProtocolLib",
+      "resolvedFile": "ProtocolLib-26.2-dev.jar"
+    },
+    {
+      "source": "packetevents",
+      "sourceFile": "packetevents-spigot-2.14.0.jar",
+      "kind": "soft",
+      "declaredTarget": "ProtocolSupport",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "packetevents",
+      "sourceFile": "packetevents-spigot-2.14.0.jar",
+      "kind": "soft",
+      "declaredTarget": "ViaVersion",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ViaVersion",
+      "resolvedFile": "ViaVersion-5.12.0.jar"
+    },
+    {
+      "source": "packetevents",
+      "sourceFile": "packetevents-spigot-2.14.0.jar",
+      "kind": "soft",
+      "declaredTarget": "ViaBackwards",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ViaBackwards",
+      "resolvedFile": "ViaBackwards-5.12.0.jar"
+    },
+    {
+      "source": "packetevents",
+      "sourceFile": "packetevents-spigot-2.14.0.jar",
+      "kind": "soft",
+      "declaredTarget": "ViaRewind",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "packetevents",
+      "sourceFile": "packetevents-spigot-2.14.0.jar",
+      "kind": "soft",
+      "declaredTarget": "Geyser-Spigot",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "skript-placeholders",
+      "sourceFile": "skript-placeholders-1.7.1.jar",
+      "kind": "soft",
+      "declaredTarget": "Skript",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "Skript",
+      "resolvedFile": "Skript-2.16.2.jar"
+    },
+    {
+      "source": "skript-placeholders",
+      "sourceFile": "skript-placeholders-1.7.1.jar",
+      "kind": "soft",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "skript-placeholders",
+      "sourceFile": "skript-placeholders-1.7.1.jar",
+      "kind": "soft",
+      "declaredTarget": "MVdWPlaceholderAPI",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "Tebex",
+      "sourceFile": "tebex-bukkit-2.4.0-974a9d5.jar",
+      "kind": "soft",
+      "declaredTarget": "BuycraftX",
+      "installed": false,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": null,
+      "resolvedFile": null
+    },
+    {
+      "source": "voicechat",
+      "sourceFile": "voicechat-bukkit-2.6.24.jar",
+      "kind": "soft",
+      "declaredTarget": "PlaceholderAPI",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "PlaceholderAPI",
+      "resolvedFile": "PlaceholderAPI-2.12.3.jar"
+    },
+    {
+      "source": "voicechat",
+      "sourceFile": "voicechat-bukkit-2.6.24.jar",
+      "kind": "soft",
+      "declaredTarget": "ViaVersion",
+      "installed": true,
+      "satisfiedViaProvides": false,
+      "resolvedTarget": "ViaVersion",
+      "resolvedFile": "ViaVersion-5.12.0.jar"
+    },
+    {
+      "source": "WorldGuard",
+      "sourceFile": "worldguard-bukkit-7.0.19.jar",
+      "kind": "hard",
+      "declaredTarget": "WorldEdit",
+      "installed": true,
+      "satisfiedViaProvides": true,
+      "resolvedTarget": "FastAsyncWorldEdit",
+      "resolvedFile": "FastAsyncWorldEdit-Paper-2.15.4.jar"
+    }
+  ]
+}
