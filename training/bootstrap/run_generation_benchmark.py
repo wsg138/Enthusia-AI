@@ -71,45 +71,51 @@ def _split_markdown_table_row(text: str) -> list[str]:
     return cleaned
 
 
-def _clean_display_line(line: str) -> str:
-    text = line.strip()
+def _render_command_table(cells: list[str]) -> str:
+    command = cells[0]
+    rest = list(cells[1:])
+    permission = next(
+        (
+            cell
+            for cell in rest
+            if re.fullmatch(
+                r"[A-Za-z][A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+",
+                cell,
+            )
+        ),
+        None,
+    )
+    if permission is not None:
+        rest.remove(permission)
 
-    # Convert Markdown command tables to readable prose without changing any
-    # factual values. Exact raw evidence remains stored separately.
-    if text.startswith("|") and text.endswith("|"):
-        cells = _split_markdown_table_row(text)
-        if len(cells) >= 2 and cells[0].startswith("/"):
-            command = cells[0]
-            rest = list(cells[1:])
-            permission = None
-            for index, cell in enumerate(rest):
-                if re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+", cell):
-                    permission = rest.pop(index)
-                    break
+    rendered = command
+    if rest:
+        rendered += f": {rest.pop(0)}"
+    if permission:
+        rendered += f" Permission: {permission}"
+    for extra in rest:
+        label = "Example" if extra.startswith("/") else "Details"
+        rendered += f" {label}: {extra}"
+    return rendered.strip()
 
-            rendered = command
-            if rest:
-                rendered += f": {rest[0]}"
-                rest = rest[1:]
-            if permission:
-                rendered += f" Permission: {permission}"
-            for extra in rest:
-                if extra.startswith("/"):
-                    rendered += f" Example: {extra}"
-                else:
-                    rendered += f" Details: {extra}"
-            return rendered.strip()
-        if len(cells) == 2:
-            return f"{cells[0]}: {cells[1]}"
-        if cells:
-            return "; ".join(cells)
 
+def _render_markdown_table(text: str) -> str | None:
+    if not (text.startswith("|") and text.endswith("|")):
+        return None
+    cells = _split_markdown_table_row(text)
+    if len(cells) >= 2 and cells[0].startswith("/"):
+        return _render_command_table(cells)
+    if len(cells) == 2:
+        return f"{cells[0]}: {cells[1]}"
+    return "; ".join(cells) if cells else ""
+
+
+def _clean_plain_display(text: str) -> str:
     text = re.sub(r"^#{1,6}\s+", "", text)
     text = re.sub(r"^[-*+]\s+", "", text)
     text = re.sub(r"^\d+[.)]\s+", "", text)
     text = text.replace("**", "").replace("__", "").replace("`", "")
 
-    # Common README examples use "/command  # explanation".
     command_comment = re.fullmatch(r"(/[^#]+?)\s+#\s+(.+)", text)
     if command_comment:
         return f"{command_comment.group(1).strip()}: {command_comment.group(2).strip()}"
@@ -119,10 +125,17 @@ def _clean_display_line(line: str) -> str:
         value = re.sub(r"&[0-9A-FK-ORa-fk-or]", "", value)
         if value.lower().startswith("usage:"):
             value = value[6:].strip()
-        text = f"Usage: {value}"
+        return f"Usage: {value}"
     if text.lower().startswith("aliases:"):
-        text = "Aliases:" + text[8:]
+        return "Aliases:" + text[8:]
     return text.strip()
+
+
+def _clean_display_line(line: str) -> str:
+    text = line.strip()
+    table = _render_markdown_table(text)
+    return table if table is not None else _clean_plain_display(text)
+
 
 def _resolve_evidence(job: dict, parsed: dict) -> tuple[list[dict], str]:
     evidence = str(job.get("target_line", ""))
@@ -152,21 +165,119 @@ QUESTION_STOPWORDS = {
 }
 
 
+def _lexeme_variants(token: str) -> set[str]:
+    variants = {token}
+    if len(token) > 4 and token.endswith("s"):
+        variants.add(token[:-1])
+    if len(token) > 5 and token.endswith("ing"):
+        variants.add(token[:-3])
+    if len(token) > 4 and token.endswith("ed"):
+        variants.add(token[:-2])
+    return variants
+
+
 def _lexemes(text: str) -> set[str]:
-    raw = re.findall(r"[A-Za-z0-9_./:+-]+", text.lower())
     result: set[str] = set()
-    for token in raw:
-        token = token.strip("./:+-")
-        if len(token) < 3 or token in QUESTION_STOPWORDS:
-            continue
-        result.add(token)
-        if len(token) > 4 and token.endswith("s"):
-            result.add(token[:-1])
-        if len(token) > 5 and token.endswith("ing"):
-            result.add(token[:-3])
-        if len(token) > 4 and token.endswith("ed"):
-            result.add(token[:-2])
+    for raw_token in re.findall(r"[A-Za-z0-9_./:+-]+", text.lower()):
+        token = raw_token.strip("./:+-")
+        if len(token) >= 3 and token not in QUESTION_STOPWORDS:
+            result.update(_lexeme_variants(token))
     return result
+
+
+SEMANTIC_SCOPE_CHECKS = (
+    (
+        re.compile(r"\brank\b"),
+        re.compile(r"\brank\b"),
+    ),
+    (
+        re.compile(r"\b(?:price|cost)\b"),
+        re.compile(r"\b(?:price|cost|usd)\b|\$"),
+    ),
+    ("leaderboard", "leaderboard"),
+    ("arena", "arena"),
+    ("cooldown", "cooldown"),
+    (
+        re.compile(r"\brules?\b"),
+        re.compile(r"\brules?\b"),
+    ),
+)
+SAFE_ABSTRACT_TERMS = {
+    "permission", "permissions", "required", "needed",
+    "configuration", "configure", "configured",
+    "specific", "available", "current",
+}
+PERMISSION_NODE_RE = re.compile(r"\b[a-z][a-z0-9_-]+(?:\.[a-z0-9_-]+)+\b")
+RATE_EVIDENCE_RE = re.compile(
+    r"(?:per second|per tick|every tick|interval|cps|rate)"
+)
+
+
+def _contains_pattern(value: str, pattern: str | re.Pattern[str]) -> bool:
+    if isinstance(pattern, str):
+        return pattern in value
+    return bool(pattern.search(value))
+
+
+def _semantic_scope_supported(question: str, support: str) -> bool:
+    return all(
+        not _contains_pattern(question, question_pattern)
+        or _contains_pattern(support, support_pattern)
+        for question_pattern, support_pattern in SEMANTIC_SCOPE_CHECKS
+    )
+
+
+def _permission_support(question: str, support: str) -> tuple[bool, bool]:
+    asks_permission = bool(re.search(r"\bpermissions?\b", question))
+    has_evidence = bool(
+        re.search(r"\bpermissions?\b", support)
+        or PERMISSION_NODE_RE.search(support)
+    )
+    return asks_permission, has_evidence
+
+
+def _version_supported(question: str, support: str) -> bool:
+    if "version" not in question:
+        return True
+    return "version" in support or bool(re.search(r"\b\d+(?:\.\d+)+", support))
+
+
+def _semantic_support(
+    question: str,
+    support: str,
+    asks_permission: bool,
+    has_permission_evidence: bool,
+) -> str:
+    result = support
+    if asks_permission and has_permission_evidence:
+        result += " permission required needed"
+    if "speed" in question and RATE_EVIDENCE_RE.search(support):
+        result += " speed"
+    return result
+
+
+def _term_supported(term: str, support_terms: set[str]) -> bool:
+    if term in support_terms:
+        return True
+    if len(term) < 5:
+        return False
+    return any(
+        support.startswith(term)
+        for support in support_terms
+        if len(support) >= len(term)
+    )
+
+
+def _long_terms_supported(
+    question_terms: set[str],
+    support_terms: set[str],
+) -> bool:
+    return all(
+        len(term) < 8
+        or term in SAFE_ABSTRACT_TERMS
+        or _term_supported(term, support_terms)
+        for term in question_terms
+    )
 
 
 def _question_is_grounded(job: dict, parsed: dict) -> bool:
@@ -175,100 +286,109 @@ def _question_is_grounded(job: dict, parsed: dict) -> bool:
     if not isinstance(question, str) or not isinstance(line, str):
         return False
 
-    q_lower = question.lower()
-    support_text = " ".join([
-        line,
-        str(job.get("repository", "")),
-        str(job.get("path", "")),
-    ])
-    support_lower = support_text.lower()
-
-    # Semantic labels that materially change meaning must be explicit.
-    if re.search(r"\brank\b", q_lower) and not re.search(r"\brank\b", support_lower):
-        return False
-    if re.search(r"\b(?:price|cost)\b", q_lower) and not re.search(
-        r"\b(?:price|cost|usd)\b|\$", support_lower
-    ):
-        return False
-    if "leaderboard" in q_lower and "leaderboard" not in support_lower:
-        return False
-    if "arena" in q_lower and "arena" not in support_lower:
-        return False
-    if "cooldown" in q_lower and "cooldown" not in support_lower:
-        return False
-    if re.search(r"\brules?\b", q_lower) and not re.search(
-        r"\brules?\b", support_lower
-    ):
+    question_lower = question.lower()
+    support_lower = " ".join(
+        [
+            line,
+            str(job.get("repository", "")),
+            str(job.get("path", "")),
+        ]
+    ).lower()
+    if not _semantic_scope_supported(question_lower, support_lower):
         return False
 
-    # Permission questions require either the word itself or a permission node.
-    asks_permission = bool(re.search(r"\bpermissions?\b", q_lower))
-    has_permission_evidence = bool(
-        re.search(r"\bpermissions?\b", support_lower)
-        or re.search(r"\b[a-z][a-z0-9_-]+(?:\.[a-z0-9_-]+)+\b", support_lower)
+    asks_permission, has_permission_evidence = _permission_support(
+        question_lower,
+        support_lower,
     )
     if asks_permission and not has_permission_evidence:
         return False
-
-    # Version questions require explicit version evidence.
-    if "version" in q_lower and not (
-        "version" in support_lower
-        or re.search(r"\b\d+(?:\.\d+)+", support_lower)
-    ):
+    if not _version_supported(question_lower, support_lower):
         return False
 
-    # "speed" is a safe paraphrase for explicit cadence/rate evidence.
-    semantic_support = support_lower
-    if asks_permission and has_permission_evidence:
-        semantic_support += " permission required needed"
-    if "speed" in q_lower and re.search(
-        r"(?:per second|per tick|every tick|interval|cps|rate)", support_lower
-    ):
-        semantic_support += " speed"
-
+    semantic_support = _semantic_support(
+        question_lower,
+        support_lower,
+        asks_permission,
+        has_permission_evidence,
+    )
     question_terms = _lexemes(question)
     if not question_terms:
         return True
+
     support_terms = _lexemes(semantic_support)
-
-    # Long concrete nouns are usually scope-bearing details. Do not allow the
-    # generated question to introduce one that is absent from the evidence.
-    # Keep a small allowlist of abstract framing terms that are safe semantic
-    # wrappers around explicit source evidence.
-    safe_abstract_terms = {
-        "permission", "permissions", "required", "needed",
-        "configuration", "configure", "configured",
-        "specific", "available", "current",
-    }
-    for term in question_terms:
-        if len(term) < 8 or term in safe_abstract_terms:
-            continue
-        if term in support_terms:
-            continue
-        if any(
-            support.startswith(term)
-            for support in support_terms
-            if len(support) >= len(term)
-        ):
-            continue
+    if not _long_terms_supported(question_terms, support_terms):
         return False
-
-    # _lexemes emits simple morphology stems. Match those directly and allow
-    # one-way compound prefixes only for long terms. Never let short
-    # substrings such as "ran" satisfy "rank".
     matched = sum(
-        1 for term in question_terms
-        if term in support_terms
-        or (
-            len(term) >= 5
-            and any(
-                support.startswith(term)
-                for support in support_terms
-                if len(support) >= len(term)
-            )
-        )
+        1 for term in question_terms if _term_supported(term, support_terms)
     )
     return matched / len(question_terms) >= 0.50
+
+
+def _validate_required_fields(parsed: dict, problems: list[str]) -> None:
+    for key in ("category", "scenario", "user", "tags"):
+        if key not in parsed:
+            problems.append(f"missing:{key}")
+
+
+def _validate_generated_shape(parsed: dict, problems: list[str]) -> None:
+    forbidden_generated = {
+        "assistant", "facts", "expected_actions", "tools", "source",
+        "source_version", "visibility", "evidence_groups", "evidence_ids",
+    }
+    if forbidden_generated.intersection(parsed):
+        problems.append("forbidden_generated_fields")
+    if parsed.get("category") not in CATEGORIES:
+        problems.append("bad_category")
+    if isinstance(parsed.get("scenario"), str) and len(parsed["scenario"].split()) > 18:
+        problems.append("scenario_too_long")
+    if isinstance(parsed.get("user"), str) and len(parsed["user"].split()) > 30:
+        problems.append("user_too_long")
+
+
+def _validate_tags(parsed: dict, problems: list[str]) -> None:
+    tags = parsed.get("tags")
+    if not isinstance(tags, list):
+        problems.append("bad_tags")
+        return
+    if len(tags) > 4 or any(not isinstance(tag, str) for tag in tags):
+        problems.append("bad_tags")
+
+
+def _validate_target_line(job: dict, problems: list[str]) -> None:
+    target_line = job.get("target_line")
+    if not isinstance(target_line, str) or not target_line.strip():
+        problems.append("missing_target_line")
+        return
+    if len(target_line) > 500:
+        problems.append("target_line_too_long")
+        return
+    if any(pattern.search(target_line) for pattern in SECRET_PATTERNS):
+        problems.append("target_line_secret_pattern")
+
+
+def _validate_generated_content(
+    job: dict,
+    parsed: dict,
+    problems: list[str],
+) -> None:
+    if not _question_is_grounded(job, parsed):
+        problems.append("question_not_fully_grounded")
+    serialized = json.dumps(parsed, ensure_ascii=False)
+    if any(pattern.search(serialized) for pattern in SECRET_PATTERNS):
+        problems.append("secret_pattern_in_output")
+    if {"reasoning", "chain_of_thought", "analysis", "thoughts"}.intersection(parsed):
+        problems.append("chain_of_thought_key")
+
+
+def _validate_resolved_answer(job: dict, parsed: dict, problems: list[str]) -> None:
+    if problems:
+        return
+    facts, assistant = _resolve_evidence(job, parsed)
+    if not facts or not assistant:
+        problems.append("resolved_answer_empty")
+    elif len(assistant.split()) > 80 or len(assistant) > 800:
+        problems.append("resolved_answer_too_long")
 
 
 def validate_output(job: dict, parsed: dict) -> list[str]:
@@ -278,53 +398,12 @@ def validate_output(job: dict, parsed: dict) -> list[str]:
             problems.append("skip_missing_reason")
         return problems
 
-    for key in ("category", "scenario", "user", "tags"):
-        if key not in parsed:
-            problems.append(f"missing:{key}")
-
-    forbidden_generated = {
-        "assistant", "facts", "expected_actions", "tools", "source",
-        "source_version", "visibility", "evidence_groups", "evidence_ids",
-    }
-    if forbidden_generated.intersection(parsed):
-        problems.append("forbidden_generated_fields")
-
-    if parsed.get("category") not in CATEGORIES:
-        problems.append("bad_category")
-    if isinstance(parsed.get("scenario"), str) and len(parsed["scenario"].split()) > 18:
-        problems.append("scenario_too_long")
-    if isinstance(parsed.get("user"), str) and len(parsed["user"].split()) > 30:
-        problems.append("user_too_long")
-
-    tags = parsed.get("tags")
-    if not isinstance(tags, list) or len(tags) > 4 or any(
-        not isinstance(tag, str) for tag in (tags if isinstance(tags, list) else [])
-    ):
-        problems.append("bad_tags")
-
-    target_line = job.get("target_line")
-    if not isinstance(target_line, str) or not target_line.strip():
-        problems.append("missing_target_line")
-    elif len(target_line) > 500:
-        problems.append("target_line_too_long")
-    elif any(pattern.search(target_line) for pattern in SECRET_PATTERNS):
-        problems.append("target_line_secret_pattern")
-
-    if not _question_is_grounded(job, parsed):
-        problems.append("question_not_fully_grounded")
-
-    serialized = json.dumps(parsed, ensure_ascii=False)
-    if any(pattern.search(serialized) for pattern in SECRET_PATTERNS):
-        problems.append("secret_pattern_in_output")
-    if {"reasoning", "chain_of_thought", "analysis", "thoughts"}.intersection(parsed):
-        problems.append("chain_of_thought_key")
-
-    if not problems:
-        facts, assistant = _resolve_evidence(job, parsed)
-        if not facts or not assistant:
-            problems.append("resolved_answer_empty")
-        elif len(assistant.split()) > 80 or len(assistant) > 800:
-            problems.append("resolved_answer_too_long")
+    _validate_required_fields(parsed, problems)
+    _validate_generated_shape(parsed, problems)
+    _validate_tags(parsed, problems)
+    _validate_target_line(job, problems)
+    _validate_generated_content(job, parsed, problems)
+    _validate_resolved_answer(job, parsed, problems)
     return problems
 
 def _response_schema(job: dict) -> dict:
@@ -415,6 +494,201 @@ def load_existing(path: Path) -> set[str]:
                 done.add(job_id)
     return done
 
+def _load_job_buckets(
+    jobs_path: str,
+    existing: set[str],
+) -> dict[str, list[dict]]:
+    buckets: dict[str, list[dict]] = collections.defaultdict(list)
+    with gzip.open(jobs_path, "rt", encoding="utf-8") as fh:
+        for line in fh:
+            job = json.loads(line)
+            if job["job_id"] not in existing:
+                buckets[job["repository"]].append(job)
+    return buckets
+
+
+def _round_robin_select(
+    buckets: dict[str, list[dict]],
+    limit: int,
+) -> list[dict]:
+    selected: list[dict] = []
+    repository_order = sorted(buckets)
+    round_index = 0
+    while len(selected) < limit:
+        before = len(selected)
+        for repository in repository_order:
+            jobs = buckets[repository]
+            if round_index < len(jobs):
+                selected.append(jobs[round_index])
+                if len(selected) >= limit:
+                    return selected
+        if len(selected) == before:
+            return selected
+        round_index += 1
+    return selected
+
+
+def _initial_stats() -> dict[str, int | float]:
+    return {
+        "attempted": 0,
+        "valid": 0,
+        "skipped": 0,
+        "invalid": 0,
+        "request_errors": 0,
+        "latency_seconds_total": 0.0,
+    }
+
+
+def _result_envelope(job: dict) -> dict:
+    return {
+        "job_id": job["job_id"],
+        "repository": job["repository"],
+        "path": job["path"],
+        "source_id": job["source_id"],
+        "source_version": job["source_version"],
+        "line_number": job.get("line_number"),
+        "target_line": job.get("target_line"),
+    }
+
+
+def _increment_problems(problems: dict[str, int], validation: list[str]) -> None:
+    for problem in validation:
+        problems[problem] = problems.get(problem, 0) + 1
+
+
+def _classify_parsed(
+    job: dict,
+    parsed: dict,
+    result: dict,
+    stats: dict[str, int | float],
+    problems: dict[str, int],
+) -> None:
+    validation = validate_output(job, parsed)
+    if not validation and parsed.get("skip") is not True:
+        facts, assistant = _resolve_evidence(job, parsed)
+        parsed["visibility"] = job.get("visibility", "staff")
+        parsed["facts"] = facts
+        parsed["assistant"] = assistant
+        parsed["expected_actions"] = []
+
+    result["parsed"] = parsed
+    result["validation_problems"] = validation
+    if validation:
+        stats["invalid"] += 1
+        _increment_problems(problems, validation)
+    elif parsed.get("skip") is True:
+        stats["skipped"] += 1
+    else:
+        stats["valid"] += 1
+
+
+def _parse_model_response(
+    job: dict,
+    raw: str,
+    result: dict,
+    stats: dict[str, int | float],
+    problems: dict[str, int],
+) -> None:
+    try:
+        parsed_value = json.loads(strip_code_fence(raw))
+        if not isinstance(parsed_value, dict):
+            raise TypeError("model response must be a JSON object")
+        _classify_parsed(job, parsed_value, result, stats, problems)
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+        result["validation_problems"] = [f"json_parse:{type(exc).__name__}"]
+        stats["invalid"] += 1
+        problems["json_parse"] = problems.get("json_parse", 0) + 1
+
+
+def _execute_job(
+    args: argparse.Namespace,
+    job: dict,
+    stats: dict[str, int | float],
+    problems: dict[str, int],
+) -> tuple[dict, bool]:
+    result = _result_envelope(job)
+    stats["attempted"] += 1
+    try:
+        raw, elapsed = request_json(
+            args.endpoint,
+            job["prompt"],
+            job,
+            args.timeout,
+            args.max_tokens,
+        )
+    except (
+        urllib.error.URLError,
+        TimeoutError,
+        OSError,
+        KeyError,
+        json.JSONDecodeError,
+    ) as exc:
+        result["request_error"] = f"{type(exc).__name__}: {exc}"
+        stats["request_errors"] += 1
+        return result, False
+
+    stats["latency_seconds_total"] += elapsed
+    result["latency_seconds"] = elapsed
+    result["raw_response"] = raw
+    _parse_model_response(job, raw, result, stats, problems)
+    return result, True
+
+
+def _print_progress(
+    index: int,
+    total: int,
+    job: dict,
+    stats: dict[str, int | float],
+) -> None:
+    print(
+        f"[{index}/{total}] {job['job_id']} "
+        f"valid={stats['valid']} skip={stats['skipped']} "
+        f"invalid={stats['invalid']} errors={stats['request_errors']}"
+    )
+
+
+def _run_selected(
+    args: argparse.Namespace,
+    output: Path,
+    selected: list[dict],
+) -> tuple[dict[str, int | float], dict[str, int]]:
+    stats = _initial_stats()
+    problems: dict[str, int] = {}
+    consecutive_request_errors = 0
+    with output.open("a", encoding="utf-8") as out:
+        for index, job in enumerate(selected, 1):
+            result, request_ok = _execute_job(args, job, stats, problems)
+            consecutive_request_errors = 0 if request_ok else consecutive_request_errors + 1
+            out.write(json.dumps(result, ensure_ascii=False) + "\n")
+            out.flush()
+            _print_progress(index, len(selected), job, stats)
+            if consecutive_request_errors >= 3:
+                print(
+                    "Aborting benchmark after 3 consecutive request errors; "
+                    "local model server is unhealthy."
+                )
+                break
+    return stats, problems
+
+
+def _build_summary(
+    stats: dict[str, int | float],
+    problems: dict[str, int],
+) -> dict:
+    completed = int(stats["valid"] + stats["skipped"] + stats["invalid"])
+    return {
+        **stats,
+        "completed_model_responses": completed,
+        "valid_rate_of_model_responses": stats["valid"] / completed if completed else 0.0,
+        "skip_rate_of_model_responses": stats["skipped"] / completed if completed else 0.0,
+        "invalid_rate_of_model_responses": stats["invalid"] / completed if completed else 0.0,
+        "average_latency_seconds": (
+            stats["latency_seconds_total"] / completed if completed else None
+        ),
+        "problem_counts": dict(sorted(problems.items())),
+    }
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--jobs", required=True)
@@ -428,116 +702,10 @@ def main() -> int:
 
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
-    existing = load_existing(output)
-    buckets: dict[str, list[dict]] = collections.defaultdict(list)
-    with gzip.open(args.jobs, "rt", encoding="utf-8") as fh:
-        for line in fh:
-            job = json.loads(line)
-            if job["job_id"] in existing:
-                continue
-            buckets[job["repository"]].append(job)
-
-    selected = []
-    repository_order = sorted(buckets)
-    round_index = 0
-    while len(selected) < args.limit:
-        added = False
-        for repository in repository_order:
-            jobs = buckets[repository]
-            if round_index < len(jobs):
-                selected.append(jobs[round_index])
-                added = True
-                if len(selected) >= args.limit:
-                    break
-        if not added:
-            break
-        round_index += 1
-
-    stats = {
-        "attempted": 0, "valid": 0, "skipped": 0, "invalid": 0, "request_errors": 0,
-        "latency_seconds_total": 0.0,
-    }
-    problems = {}
-    consecutive_request_errors = 0
-
-    with output.open("a", encoding="utf-8") as out:
-        for index, job in enumerate(selected, 1):
-            stats["attempted"] += 1
-            result = {
-                "job_id": job["job_id"],
-                "repository": job["repository"],
-                "path": job["path"],
-                "source_id": job["source_id"],
-                "source_version": job["source_version"],
-                "line_number": job.get("line_number"),
-                "target_line": job.get("target_line"),
-            }
-            try:
-                raw, elapsed = request_json(
-                    args.endpoint,
-                    job["prompt"],
-                    job,
-                    args.timeout,
-                    args.max_tokens,
-                )
-                stats["latency_seconds_total"] += elapsed
-                result["latency_seconds"] = elapsed
-                result["raw_response"] = raw
-                try:
-                    parsed_value = json.loads(strip_code_fence(raw))
-                    if not isinstance(parsed_value, dict):
-                        raise TypeError("model response must be a JSON object")
-                    parsed = parsed_value
-                    validation = validate_output(job, parsed)
-                    if not validation and parsed.get("skip") is not True:
-                        facts, assistant = _resolve_evidence(job, parsed)
-                        parsed["visibility"] = job.get("visibility", "staff")
-                        parsed["facts"] = facts
-                        parsed["assistant"] = assistant
-                        parsed["expected_actions"] = []
-                    result["parsed"] = parsed
-                    result["validation_problems"] = validation
-                    consecutive_request_errors = 0
-                    if validation:
-                        stats["invalid"] += 1
-                        for problem in validation:
-                            problems[problem] = problems.get(problem, 0) + 1
-                    elif parsed.get("skip") is True:
-                        stats["skipped"] += 1
-                    else:
-                        stats["valid"] += 1
-                except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
-                    result["validation_problems"] = [f"json_parse:{type(exc).__name__}"]
-                    stats["invalid"] += 1
-                    problems["json_parse"] = problems.get("json_parse", 0) + 1
-            except (urllib.error.URLError, TimeoutError, OSError, KeyError, json.JSONDecodeError) as exc:
-                result["request_error"] = f"{type(exc).__name__}: {exc}"
-                stats["request_errors"] += 1
-                consecutive_request_errors += 1
-            out.write(json.dumps(result, ensure_ascii=False) + "\n")
-            out.flush()
-            print(
-                f"[{index}/{len(selected)}] {job['job_id']} "
-                f"valid={stats['valid']} skip={stats['skipped']} invalid={stats['invalid']} "
-                f"errors={stats['request_errors']}"
-            )
-            if consecutive_request_errors >= 3:
-                print(
-                    "Aborting benchmark after 3 consecutive request errors; "
-                    "local model server is unhealthy."
-                )
-                break
-
-    completed = stats["valid"] + stats["skipped"] + stats["invalid"]
-    summary = {
-        **stats,
-        "completed_model_responses": completed,
-        "valid_rate_of_model_responses": stats["valid"] / completed if completed else 0.0,
-        "skip_rate_of_model_responses": stats["skipped"] / completed if completed else 0.0,
-        "invalid_rate_of_model_responses": stats["invalid"] / completed if completed else 0.0,
-        "average_latency_seconds": stats["latency_seconds_total"] / completed if completed else None,
-        "problem_counts": dict(sorted(problems.items())),
-    }
+    buckets = _load_job_buckets(args.jobs, load_existing(output))
+    selected = _round_robin_select(buckets, args.limit)
+    stats, problems = _run_selected(args, output, selected)
+    summary = _build_summary(stats, problems)
     Path(args.summary).write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(json.dumps(summary, indent=2))
     return 0 if stats["request_errors"] == 0 else 2
