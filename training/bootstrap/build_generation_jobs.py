@@ -64,6 +64,7 @@ def source_visibility(record: dict, line: str = "") -> str:
         return "staff"
     if any(token in lower for token in (
         "/src/", "/internal/", "/config/", "config.", "config-", "/audit",
+        "/admins/", "/admin/",
     )):
         return "staff"
 
@@ -82,7 +83,7 @@ def source_visibility(record: dict, line: str = "") -> str:
     ):
         return "staff"
     if re.search(
-        r"(?:^|\s)/(?:ee|estaff|startupguardian|gatekeeper|tppos)\b",
+        r"(?:^|\s)/(?:ee|estaff|startupguardian|gatekeeper|tppos|warzone|shopmarket|ekoth)\b",
         line_lower,
     ):
         return "staff"
@@ -116,6 +117,13 @@ def path_score(record: dict) -> int:
         or "acceptance_harness" in lower_path
         or "component-metadata" in lower_path
         or "wiki-maintenance" in lower_path
+        or "/handoffs/" in "/" + lower_path
+        or lower_path.startswith("handoffs/")
+        or "/ai-agents/" in "/" + lower_path
+        or lower_path.startswith("ai-agents/")
+        or "workspace-state" in lower_path
+        or "codacy-evidence" in lower_path
+        or "codacy_evidence" in lower_path
     ):
         return -10_000
     lower = path.lower()
