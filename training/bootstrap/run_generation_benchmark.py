@@ -75,7 +75,7 @@ def _clean_display_line(line: str) -> str:
     text = re.sub(r"^#{1,6}\s+", "", text)
     text = re.sub(r"^[-*+]\s+", "", text)
     text = re.sub(r"^\d+[.)]\s+", "", text)
-    text = text.replace("**", "").replace("__", "").replace("\`", "")
+    text = text.replace("**", "").replace("__", "").replace("`", "")
 
     # Common README examples use "/command  # explanation".
     command_comment = re.fullmatch(r"(/[^#]+?)\s+#\s+(.+)", text)
