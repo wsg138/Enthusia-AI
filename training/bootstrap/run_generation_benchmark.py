@@ -33,7 +33,6 @@ except ModuleNotFoundError:
         validate_output,
     )
 
-# Compatibility exports used by deterministic builders and bootstrap regression tests.
 __all__ = (
     "_clean_display_line",
     "_question_is_grounded",
@@ -44,6 +43,9 @@ __all__ = (
     "strip_code_fence",
     "validate_output",
 )
+
+SAFE_EXAMPLE_FIELDS = ("category", "scenario", "user", "assistant", "tags")
+
 
 def request_json(
     endpoint: str,
@@ -57,7 +59,10 @@ def request_json(
         "messages": [
             {
                 "role": "system",
-                "content": "Return only the requested JSON object. Never include hidden reasoning or chain-of-thought.",
+                "content": (
+                    "Return only the requested JSON object. Never include hidden "
+                    "reasoning or chain-of-thought."
+                ),
             },
             {"role": "user", "content": prompt},
         ],
@@ -71,18 +76,17 @@ def request_json(
         },
     }
     endpoint = _validated_endpoint(endpoint)
-    req = urllib.request.Request(
+    request = urllib.request.Request(
         endpoint + "/v1/chat/completions",
         data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST",
     )
     started = time.perf_counter()
-    # The endpoint is restricted above to explicit HTTP(S); file/custom
-    # urllib schemes are rejected before this request is created.
-    with urllib.request.urlopen(req, timeout=timeout) as response:  # nosec B310  # nosemgrep
+    with urllib.request.urlopen(request, timeout=timeout) as response:  # nosec B310  # nosemgrep
         data = json.loads(response.read().decode("utf-8"))
     return data["choices"][0]["message"]["content"], time.perf_counter() - started
+
 
 def _existing_job_id(line: str) -> str | None:
     try:
@@ -99,20 +103,21 @@ def load_existing(path: Path) -> set[str]:
     if not path.exists():
         return set()
     done: set[str] = set()
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
             job_id = _existing_job_id(line)
             if job_id is not None:
                 done.add(job_id)
     return done
+
 
 def _load_job_buckets(
     jobs_path: str,
     existing: set[str],
 ) -> dict[str, list[dict]]:
     buckets: dict[str, list[dict]] = collections.defaultdict(list)
-    with gzip.open(jobs_path, "rt", encoding="utf-8") as fh:
-        for line in fh:
+    with gzip.open(jobs_path, "rt", encoding="utf-8") as handle:
+        for line in handle:
             job = json.loads(line)
             if job["job_id"] not in existing:
                 buckets[job["repository"]].append(job)
@@ -124,11 +129,11 @@ def _round_robin_select(
     limit: int,
 ) -> list[dict]:
     selected: list[dict] = []
-    repository_order = sorted(buckets)
+    repositories = sorted(buckets)
     round_index = 0
     while len(selected) < limit:
         before = len(selected)
-        for repository in repository_order:
+        for repository in repositories:
             jobs = buckets[repository]
             if round_index < len(jobs):
                 selected.append(jobs[round_index])
@@ -152,20 +157,54 @@ def _initial_stats() -> dict[str, int | float]:
 
 
 def _result_envelope(job: dict) -> dict:
-    return {
-        "job_id": job["job_id"],
-        "repository": job["repository"],
-        "path": job["path"],
-        "source_id": job["source_id"],
-        "source_version": job["source_version"],
-        "line_number": job.get("line_number"),
-        "target_line": job.get("target_line"),
-    }
+    keys = (
+        "job_id", "repository", "path", "source_id", "source_version",
+        "line_number", "target_line", "visibility", "response_mode",
+        "familiarity_profile", "production_authority", "evidence",
+        "evidence_ranges", "evidence_text",
+    )
+    return {key: job.get(key) for key in keys}
 
 
 def _increment_problems(problems: dict[str, int], validation: list[str]) -> None:
     for problem in validation:
         problems[problem] = problems.get(problem, 0) + 1
+
+
+def _unsafe_generated_content(validation: list[str]) -> bool:
+    unsafe = {
+        "secret_pattern_in_output",
+        "forbidden_generated_fields",
+    }
+    return bool(unsafe.intersection(validation))
+
+
+def _safe_parsed(parsed: dict, validation: list[str]) -> dict:
+    if _unsafe_generated_content(validation):
+        return {"rejected": True, "content_withheld": True}
+    if parsed.get("skip") is True:
+        reason = parsed.get("reason")
+        return {
+            "skip": True,
+            "reason": reason if isinstance(reason, str) else "invalid skip",
+        }
+    return {
+        key: parsed[key]
+        for key in SAFE_EXAMPLE_FIELDS
+        if key in parsed
+    }
+
+
+def _attach_validated_fields(job: dict, parsed: dict) -> dict:
+    resolved = dict(parsed)
+    facts, assistant = _resolve_evidence(job, parsed)
+    resolved["visibility"] = job.get("visibility", "staff")
+    resolved["response_mode"] = job.get("response_mode")
+    resolved["familiarity_profile"] = job.get("familiarity_profile")
+    resolved["facts"] = facts
+    resolved["assistant"] = assistant
+    resolved["expected_actions"] = []
+    return resolved
 
 
 def _classify_parsed(
@@ -176,14 +215,10 @@ def _classify_parsed(
     problems: dict[str, int],
 ) -> None:
     validation = validate_output(job, parsed)
+    safe = _safe_parsed(parsed, validation)
     if not validation and parsed.get("skip") is not True:
-        facts, assistant = _resolve_evidence(job, parsed)
-        parsed["visibility"] = job.get("visibility", "staff")
-        parsed["facts"] = facts
-        parsed["assistant"] = assistant
-        parsed["expected_actions"] = []
-
-    result["parsed"] = parsed
+        safe = _attach_validated_fields(job, safe)
+    result["parsed"] = safe
     result["validation_problems"] = validation
     if validation:
         stats["invalid"] += 1
@@ -208,6 +243,7 @@ def _parse_model_response(
         _classify_parsed(job, parsed_value, result, stats, problems)
     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
         result["validation_problems"] = [f"json_parse:{type(exc).__name__}"]
+        result["parsed"] = {"rejected": True, "content_withheld": True}
         stats["invalid"] += 1
         problems["json_parse"] = problems.get("json_parse", 0) + 1
 
@@ -238,10 +274,9 @@ def _execute_job(
         result["request_error"] = f"{type(exc).__name__}: {exc}"
         stats["request_errors"] += 1
         return result, False
-
     stats["latency_seconds_total"] += elapsed
     result["latency_seconds"] = elapsed
-    result["raw_response"] = raw
+    result["model_response_chars"] = len(raw)
     _parse_model_response(job, raw, result, stats, problems)
     return result, True
 
@@ -266,15 +301,15 @@ def _run_selected(
 ) -> tuple[dict[str, int | float], dict[str, int]]:
     stats = _initial_stats()
     problems: dict[str, int] = {}
-    consecutive_request_errors = 0
-    with output.open("a", encoding="utf-8") as out:
+    consecutive_errors = 0
+    with output.open("a", encoding="utf-8") as handle:
         for index, job in enumerate(selected, 1):
             result, request_ok = _execute_job(args, job, stats, problems)
-            consecutive_request_errors = 0 if request_ok else consecutive_request_errors + 1
-            out.write(json.dumps(result, ensure_ascii=False) + "\n")
-            out.flush()
+            consecutive_errors = 0 if request_ok else consecutive_errors + 1
+            handle.write(json.dumps(result, ensure_ascii=False) + "\n")
+            handle.flush()
             _print_progress(index, len(selected), job, stats)
-            if consecutive_request_errors >= 3:
+            if consecutive_errors >= 3:
                 print(
                     "Aborting benchmark after 3 consecutive request errors; "
                     "local model server is unhealthy."
@@ -298,19 +333,20 @@ def _build_summary(
             stats["latency_seconds_total"] / completed if completed else None
         ),
         "problem_counts": dict(sorted(problems.items())),
+        "raw_model_responses_persisted": False,
     }
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--jobs", required=True)
-    ap.add_argument("--output", required=True)
-    ap.add_argument("--summary", required=True)
-    ap.add_argument("--endpoint", default="http://127.0.0.1:8091")
-    ap.add_argument("--limit", type=int, default=30)
-    ap.add_argument("--timeout", type=int, default=300)
-    ap.add_argument("--max-tokens", type=int, default=450)
-    args = ap.parse_args()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--jobs", required=True)
+    parser.add_argument("--output", required=True)
+    parser.add_argument("--summary", required=True)
+    parser.add_argument("--endpoint", default="http://127.0.0.1:8091")
+    parser.add_argument("--limit", type=int, default=10)
+    parser.add_argument("--timeout", type=int, default=300)
+    parser.add_argument("--max-tokens", type=int, default=550)
+    args = parser.parse_args()
 
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -321,6 +357,7 @@ def main() -> int:
     Path(args.summary).write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(json.dumps(summary, indent=2))
     return 0 if stats["request_errors"] == 0 else 2
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

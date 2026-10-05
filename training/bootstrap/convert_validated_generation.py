@@ -5,8 +5,9 @@ import argparse
 import json
 from pathlib import Path
 
-GENERATOR = "qwen3.5-35b-a3b-q4_k_m-retrieval-grounded-v2"
+GENERATOR = "qwen3.5-35b-a3b-q4_k_m-bounded-grounding-v3"
 KNOWLEDGE_TOOL = "knowledge.search"
+
 
 def _facts(parsed: dict) -> list[dict]:
     facts: list[dict] = []
@@ -24,21 +25,18 @@ def _facts(parsed: dict) -> list[dict]:
 
 
 def _tags(parsed: dict) -> list[str]:
-    return list(
-        dict.fromkeys(
-            [
-                parsed.get("category", "unknown"),
-                "grounded",
-                "retrieval-grounded",
-                "github-source",
-                *[
-                    tag
-                    for tag in parsed.get("tags", [])
-                    if isinstance(tag, str)
-                ],
-            ]
-        )
-    )
+    profile = parsed.get("familiarity_profile")
+    response_mode = parsed.get("response_mode")
+    values = [
+        parsed.get("category", "unknown"),
+        "grounded",
+        "bounded-evidence",
+        "github-source",
+        response_mode,
+        f"familiarity:{profile}" if profile else None,
+        *parsed.get("tags", []),
+    ]
+    return list(dict.fromkeys(value for value in values if isinstance(value, str)))
 
 
 def _source_result(result: dict) -> dict:
@@ -47,8 +45,12 @@ def _source_result(result: dict) -> dict:
         "source_version": result.get("source_version"),
         "repository": result.get("repository"),
         "path": result.get("path"),
-        "line_number": result.get("line_number"),
-        "evidence": result.get("target_line"),
+        "target_line_number": result.get("line_number"),
+        "target_line": result.get("target_line"),
+        "evidence": result.get("evidence", []),
+        "evidence_ranges": result.get("evidence_ranges", []),
+        "production_authority": result.get("production_authority"),
+        "visibility": result.get("visibility"),
     }
 
 
@@ -56,10 +58,7 @@ def _tool_message(result: dict) -> dict:
     return {
         "role": "tool",
         "content": json.dumps(
-            {
-                "tool": KNOWLEDGE_TOOL,
-                "result": _source_result(result),
-            },
+            {"tool": KNOWLEDGE_TOOL, "result": _source_result(result)},
             ensure_ascii=False,
             sort_keys=True,
         ),
@@ -72,11 +71,9 @@ def convert(result: dict) -> dict | None:
     parsed = result.get("parsed")
     if not isinstance(parsed, dict) or parsed.get("skip") is True:
         return None
-
     facts = _facts(parsed)
     if not facts:
         return None
-
     job_id = result["job_id"]
     return {
         "id": f"synth-{job_id}",
@@ -104,17 +101,20 @@ def convert(result: dict) -> dict | None:
         "source_path": result.get("path"),
         "source_id": result.get("source_id"),
         "source_version": result.get("source_version"),
+        "evidence_ranges": result.get("evidence_ranges", []),
+        "familiarity_profile": parsed.get("familiarity_profile"),
+        "response_mode": parsed.get("response_mode"),
+        "production_authority": result.get("production_authority"),
         "generation_latency_seconds": result.get("latency_seconds"),
+        "admission_status": "owner_review_required",
     }
 
 
 def _load_converted(input_path: str) -> tuple[list[dict], int, int, int]:
     records: list[dict] = []
-    skipped = 0
-    invalid = 0
-    total = 0
-    with open(input_path, encoding="utf-8") as fh:
-        for line in fh:
+    skipped = invalid = total = 0
+    with open(input_path, encoding="utf-8") as handle:
+        for line in handle:
             total += 1
             result = json.loads(line)
             if result.get("validation_problems") or result.get("request_error"):
@@ -135,43 +135,41 @@ def _load_converted(input_path: str) -> tuple[list[dict], int, int, int]:
 def _write_records(output_path: str, records: list[dict]) -> None:
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
-    with output.open("w", encoding="utf-8") as fh:
+    with output.open("w", encoding="utf-8") as handle:
         for record in records:
-            fh.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+            handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
 
 
 def _manifest(total: int, records: list[dict], skipped: int, invalid: int) -> dict:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "generator": GENERATOR,
         "input_results": total,
         "converted_records": len(records),
         "model_skips": skipped,
         "invalid_or_request_error": invalid,
-        "status": "candidate_records_only",
+        "status": "candidate_records_only_owner_review_required",
         "note": (
-            "These retrieval-grounded trace candidates passed deterministic "
-            "JSON/evidence validation but are not a released training dataset until "
-            "W16 normalization, secret scan, dedupe, split isolation, and quality "
-            "review accept them. Mutable facts remain in tool evidence rather than "
-            "unconditioned QA."
+            "These bounded-evidence candidates are not admitted to W16 or training. "
+            "Owner review, W16 normalization, secret scan, dedupe, split isolation, "
+            "and downstream quality gates remain required."
         ),
     }
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--input", required=True)
-    ap.add_argument("--output", required=True)
-    ap.add_argument("--manifest", required=True)
-    args = ap.parse_args()
-
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", required=True)
+    parser.add_argument("--output", required=True)
+    parser.add_argument("--manifest", required=True)
+    args = parser.parse_args()
     records, skipped, invalid, total = _load_converted(args.input)
     _write_records(args.output, records)
     manifest = _manifest(total, records, skipped, invalid)
     Path(args.manifest).write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     print(json.dumps(manifest, indent=2))
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

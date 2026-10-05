@@ -75,3 +75,40 @@ Current owner corrections that must be treated as negative regression cases, not
 - normal players do **not** have a general `/fly` command.
 
 These examples exist specifically to catch hallucinated/stale server knowledge. If future live authoritative evidence changes either fact, the current-source verification layer wins and this bootstrap note must be updated before regenerating training data.
+
+
+## Source-grounded natural-response generation
+
+The owner-review generator uses a bounded grounding contract rather than turning source
+lines directly into assistant text:
+
+1. deterministic selection chooses a high-value source target;
+2. at most 12 source lines / 2,400 characters form a coherent evidence window;
+3. exact repository, path, SHA, line numbers, evidence ranges, visibility, and deployment
+   authority stay attached to the job;
+4. the local model writes a natural question and final assistant reply from that evidence;
+5. deterministic validation rejects unsupported commands, numbers, permission nodes,
+   deployment strengthening, secrets, staff-boundary leakage, and known owner-truth
+   regressions;
+6. generated results remain review-only candidates until the owner and downstream W16
+   gates explicitly accept them.
+
+Public support jobs can be emitted with novice and familiar explanation profiles.
+Those profiles change explanation depth only; they do not change the source facts or
+encode a player's familiarity into static server knowledge. Runtime use of actual player
+context is tracked separately in issue #33.
+
+Staff/internal evidence is not silently exposed to normal players. A useful staff-only
+command example may train a boundary response that redirects the player toward a
+player-facing option, but the answer must not reveal staff command syntax, permission
+nodes, backend details, or operational steps.
+
+GitHub source is not treated as proof of live deployment. Explicit source qualifications
+such as staging, retained configuration, testing, or "when deployed" must survive into
+the candidate answer. A bounded evidence window may include nearby authoritative
+context when needed (for example a player-guide section around /baltop or Good Stall),
+but public windows may not absorb staff-only context from mixed documentation.
+
+render_owner_review.py renders exactly 10 attempted results into the compact owner
+review artifact. It refuses any other attempt count and labels the output as review-only,
+not admitted to W16 or training data.
