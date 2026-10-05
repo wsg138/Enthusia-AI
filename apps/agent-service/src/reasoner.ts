@@ -103,15 +103,14 @@ const JSON_ESCAPES: Readonly<Record<string, string>> = {
 function escapeJsonCharacter(value: string): string {
   const known = JSON_ESCAPES[value];
   if (known !== undefined) return known;
-  return '\\u' + value.charCodeAt(0).toString(16).padStart(4, '0');
+  const code = value.charCodeAt(0);
+  return code < 32
+    ? '\\u' + code.toString(16).padStart(4, '0')
+    : value;
 }
 
 function quoteJson(value: string): string {
-  const escaped = value.replace(
-    /["\\\u0000-\u001f]/g,
-    escapeJsonCharacter,
-  );
-  return '"' + escaped + '"';
+  return '"' + Array.from(value, escapeJsonCharacter).join('') + '"';
 }
 
 function stableObjectJson(value: Record<string, unknown>): string {
