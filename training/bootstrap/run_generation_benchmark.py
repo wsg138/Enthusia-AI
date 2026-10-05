@@ -33,6 +33,18 @@ except ModuleNotFoundError:
         validate_output,
     )
 
+# Compatibility exports used by deterministic builders and bootstrap regression tests.
+__all__ = (
+    "_clean_display_line",
+    "_question_is_grounded",
+    "_resolve_evidence",
+    "_response_schema",
+    "_split_markdown_table_row",
+    "_validated_endpoint",
+    "strip_code_fence",
+    "validate_output",
+)
+
 def request_json(
     endpoint: str,
     prompt: str,
