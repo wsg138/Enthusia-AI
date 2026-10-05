@@ -36,24 +36,32 @@ def strip_code_fence(text: str) -> str:
             text = text.rstrip()[:-3]
     return text.strip()
 
+def _split_markdown_table_row(text: str) -> list[str]:
+    inner = text.strip().strip("|")
+    # Split only on unescaped table separators. A literal escaped pipe inside
+    # command syntax (for example packages\\|letters) remains part of the cell.
+    cells = re.split(r"(?<!\\\\)\\|", inner)
+    cleaned: list[str] = []
+    for cell in cells:
+        value = (
+            cell.strip()
+            .replace("\\\\|", "|")
+            .replace("**", "")
+            .replace("__", "")
+            .replace("\`", "")
+        )
+        if value and not re.fullmatch(r":?-{3,}:?", value):
+            cleaned.append(value)
+    return cleaned
+
+
 def _clean_display_line(line: str) -> str:
     text = line.strip()
 
-    # Convert Markdown table rows to readable prose. Split only unescaped pipes
-    # so cells such as packages\\|letters\\|announcements remain intact.
+    # Convert Markdown command tables to readable prose without changing any
+    # factual values. Exact raw evidence remains stored separately.
     if text.startswith("|") and text.endswith("|"):
-        cells = [
-            cell.strip()
-            .replace("\\|", "|")
-            .replace("**", "")
-            .replace("__", "")
-            .replace("`", "")
-            for cell in re.split(r"(?<!\\)\|", text.strip("|"))
-        ]
-        cells = [
-            cell for cell in cells
-            if cell and not re.fullmatch(r":?-{3,}:?", cell)
-        ]
+        cells = _split_markdown_table_row(text)
         if len(cells) >= 3 and cells[0].startswith("/"):
             rendered = f"{cells[0]}: {cells[1]} Permission: {cells[2]}"
             if len(cells) > 3:
@@ -64,23 +72,21 @@ def _clean_display_line(line: str) -> str:
         if cells:
             return "; ".join(cells)
 
-    text = re.sub(r"^#{1,6}\s+", "", text)
-    text = re.sub(r"^[-*+]\s+", "", text)
-    text = re.sub(r"^\d+[.)]\s+", "", text)
-    text = text.replace("**", "").replace("__", "").replace("`", "")
+    text = re.sub(r"^#{1,6}\\s+", "", text)
+    text = re.sub(r"^[-*+]\\s+", "", text)
+    text = re.sub(r"^\\d+[.)]\\s+", "", text)
+    text = text.replace("**", "").replace("__", "").replace("\`", "")
 
-    # Common README command examples use "/command  # explanation".
-    command_comment = re.fullmatch(r"(/[^#]+?)\s+#\s+(.+)", text)
+    # Common README examples use "/command  # explanation".
+    command_comment = re.fullmatch(r"(/[^#]+?)\\s+#\\s+(.+)", text)
     if command_comment:
         return f"{command_comment.group(1).strip()}: {command_comment.group(2).strip()}"
 
-    text = re.sub(r"^#\s*", "", text)
     if text.lower().startswith("usage:"):
         text = "Usage:" + text[6:]
     if text.lower().startswith("aliases:"):
         text = "Aliases:" + text[8:]
     return text.strip()
-
 
 def _resolve_evidence(job: dict, parsed: dict) -> tuple[list[dict], str]:
     evidence = str(job.get("target_line", ""))
