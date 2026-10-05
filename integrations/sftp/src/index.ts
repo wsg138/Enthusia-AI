@@ -144,6 +144,15 @@ export {
   createLiveServerSourceTools,
 } from './live-tools.js';
 
+export {
+  readCurrentPluginDeployment,
+  readCurrentPluginInterface,
+  readCurrentTargetFreshness,
+  type CurrentPluginDeployment,
+  type CurrentPluginInterface,
+  type CurrentTargetFreshness,
+} from './current-intelligence.js';
+
 export type {
   Tool,
   ToolCallContext,
