@@ -2,21 +2,13 @@ import { z } from 'zod';
 import { loadConfig, type AppConfig } from '@enthusia/config';
 import { SURFACES, type ActorType, type Surface } from '@enthusia/contracts';
 
-/**
- * @enthusia/ai-gateway — gateway-specific configuration.
- *
- * Spec: MASTER-SPECIFICATION.md §§18.4 (rate limiting), 34.3 (service
- * authentication), 36 (health/observability); WORKER-EXECUTION-PLAN.md §5 (W02).
- *
- * All values come from environment variables with safe defaults. Service API
- * keys may be omitted only in development/test. Production fails closed at
- * startup when no gateway service key is configured.
- */
-
 export const ACTOR_TYPES = ['player', 'staff', 'system', 'unknown'] as const;
 
-/** Comma-separated env list validated against a fixed allowlist (fail fast). */
-function csvEnumList<T extends string>(envDefault: string, allowed: readonly T[], label: string) {
+function csvEnumList<T extends string>(
+  envDefault: string,
+  allowed: readonly T[],
+  label: string,
+) {
   return z
     .string()
     .default(envDefault)
@@ -25,13 +17,21 @@ function csvEnumList<T extends string>(envDefault: string, allowed: readonly T[]
         .split(',')
         .map((p) => p.trim().toLowerCase())
         .filter((p) => p.length > 0);
-      const bad = parts.filter((p) => !(allowed as readonly string[]).includes(p));
+      const bad = parts.filter(
+        (p) => !(allowed as readonly string[]).includes(p),
+      );
       if (bad.length > 0) {
-        ctx.addIssue({ code: 'custom', message: `Unknown ${label}: ${bad.join(', ')}` });
+        ctx.addIssue({
+          code: 'custom',
+          message: `Unknown ${label}: ${bad.join(', ')}`,
+        });
         return z.NEVER;
       }
       if (parts.length === 0) {
-        ctx.addIssue({ code: 'custom', message: `At least one ${label} must be configured` });
+        ctx.addIssue({
+          code: 'custom',
+          message: `At least one ${label} must be configured`,
+        });
         return z.NEVER;
       }
       return parts as T[];
@@ -49,37 +49,30 @@ const commaSeparatedKeys = z
   .pipe(z.array(z.string().min(1)));
 
 export const gatewayConfigSchema = z.object({
-  /** TCP port the gateway listens on. */
   port: z.coerce.number().int().min(1).max(65535).default(4100),
-
-  /** Service API keys accepted as `Authorization: Bearer <key>`. Empty = auth disabled (dev/test). */
   apiKeys: commaSeparatedKeys,
-
-  /** Surfaces this gateway instance serves. */
-  allowedSurfaces: csvEnumList<Surface>('discord,minecraft,ticket,staff', SURFACES, 'surface'),
-
-  /** Actor types this gateway instance accepts. */
-  allowedActorTypes: csvEnumList<ActorType>('player,staff,system,unknown', ACTOR_TYPES, 'actor type'),
-
-  /** Sliding-window rate limit: requests per minute per (surface, actor id). */
+  allowedSurfaces: csvEnumList<Surface>(
+    'discord,minecraft,ticket,staff',
+    SURFACES,
+    'surface',
+  ),
+  allowedActorTypes: csvEnumList<ActorType>(
+    'player,staff,system,unknown',
+    ACTOR_TYPES,
+    'actor type',
+  ),
   rateLimitUserPerMin: z.coerce.number().int().positive().default(20),
-  /** Sliding-window rate limit: requests per minute globally. */
   rateLimitGlobalPerMin: z.coerce.number().int().positive().default(200),
-
-  /** Maximum UTF-8 byte length of ChatRequest.message. */
   maxMessageBytes: z.coerce.number().int().positive().default(8192),
-  /** Maximum total HTTP request body size in bytes (abuse guard). */
   maxBodyBytes: z.coerce.number().int().positive().default(65536),
-
-  /** Downstream agent call timeout in milliseconds. */
   agentTimeoutMs: z.coerce.number().int().positive().default(30_000),
-  /** /health/ready dependency probe timeout in milliseconds. */
   readyProbeTimeoutMs: z.coerce.number().int().positive().default(5000),
+  agentBaseUrl: z.string().url().optional(),
+  agentApiKey: z.string().min(1).optional(),
 });
 
 export type GatewayConfigFields = z.infer<typeof gatewayConfigSchema>;
 
-/** Full gateway runtime config: shared app config + gateway fields. */
 export interface GatewayConfig extends GatewayConfigFields {
   nodeEnv: AppConfig['nodeEnv'];
   serviceName: string;
@@ -98,10 +91,13 @@ const GATEWAY_ENV_MAP = {
   maxBodyBytes: 'ENTHUSIA_GATEWAY_MAX_BODY_BYTES',
   agentTimeoutMs: 'ENTHUSIA_GATEWAY_AGENT_TIMEOUT_MS',
   readyProbeTimeoutMs: 'ENTHUSIA_GATEWAY_READY_PROBE_TIMEOUT_MS',
+  agentBaseUrl: 'ENTHUSIA_AGENT_BASE_URL',
+  agentApiKey: 'ENTHUSIA_AGENT_API_KEY',
 } as const;
 
-/** Load and validate the gateway configuration from `env`. */
-export function loadGatewayConfig(env: NodeJS.ProcessEnv = process.env): GatewayConfig {
+export function loadGatewayConfig(
+  env: NodeJS.ProcessEnv = process.env,
+): GatewayConfig {
   const base = loadConfig(env);
   const fields = gatewayConfigSchema.parse({
     port: env[GATEWAY_ENV_MAP.port] ?? base.aiGatewayPort,
@@ -114,12 +110,27 @@ export function loadGatewayConfig(env: NodeJS.ProcessEnv = process.env): Gateway
     maxBodyBytes: env[GATEWAY_ENV_MAP.maxBodyBytes],
     agentTimeoutMs: env[GATEWAY_ENV_MAP.agentTimeoutMs],
     readyProbeTimeoutMs: env[GATEWAY_ENV_MAP.readyProbeTimeoutMs],
+    agentBaseUrl: env[GATEWAY_ENV_MAP.agentBaseUrl],
+    agentApiKey: env[GATEWAY_ENV_MAP.agentApiKey],
   });
 
-  if (base.nodeEnv === 'production' && fields.apiKeys.length === 0) {
+  if (fields.agentApiKey !== undefined && fields.agentBaseUrl === undefined) {
     throw new Error(
-      'ENTHUSIA_GATEWAY_API_KEYS must contain at least one service key when NODE_ENV=production.',
+      'ENTHUSIA_AGENT_API_KEY requires ENTHUSIA_AGENT_BASE_URL.',
     );
+  }
+
+  if (base.nodeEnv === 'production') {
+    if (fields.apiKeys.length === 0) {
+      throw new Error(
+        'ENTHUSIA_GATEWAY_API_KEYS must contain at least one service key when NODE_ENV=production.',
+      );
+    }
+    if (fields.agentBaseUrl === undefined || fields.agentApiKey === undefined) {
+      throw new Error(
+        'ENTHUSIA_AGENT_BASE_URL and ENTHUSIA_AGENT_API_KEY are required when NODE_ENV=production.',
+      );
+    }
   }
 
   return {
@@ -131,11 +142,9 @@ export function loadGatewayConfig(env: NodeJS.ProcessEnv = process.env): Gateway
   };
 }
 
-/**
- * Startup-safe view of the config: safe to log. API key VALUES are never
- * included — only the count of configured keys.
- */
-export function redactedGatewayConfig(config: GatewayConfig): Record<string, unknown> {
+export function redactedGatewayConfig(
+  config: GatewayConfig,
+): Record<string, unknown> {
   return {
     nodeEnv: config.nodeEnv,
     serviceName: config.serviceName,
@@ -152,5 +161,7 @@ export function redactedGatewayConfig(config: GatewayConfig): Record<string, unk
     maxBodyBytes: config.maxBodyBytes,
     agentTimeoutMs: config.agentTimeoutMs,
     readyProbeTimeoutMs: config.readyProbeTimeoutMs,
+    remoteAgentConfigured: config.agentBaseUrl !== undefined,
+    agentApiKeyConfigured: config.agentApiKey !== undefined,
   };
 }

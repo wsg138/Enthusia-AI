@@ -8,14 +8,14 @@ user-approved step owned by a future deployment run.
 
 | File | Purpose |
 |------|---------|
-| `egg.json` | Pterodactyl egg template: Enthusia AI split (agent, discord, inference, indexer). Import into the panel; one server per role. |
+| `egg.json` | Pterodactyl egg template: Enthusia AI split (gateway, agent, discord, inference, indexer). Import into the panel; one server per role. |
 | `startup.sh` | Container startup script referenced by the egg. Validates env, sets OOM priority, applies optional CPU pinning, launches the role. |
 | `resource-limits.env` | Default environment: RAM cap (24–32 GB envelope, §63), thread bounds (§35.2), OOM score (§35.4), observability ports (§36). Secrets stay empty — injected by the panel, never committed (§34.1). |
 
 ## Provisioning checklist (manual, future)
 
 1. Import `egg.json` into the Pterodactyl panel (nests: create "Enthusia AI" nest first if needed).
-2. Create one server per role (`AI_SERVICE=agent|discord|inference|indexer`), §35.1.
+2. Create one server per role (`AI_SERVICE=gateway|agent|discord|inference|indexer`), §35.1. The gateway is the stable surface API; the agent is the W12 orchestration/runtime service behind it.
 3. Set the panel allocation RAM/CPU to match `deploy/RESOURCE-LIMITS.md`.
 4. Paste `resource-limits.env` values into each server's environment; fill secrets in the panel only. Keep `INFERENCE_BIND_HOST=127.0.0.1` unless another container must connect; in that case use a private/internal address and firewall it from public ingress.
 5. Place the model artifact per `deploy/MODEL-ARTIFACTS.md`.

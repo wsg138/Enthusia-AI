@@ -37,7 +37,7 @@ import { AgentRegistry, Router } from './router.js';
  * behavior), 48 (API contracts); WORKER-EXECUTION-PLAN.md §5 (W02).
  *
  * Endpoints:
- *  - POST /v1/chat    — ChatRequest in, AgentResponse out (mock agent, W02)
+ *  - POST /v1/chat    — ChatRequest in, AgentResponse out through the configured downstream agent
  *  - GET  /health/live  — liveness probe
  *  - GET  /health/ready — readiness probe (downstream agent reachability)
  *

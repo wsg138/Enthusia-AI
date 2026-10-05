@@ -8,6 +8,7 @@ import { compileConfig } from '../src/config.js';
 import { LiveServerSourceGateway } from '../src/live-source.js';
 import { createLiveServerSourceTools } from '../src/live-tools.js';
 import { MockSftpServer } from './fakes.js';
+import { gatewayFor, makeServer } from './live-source-fixtures.js';
 import type { ToolCallContext } from '../src/tool-adapter.js';
 
 const HOST_KEY = 'SHA256:' + 'B'.repeat(43);
@@ -173,3 +174,37 @@ const PLAYER: Actor = { id: 'player-1', type: 'player' };
     expect(freshness['observedTime']).toBe('2026-10-04T20:00:00.000Z');
     expect(freshness['sourceStatus']).toBe(SourceStatus.CURRENT);
   });
+
+
+it('adds bounded W12 claim evidence only to current-state composite tools', async () => {
+  const gateway = gatewayFor({ smp: makeServer() });
+  const tools = createLiveServerSourceTools(gateway);
+
+  const current = await tools.get('server.current_plugin_interface')!.execute(
+    {
+      serverId: 'smp',
+      directoryId: 'plugins',
+      fileName: 'ExamplePlugin.jar',
+    },
+    context(STAFF),
+  );
+  expect(current.error).toBeUndefined();
+  expect(current.result).toMatchObject({
+    value: expect.stringContaining('declaredCommands=example'),
+    excerpt: expect.stringContaining('ExamplePlugin'),
+    data: {
+      evidence: 'deployed-plugin-metadata',
+      caveat: 'metadata-declarations-do-not-prove-runtime-registration',
+    },
+  });
+  expect(JSON.stringify(current.result)).not.toContain('/srv/smp');
+
+  const raw = await tools.get('server.list_plugins')!.execute(
+    { serverId: 'smp', directoryId: 'plugins' },
+    context(STAFF),
+  );
+  expect(raw.error).toBeUndefined();
+  const rawRecord = raw.result as Record<string, unknown>;
+  expect(rawRecord['value']).toBeUndefined();
+  expect(rawRecord['excerpt']).toBeUndefined();
+});

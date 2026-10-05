@@ -49,10 +49,12 @@ export LOG_LEVEL METRICS_PORT HEALTH_PORT ENTHUSIA_VERSION="${VERSION}"
 
 case "${ROLE}" in
   agent)
-    # Service entrypoints are provided by later workstreams (W02 gateway,
-    # W12 orchestrator). Placeholder until the agent service ships.
-    log "FATAL: agent service entrypoint not yet implemented (W02/W12)"
-    exit 1
+    log "Starting W12 agent service"
+    exec ${PIN_CMD} node apps/agent-service/dist/main.js
+    ;;
+  gateway)
+    log "Starting W02 AI Gateway"
+    exec node apps/ai-gateway/dist/main.js
     ;;
   discord)
     log "FATAL: discord adapter entrypoint not yet implemented (W06)"
@@ -85,7 +87,7 @@ case "${ROLE}" in
     exit 1
     ;;
   *)
-    log "FATAL: unknown AI_SERVICE='${ROLE}' (expected agent|discord|inference|indexer)"
+    log "FATAL: unknown AI_SERVICE='${ROLE}' (expected agent|gateway|discord|inference|indexer)"
     exit 1
     ;;
 esac
