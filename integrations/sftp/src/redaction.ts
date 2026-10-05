@@ -1,9 +1,9 @@
 /**
  * Secret-aware sanitization for model-visible server text.
  *
- * Structured configuration may describe that an integration exists, but
- * credential values never leave the gateway. High-risk opaque secret material
- * that cannot be attributed to a field is denied entirely.
+ * Useful configuration may describe integrations, but authentication values
+ * never leave this boundary. Structured secret fields are redacted and opaque
+ * high-risk secret material denies the entire document.
  */
 
 import posixPath from 'node:path/posix';
@@ -22,17 +22,23 @@ const DIRECT_SECRET_KEYS = new Set([
   'apitoken',
   'apikey',
   'clientsecret',
+  'webhook',
+  'webhookurl',
   'webhooksecret',
   'forwardingsecret',
   'sharedsecret',
   'privatekey',
   'secretkey',
+  'credential',
+  'credentials',
   'sftpcredential',
+  'sftpcredentials',
   'sftppassword',
   'databaseurl',
   'jdbcurl',
   'dsn',
   'connectionstring',
+  'authorization',
 ]);
 
 const DATABASE_PARENTS = new Set([
@@ -66,21 +72,41 @@ const HIGH_RISK_SECRET_PATTERNS: readonly RegExp[] = [
   /\bmfa\.[A-Za-z0-9_-]{20,}\b/,
 ];
 
+interface YamlFrame {
+  indent: number;
+  key: string;
+}
+
+interface YamlField {
+  indent: number;
+  prefix: string;
+  rawKey: string;
+  key: string;
+  separator: string;
+  value: string;
+}
+
+interface YamlState {
+  stack: YamlFrame[];
+  redactedBlockIndent?: number;
+}
+
 function normalizeKey(key: string): string {
   return key.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function isDatabaseParent(path: readonly string[]): boolean {
+  return path.some((part) => DATABASE_PARENTS.has(normalizeKey(part)));
 }
 
 function isSecretKey(path: readonly string[], key: string): boolean {
   const normalized = normalizeKey(key);
   if (DIRECT_SECRET_KEYS.has(normalized)) return true;
   if (normalized.includes('password') || normalized.includes('passwd')) return true;
-  if (normalized.endsWith('token') || normalized.endsWith('secret')) return true;
   if (normalized.includes('apikey') || normalized.includes('privatekey')) return true;
-
-  if (CONNECTION_KEYS.has(normalized)) {
-    return path.some((part) => DATABASE_PARENTS.has(normalizeKey(part)));
-  }
-  return false;
+  if (normalized.includes('credential')) return true;
+  if (normalized.endsWith('token') || normalized.endsWith('secret')) return true;
+  return CONNECTION_KEYS.has(normalized) && isDatabaseParent(path);
 }
 
 function redactJsonValue(
@@ -99,9 +125,9 @@ function redactJsonValue(
     if (isSecretKey(path, key) && child !== null) {
       output[key] = REDACTED_VALUE;
       redactedFields.add(fieldPath.join('.'));
-    } else {
-      output[key] = redactJsonValue(child, fieldPath, redactedFields);
+      continue;
     }
+    output[key] = redactJsonValue(child, fieldPath, redactedFields);
   }
   return output;
 }
@@ -109,41 +135,78 @@ function redactJsonValue(
 function redactJson(text: string, redactedFields: Set<string>): string | undefined {
   try {
     const parsed: unknown = JSON.parse(text);
-    const redacted = redactJsonValue(parsed, [], redactedFields);
-    return JSON.stringify(redacted, null, 2);
+    return JSON.stringify(redactJsonValue(parsed, [], redactedFields), null, 2);
   } catch {
     return undefined;
   }
 }
 
-interface YamlFrame {
-  indent: number;
-  key: string;
+function parseYamlField(line: string): YamlField | undefined {
+  const match = /^(\s*)([^#][^:]*?):(\s*)(.*)$/.exec(line);
+  if (match === null) return undefined;
+  const rawKey = match[2] ?? '';
+  return {
+    indent: (match[1] ?? '').length,
+    prefix: match[1] ?? '',
+    rawKey,
+    key: rawKey.trim().replace(/^['"]|['"]$/g, ''),
+    separator: match[3] ?? ' ',
+    value: match[4] ?? '',
+  };
+}
+
+function trimYamlStack(state: YamlState, indent: number): void {
+  while ((state.stack.at(-1)?.indent ?? -1) >= indent) state.stack.pop();
+}
+
+function insideRedactedYamlBlock(state: YamlState, indent: number): boolean {
+  const blockIndent = state.redactedBlockIndent;
+  if (blockIndent === undefined) return false;
+  if (indent > blockIndent) return true;
+  state.redactedBlockIndent = undefined;
+  return false;
+}
+
+function redactYamlField(
+  field: YamlField,
+  state: YamlState,
+  redactedFields: Set<string>,
+): string {
+  trimYamlStack(state, field.indent);
+  const path = state.stack.map((frame) => frame.key);
+  if (!isSecretKey(path, field.key)) {
+    if (field.value.trim().length === 0) {
+      state.stack.push({ indent: field.indent, key: field.key });
+    }
+    return field.prefix + field.rawKey + ':' + field.separator + field.value;
+  }
+
+  redactedFields.add([...path, field.key].join('.'));
+  if (field.value.trim().length === 0) state.redactedBlockIndent = field.indent;
+  return field.prefix + field.rawKey + ':' + field.separator + REDACTED_VALUE;
+}
+
+function redactYamlLine(
+  line: string,
+  state: YamlState,
+  redactedFields: Set<string>,
+): string | undefined {
+  const indent = line.length - line.trimStart().length;
+  if (insideRedactedYamlBlock(state, indent)) return undefined;
+
+  const field = parseYamlField(line);
+  if (field === undefined) return redactAssignmentLine(line, [], redactedFields);
+  return redactYamlField(field, state, redactedFields);
 }
 
 function redactYaml(text: string, redactedFields: Set<string>): string {
-  const stack: YamlFrame[] = [];
-  return text
-    .split(/\r?\n/)
-    .map((line) => {
-      const match = /^(\s*)([^#][^:]*?):(\s*)(.*)$/.exec(line);
-      if (match === null) return redactAssignmentLine(line, [], redactedFields);
-      const indent = match[1]?.length ?? 0;
-      const key = (match[2] ?? '').trim().replace(/^['"]|['"]$/g, '');
-      const value = match[4] ?? '';
-
-      while ((stack.at(-1)?.indent ?? -1) >= indent) stack.pop();
-      const path = stack.map((frame) => frame.key);
-      if (value.trim().length === 0) {
-        stack.push({ indent, key });
-        return line;
-      }
-      if (!isSecretKey(path, key)) return line;
-
-      redactedFields.add([...path, key].join('.'));
-      return (match[1] ?? '') + (match[2] ?? key) + ':' + (match[3] ?? ' ') + REDACTED_VALUE;
-    })
-    .join('\n');
+  const state: YamlState = { stack: [] };
+  const output: string[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const redacted = redactYamlLine(line, state, redactedFields);
+    if (redacted !== undefined) output.push(redacted);
+  }
+  return output.join('\n');
 }
 
 function redactProperties(text: string, redactedFields: Set<string>): string {
@@ -162,6 +225,7 @@ function redactAssignmentLine(
   if (match === null) return line;
   const key = match[2] ?? '';
   if (!isSecretKey(path, key)) return line;
+
   redactedFields.add([...path, key].join('.'));
   return (match[1] ?? '') + key + (match[3] ?? '=') + REDACTED_VALUE;
 }
@@ -194,25 +258,27 @@ export interface SecretContentDenied {
 
 export type SanitizeResult = SanitizedText | SecretContentDenied;
 
+function redactByFormat(
+  text: string,
+  extension: string,
+  redactedFields: Set<string>,
+): string {
+  if (extension === '.json') {
+    return redactJson(text, redactedFields) ?? redactProperties(text, redactedFields);
+  }
+  if (extension === '.yml' || extension === '.yaml') {
+    return redactYaml(text, redactedFields);
+  }
+  return redactProperties(text, redactedFields);
+}
+
 /**
  * Remove credential-valued fields before text is returned or indexed.
- *
- * JSON, YAML and properties files receive structure-aware redaction. Other
- * text receives conservative assignment-line redaction. Opaque private-key
- * blocks and token literals that remain after field redaction deny the file.
  */
 export function sanitizeModelVisibleText(text: string, filePath = ''): SanitizeResult {
   const redactedFields = new Set<string>();
   const extension = posixPath.extname(filePath).toLowerCase();
-
-  let sanitized: string;
-  if (extension === '.json') {
-    sanitized = redactJson(text, redactedFields) ?? redactProperties(text, redactedFields);
-  } else if (extension === '.yml' || extension === '.yaml') {
-    sanitized = redactYaml(text, redactedFields);
-  } else {
-    sanitized = redactProperties(text, redactedFields);
-  }
+  const sanitized = redactByFormat(text, extension, redactedFields);
 
   if (containsHighRiskSecret(sanitized)) {
     return { ok: false, reason: 'secret-content' };
@@ -227,7 +293,6 @@ export function sanitizeModelVisibleText(text: string, filePath = ''): SanitizeR
   };
 }
 
-/** True only for opaque secret material that must deny the whole file. */
 export function containsHighRiskSecretMaterial(text: string): boolean {
   return containsHighRiskSecret(text);
 }
