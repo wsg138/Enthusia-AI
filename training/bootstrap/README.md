@@ -53,3 +53,25 @@ The default collector is designed for the owner's limited local free space:
 - build outputs, binaries, logs, databases, backups, and large files are excluded.
 
 Use `--keep-repos` only when there is intentionally enough disk space.
+
+
+## Training-truth policy
+
+Synthetic examples are not allowed to teach a server fact merely because a model inferred it or an old source mentioned something similar.
+
+Before an example can become training data:
+
+- commands, ranks, permissions, prices, plugin behavior, server addresses, and other mutable Enthusia facts must be directly supported by current authoritative evidence;
+- repository `main` is not enough to prove deployed runtime truth when deployment state matters;
+- stale/test/staging/historical values must not be promoted as current facts;
+- unsupported assumptions must be rejected rather than "made plausible";
+- exact evidence + source SHA/path must remain attached through generation and validation;
+- generated questions must not ask for a broader fact than the selected evidence actually proves;
+- generated answers must not introduce factual paraphrases that strengthen or alter the evidence.
+
+Current owner corrections that must be treated as negative regression cases, not training facts:
+
+- Enthusia does **not** have an `Elite` rank;
+- normal players do **not** have a general `/fly` command.
+
+These examples exist specifically to catch hallucinated/stale server knowledge. If future live authoritative evidence changes either fact, the current-source verification layer wins and this bootstrap note must be updated before regenerating training data.
