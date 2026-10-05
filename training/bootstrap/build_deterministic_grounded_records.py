@@ -12,6 +12,13 @@ from run_generation_benchmark import _clean_display_line, _split_markdown_table_
 
 KNOWLEDGE_TOOL = "knowledge.search"
 
+SOURCE_EXTS = {".java", ".kt", ".kts", ".ts", ".tsx", ".js", ".mjs", ".cjs", ".py"}
+GENERIC_TABLE_HEADERS = {
+    "command", "commands", "permission", "permissions", "description",
+    "feature", "features", "setting", "settings", "option", "options",
+    "name", "value", "default", "example", "examples", "status",
+}
+
 
 def _strip_markup(text: str) -> str:
     return (
@@ -55,9 +62,19 @@ def derive_question(target_line: str, repository: str) -> tuple[str, str, list[s
         if len(cells) == 2:
             label = _strip_markup(cells[0]).strip()
             detail = _strip_markup(cells[1]).strip()
+            label_lower = label.lower()
+            path_like = bool(
+                re.search(
+                    r"(?:\[[^\]]+\]\(|https?://|[\\/]|\.(?:md|yml|yaml|json|py|ts|java|kt)\b)",
+                    label,
+                    flags=re.I,
+                )
+            )
             if (
                 2 <= len(label) <= 80
                 and 4 <= len(detail) <= 300
+                and label_lower not in GENERIC_TABLE_HEADERS
+                and not path_like
                 and not label.startswith(("http://", "https://"))
             ):
                 return (
@@ -112,6 +129,9 @@ def derive_question(target_line: str, repository: str) -> tuple[str, str, list[s
 
 
 def make_record(job: dict) -> dict | None:
+    if Path(job.get("path", "")).suffix.lower() in SOURCE_EXTS:
+        return None
+
     derived = derive_question(job["target_line"], job["repository"])
     if derived is None:
         return None
@@ -196,6 +216,7 @@ def main() -> int:
     ap.add_argument("--jobs", required=True)
     ap.add_argument("--output", required=True)
     ap.add_argument("--manifest", required=True)
+    ap.add_argument("--per-repo-cap", type=int, default=30)
     args = ap.parse_args()
 
     records: list[dict] = []
@@ -210,13 +231,16 @@ def main() -> int:
             if record is None:
                 skipped += 1
                 continue
+            repo = record["source_repository"]
+            if repos.get(repo, 0) >= args.per_repo_cap:
+                skipped += 1
+                continue
             pair = (record["messages"][0]["content"], record["expected_answer"])
             if pair in seen_pairs:
                 skipped += 1
                 continue
             seen_pairs.add(pair)
             records.append(record)
-            repo = record["source_repository"]
             repos[repo] = repos.get(repo, 0) + 1
 
     output = Path(args.output)
@@ -231,6 +255,7 @@ def main() -> int:
         "generated_records": len(records),
         "skipped_or_unstructured": skipped,
         "repositories": len(repos),
+        "per_repo_cap": args.per_repo_cap,
         "records_by_repository": dict(
             sorted(repos.items(), key=lambda item: (-item[1], item[0]))
         ),
