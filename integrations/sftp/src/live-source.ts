@@ -93,7 +93,6 @@ function withDeadline<T>(
 
   return new Promise<T>((resolve, reject) => {
     let settled = false;
-    let timer: ReturnType<typeof setTimeout>;
     const cleanup = (): void => {
       clearTimeout(timer);
       signal?.removeEventListener('abort', abort);
@@ -105,7 +104,7 @@ function withDeadline<T>(
       action();
     };
     const abort = (): void => finish(() => reject(new LiveAbortError()));
-    timer = setTimeout(
+    const timer = setTimeout(
       () => finish(() => reject(new LiveTimeoutError())),
       timeoutMs,
     );
