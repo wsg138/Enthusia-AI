@@ -33,23 +33,20 @@ Production:
 - SHA-256: `8894415da0046a9ee100c186ec5306522be218408c09e18e655f4a07fb2dd2be`
 - size: 24,946,684 bytes
 
-Closest verified source/build:
+Verified source/release:
 
 - repo: `BadgersMC/LumaGuilds`
-- source commit: `e90bbb53f5b3b7a7b37b61c938f56d3e8abfc5cf`
-- CI build run: `37244444547`
-- CI artifact JAR SHA-256: `c1854d85c50b0c96be551c7e6394ab2caa5d00468f0171b339045279016e50fe`
+- release: `v3.0.20`
+- release published: 2026-10-04T23:42:42Z
+- release asset: `LumaGuilds-3.0.20.jar`
+- release asset SHA-256: `8894415da0046a9ee100c186ec5306522be218408c09e18e655f4a07fb2dd2be`
+- release asset size: 24,946,684 bytes
 
-ZIP entry comparison shows **every entry is identical except `plugin.yml`**. The only content difference in that file is:
+Result: **VERIFIED exact release-asset match**.
 
-```diff
--version: 3.0.0
-+version: 3.0.20
-```
+A separate comparison against upstream commit `e90bbb53f5b3b7a7b37b61c938f56d3e8abfc5cf` also showed the same executable/resource contents with only the pre-release CI artifact's embedded `plugin.yml` version changing from 3.0.0 to 3.0.20.
 
-Result: **VERIFIED same executable/resource code as commit `e90bbb53...`, with a post-build embedded version metadata edit**.
-
-Do not equate current LumaGuilds main (`439681af...`) with the deployed artifact; later commits were merged after this production JAR was built.
+Do not equate current LumaGuilds main (`439681af...`) with the deployed artifact; later commits were merged after the v3.0.20 production release.
 
 Current live config additionally has:
 
@@ -58,6 +55,45 @@ Current live config additionally has:
 - `home_activation_scale: 1.0`
 
 The source formula is `base * scale^(homeOrdinal - 1)`, rounded upward. With the current values, every newly activated guild home costs 100 while Chapter 2 gold costs remain enabled.
+
+## EnthusiaMarket
+
+Production:
+
+- file: `EnthusiaMarket-1.0.52.jar`
+- SHA-256: `1c7dee48dbe060a826a00ca85d828b656bd690e88387e9a49da031e7425d0483`
+- size: 3,984,922 bytes
+
+Verified source/release:
+
+- repo: `BadgersMC/EnthusiaMarket`
+- release: `v1.0.52`
+- release published: 2026-09-29T20:07:18Z
+- release asset SHA-256 and size exactly match production.
+
+Result: **VERIFIED exact release-asset match**.
+
+The configured `wsg138/EnthusiaMarket` source fork is stale relative to this deployment and must not be treated as production source authority.
+
+## LumaTrivia
+
+Production:
+
+- file: `LumaTrivia-1.0.7.jar`
+- SHA-256: `f3dab23ce02c253f67b3a3a49b96f52ecf1ce2ef7bccc553f3295b79519c7d1a`
+- size: 1,470,341 bytes
+- embedded plugin version reported at runtime: `1.1.0`
+
+Verified source/release:
+
+- repo: `BadgersMC/LumaTrivia`
+- release: `v1.0.7`
+- release asset: `LumaTrivia-1.0.7.jar`
+- release asset SHA-256 and size exactly match production.
+
+Result: **VERIFIED exact release-asset match with a release-filename/tag vs embedded-version mismatch**.
+
+Retrieval should identify the deployed binary by hash/release provenance and may describe its runtime embedded version as 1.1.0, but should not silently rewrite the release tag/filename to match.
 
 ## RoseChat
 
