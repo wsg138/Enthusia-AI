@@ -12,7 +12,7 @@ for /f "tokens=5" %%P in ('netstat -ano ^| findstr ":8091" ^| findstr "LISTENING
   echo Stopping stale baseline server ^(PID %%P^)...
   taskkill /PID %%P /F >nul 2>&1
 )
-timeout /t 1 /nobreak >nul
+powershell -NoProfile -Command "Start-Sleep -Seconds 1" >nul 2>&1
 
 echo Starting baseline server in a separate minimized window...
 start "Enthusia Qwen Baseline" /min cmd /c call "%REPO%\training\bootstrap\Start-Qwen35-Baseline.cmd"
