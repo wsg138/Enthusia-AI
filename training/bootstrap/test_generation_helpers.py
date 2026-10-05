@@ -100,6 +100,30 @@ class QuestionGroundingTests(unittest.TestCase):
         }
         self.assertTrue(mod._question_is_grounded(job, parsed))
 
+    def test_rejects_question_with_unsupported_reputation_scope(self) -> None:
+        job = {
+            "target_line": "| **Good Stall** | Ran a fair/reliable market stall |",
+            "repository": "EnthusiaCommend",
+            "path": "PLAYER_GUIDE.md",
+        }
+        parsed = {
+            "user": "How can I earn a Good Stall reputation point?"
+        }
+        self.assertFalse(mod._question_is_grounded(job, parsed))
+
+    def test_trailing_semicolon_does_not_become_semicolon_period(self) -> None:
+        job = {
+            "target_line": "- the configured permission, normally `startupguardian.bypass`;",
+            "source_id": "github:wsg138/StartupGuardian@abc:README.md#line-1",
+            "source_version": "abc",
+            "line_number": 1,
+        }
+        _, answer = mod._resolve_evidence(job, {})
+        self.assertEqual(
+            answer,
+            "the configured permission, normally startupguardian.bypass.",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
