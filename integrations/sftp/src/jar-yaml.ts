@@ -146,26 +146,29 @@ function addPaperPlugin(field: YamlField, state: PaperState): void {
   state.dependencies.push(dependency);
 }
 
+function updatePaperOptional(field: YamlField, state: PaperState): void {
+  if (state.current === undefined) return;
+  if (field.key !== 'required') return;
+  state.current.optional = field.value.toLowerCase() === 'false';
+}
+
+function applyPaperNestedField(field: YamlField, state: PaperState): void {
+  state.pluginIndent ??= field.indent;
+  if (field.indent === state.pluginIndent) {
+    addPaperPlugin(field, state);
+    return;
+  }
+  updatePaperOptional(field, state);
+}
+
 function applyPaperField(field: YamlField, state: PaperState): 'continue' | 'stop' {
   if (field.indent === 0) return 'stop';
   state.categoryIndent ??= field.indent;
-
   if (isPaperCategory(field, state.categoryIndent)) {
     state.current = undefined;
     return 'continue';
   }
-  if (field.indent <= state.categoryIndent) return 'continue';
-
-  state.pluginIndent ??= field.indent;
-  if (field.indent === state.pluginIndent) {
-    addPaperPlugin(field, state);
-    return 'continue';
-  }
-  if (state.current !== undefined &&
-      field.key === 'required' &&
-      field.value.toLowerCase() === 'false') {
-    state.current.optional = true;
-  }
+  if (field.indent > state.categoryIndent) applyPaperNestedField(field, state);
   return 'continue';
 }
 

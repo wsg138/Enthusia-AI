@@ -365,29 +365,6 @@ export class LiveServerSourceGateway {
     return this.configDiscovery.discover(client, server, directory);
   }
 
->,
-    observedAt: string,
-  ): ApprovedFileReadResult {
-    const result: ApprovedFileReadResult = {
-      sourceId: source.id,
-      kind: source.kind,
-      visibility: source.visibility,
-      redactedFields: prepared.redactedFields,
-      redactionCount: prepared.redactionCount,
-      provenance: liveProvenance(
-        liveServerIdentity(server, server.id),
-        file,
-        observedAt,
-      ),
-    };
-    if (source.kind === 'deployment-identity') {
-      result.deploymentIdentity = parseDeploymentIdentity(prepared.text);
-    } else {
-      result.content = prepared.text;
-    }
-    return result;
-  }
-
   private assertReadableFile(
     isFile: boolean,
     size: number,
