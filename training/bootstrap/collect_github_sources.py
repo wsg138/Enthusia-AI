@@ -454,7 +454,8 @@ def _harvest_repository(
                 sensitive += 1
             else:
                 skipped += 1
-                assert reason is not None
+                if reason is None:
+                    raise RuntimeError("skipped source file missing rejection reason")
                 skip_reasons[reason] = skip_reasons.get(reason, 0) + 1
     return accepted, skipped, sensitive, skip_reasons
 
