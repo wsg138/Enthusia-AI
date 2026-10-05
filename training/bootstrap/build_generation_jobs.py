@@ -76,6 +76,11 @@ def source_visibility(record: dict, line: str = "") -> str:
         return "staff"
     if re.search(r"(?:^|\s)/\S+\s+reload\b", line_lower):
         return "staff"
+    if "/" in line_lower and re.search(
+        r"\b(?:reload|debug|admin|adminview|breakothers|freeze|unfreeze)\b",
+        line_lower,
+    ):
+        return "staff"
 
     return "public"
 
