@@ -1,0 +1,28 @@
+name: Bootstrap Python tests
+
+on:
+  pull_request:
+    paths:
+      - "training/bootstrap/**"
+      - ".github/workflows/bootstrap-python-tests.yml"
+  push:
+    branches: [main]
+    paths:
+      - "training/bootstrap/**"
+      - ".github/workflows/bootstrap-python-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap-python:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Compile bootstrap scripts
+        run: python -m compileall -q training/bootstrap
+      - name: Run bootstrap helper regressions
+        run: python training/bootstrap/test_generation_helpers.py
