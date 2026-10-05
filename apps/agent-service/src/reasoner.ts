@@ -90,6 +90,33 @@ function parseJson<T>(text: string, schema: z.ZodType<T>): T {
   return result.data;
 }
 
+function quoteJson(value: string): string {
+  return JSON.stringify(value);
+}
+
+function stableObjectJson(value: Record<string, unknown>): string {
+  const fields = Object.keys(value)
+    .sort()
+    .map((key) => quoteJson(key) + ':' + stableJson(value[key]));
+  return '{' + fields.join(',') + '}';
+}
+
+function stableJson(value: unknown): string {
+  if (value === null || value === undefined) return 'null';
+  if (typeof value === 'string') return quoteJson(value);
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? String(value) : 'null';
+  }
+  if (Array.isArray(value)) {
+    return '[' + value.map((item) => stableJson(item)).join(',') + ']';
+  }
+  if (typeof value === 'object') {
+    return stableObjectJson(value as Record<string, unknown>);
+  }
+  return 'null';
+}
+
 function systemInstruction(task: string): string {
   return [
     'You are the local planning model inside Enthusia AI.',
@@ -178,7 +205,7 @@ export class InferenceReasoner implements Reasoner {
           },
           {
             role: 'user',
-            content: JSON.stringify({
+            content: stableJson({
               task: 'classify_intent',
               request: {
                 surface: request.surface,
@@ -220,7 +247,7 @@ export class InferenceReasoner implements Reasoner {
           },
           {
             role: 'user',
-            content: JSON.stringify({
+            content: stableJson({
               task: 'plan_evidence',
               request: {
                 surface: request.surface,
@@ -255,7 +282,7 @@ export class InferenceReasoner implements Reasoner {
           },
           {
             role: 'user',
-            content: JSON.stringify({
+            content: stableJson({
               task: 'next_investigation_step',
               snapshot,
             }),

@@ -33,6 +33,27 @@ export interface RunningAgentService {
   close(): Promise<void>;
 }
 
+interface ServiceState {
+  now: () => number;
+  startedAt: number;
+  activeRequests: number;
+}
+
+interface InferenceReadiness {
+  status: HealthStatus;
+  modelLoaded: boolean;
+  dependency: DependencyHealth;
+}
+
+type ParsedChat =
+  | { ok: true; request: ChatRequest }
+  | {
+      ok: false;
+      status: number;
+      code: string;
+      message: string;
+    };
+
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8' };
 
 function equalSecret(left: string, right: string): boolean {
@@ -123,154 +144,258 @@ function capabilities(registry: ToolRegistry): Record<string, unknown> {
   };
 }
 
-export async function startAgentService(
+function uptimeSeconds(state: ServiceState): number {
+  return Math.max(0, Math.floor((state.now() - state.startedAt) / 1000));
+}
+
+function handleLive(
+  res: http.ServerResponse,
   deps: AgentServiceDeps,
-): Promise<RunningAgentService> {
-  const now = deps.now ?? Date.now;
-  const startedAt = now();
-  let activeRequests = 0;
+  state: ServiceState,
+): void {
+  const body = {
+    status: 'ok' as const,
+    version: deps.config.serviceVersion,
+    uptimeSeconds: uptimeSeconds(state),
+  };
+  livenessResponseSchema.parse(body);
+  sendJson(res, 200, body);
+}
 
-  const server = http.createServer((req, res) => {
-    void (async () => {
-      const url = new URL(req.url ?? '/', 'http://localhost');
+async function probeInference(
+  deps: AgentServiceDeps,
+  state: ServiceState,
+): Promise<InferenceReadiness> {
+  const before = state.now();
+  try {
+    const models = await deps.inference.getModels();
+    const modelLoaded = models.length > 0;
+    return {
+      status: modelLoaded ? 'ok' : 'degraded',
+      modelLoaded,
+      dependency: {
+        name: 'local-inference',
+        status: modelLoaded ? 'ok' : 'degraded',
+        latencyMs: Math.max(0, state.now() - before),
+        ...(modelLoaded
+          ? {}
+          : { detail: 'no model reported by inference runtime' }),
+      },
+    };
+  } catch {
+    return {
+      status: 'down',
+      modelLoaded: false,
+      dependency: {
+        name: 'local-inference',
+        status: 'down',
+        latencyMs: Math.max(0, state.now() - before),
+        detail: 'inference runtime unavailable',
+      },
+    };
+  }
+}
 
-      if (req.method === 'GET' && url.pathname === '/health/live') {
-        const body = {
-          status: 'ok' as const,
-          version: deps.config.serviceVersion,
-          uptimeSeconds: Math.max(0, Math.floor((now() - startedAt) / 1000)),
-        };
-        livenessResponseSchema.parse(body);
-        sendJson(res, 200, body);
-        return;
-      }
+async function handleReady(
+  res: http.ServerResponse,
+  deps: AgentServiceDeps,
+  state: ServiceState,
+): Promise<void> {
+  const inference = await probeInference(deps, state);
+  const dependencies: DependencyHealth[] = [
+    inference.dependency,
+    {
+      name: 'tool-registry',
+      status: 'ok',
+      detail: String(deps.registry.size) + ' tools registered',
+    },
+  ];
+  const body = {
+    status: inference.status,
+    version: deps.config.serviceVersion,
+    uptimeSeconds: uptimeSeconds(state),
+    dependencies,
+    modelLoaded: inference.modelLoaded,
+    activeRequests: state.activeRequests,
+    queueDepth: deps.inference.getMetrics().queueDepth,
+  };
+  readinessResponseSchema.parse(body);
+  sendJson(res, inference.status === 'down' ? 503 : 200, body);
+}
 
-      if (req.method === 'GET' && url.pathname === '/health/ready') {
-        const dependencies: DependencyHealth[] = [];
-        let status: HealthStatus = 'ok';
-        let modelLoaded = false;
-        const before = now();
-        try {
-          const models = await deps.inference.getModels();
-          modelLoaded = models.length > 0;
-          dependencies.push({
-            name: 'local-inference',
-            status: modelLoaded ? 'ok' : 'degraded',
-            latencyMs: Math.max(0, now() - before),
-            ...(modelLoaded ? {} : { detail: 'no model reported by inference runtime' }),
-          });
-          if (!modelLoaded) status = 'degraded';
-        } catch {
-          status = 'down';
-          dependencies.push({
-            name: 'local-inference',
-            status: 'down',
-            latencyMs: Math.max(0, now() - before),
-            detail: 'inference runtime unavailable',
-          });
-        }
+function parseJsonBody(raw: Buffer): ParsedChat {
+  let json: unknown;
+  try {
+    json = JSON.parse(raw.toString('utf8'));
+  } catch {
+    return {
+      ok: false,
+      status: 400,
+      code: 'INVALID_JSON',
+      message: 'request body is not valid JSON',
+    };
+  }
+  const parsed = chatRequestSchema.safeParse(json);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      status: 400,
+      code: 'INVALID_CHAT_REQUEST',
+      message: 'request does not match ChatRequest',
+    };
+  }
+  return { ok: true, request: parsed.data as ChatRequest };
+}
 
-        dependencies.push({
-          name: 'tool-registry',
-          status: 'ok',
-          detail: String(deps.registry.size) + ' tools registered',
-        });
+async function parseChatRequest(
+  req: http.IncomingMessage,
+  maxBodyBytes: number,
+): Promise<ParsedChat> {
+  try {
+    return parseJsonBody(await readBody(req, maxBodyBytes));
+  } catch {
+    return {
+      ok: false,
+      status: 413,
+      code: 'REQUEST_TOO_LARGE',
+      message: 'request body exceeds limit',
+    };
+  }
+}
 
-        const body = {
-          status,
-          version: deps.config.serviceVersion,
-          uptimeSeconds: Math.max(0, Math.floor((now() - startedAt) / 1000)),
-          dependencies,
-          modelLoaded,
-          activeRequests,
-          queueDepth: deps.inference.getMetrics().queueDepth,
-        };
-        readinessResponseSchema.parse(body);
-        sendJson(res, status === 'down' ? 503 : 200, body);
-        return;
-      }
-
-      if (!authenticate(req, deps.config)) {
-        sendJson(res, 401, {
-          error: { code: 'UNAUTHORIZED', message: 'service authentication required' },
-        });
-        return;
-      }
-
-      if (req.method === 'GET' && url.pathname === '/v1/capabilities') {
-        sendJson(res, 200, capabilities(deps.registry));
-        return;
-      }
-
-      if (req.method === 'POST' && url.pathname === '/v1/agent/chat') {
-        activeRequests += 1;
-        try {
-          let raw: Buffer;
-          try {
-            raw = await readBody(req, deps.config.maxBodyBytes);
-          } catch {
-            sendJson(res, 413, {
-              error: { code: 'REQUEST_TOO_LARGE', message: 'request body exceeds limit' },
-            });
-            return;
-          }
-
-          let json: unknown;
-          try {
-            json = JSON.parse(raw.toString('utf8'));
-          } catch {
-            sendJson(res, 400, {
-              error: { code: 'INVALID_JSON', message: 'request body is not valid JSON' },
-            });
-            return;
-          }
-
-          const parsed = chatRequestSchema.safeParse(json);
-          if (!parsed.success) {
-            sendJson(res, 400, {
-              error: { code: 'INVALID_CHAT_REQUEST', message: 'request does not match ChatRequest' },
-            });
-            return;
-          }
-
-          const request = parsed.data as ChatRequest;
-          if (!validVisibility(request)) {
-            sendJson(res, 403, {
-              error: { code: 'VISIBILITY_DENIED', message: 'visibility ceiling exceeds actor grant' },
-            });
-            return;
-          }
-
-          const response = await deps.orchestrator.handleChat(request);
-          agentResponseSchema.parse(response);
-          sendJson(res, 200, response, response.traceId);
-          return;
-        } finally {
-          activeRequests -= 1;
-        }
-      }
-
-      sendJson(res, 404, {
-        error: { code: 'NOT_FOUND', message: 'route not found' },
-      });
-    })().catch((error: unknown) => {
-      const traceId = newTraceId();
-      deps.logger.error({ error, traceId }, 'agent service request failed');
-      if (!res.headersSent) {
-        sendJson(res, 500, {
-          error: {
-            code: 'INTERNAL_ERROR',
-            message: 'internal agent service error',
-            traceId,
-          },
-        }, traceId);
-      } else {
-        res.end();
-      }
-    });
+function sendParsedChatError(
+  res: http.ServerResponse,
+  parsed: Extract<ParsedChat, { ok: false }>,
+): void {
+  sendJson(res, parsed.status, {
+    error: { code: parsed.code, message: parsed.message },
   });
+}
 
-  await new Promise<void>((resolve, reject) => {
+async function executeChat(
+  res: http.ServerResponse,
+  deps: AgentServiceDeps,
+  request: ChatRequest,
+): Promise<void> {
+  if (!validVisibility(request)) {
+    sendJson(res, 403, {
+      error: {
+        code: 'VISIBILITY_DENIED',
+        message: 'visibility ceiling exceeds actor grant',
+      },
+    });
+    return;
+  }
+
+  const response = await deps.orchestrator.handleChat(request);
+  agentResponseSchema.parse(response);
+  sendJson(res, 200, response, response.traceId);
+}
+
+async function handleChat(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  deps: AgentServiceDeps,
+  state: ServiceState,
+): Promise<void> {
+  state.activeRequests += 1;
+  try {
+    const parsed = await parseChatRequest(req, deps.config.maxBodyBytes);
+    if (!parsed.ok) {
+      sendParsedChatError(res, parsed);
+      return;
+    }
+    await executeChat(res, deps, parsed.request);
+  } finally {
+    state.activeRequests -= 1;
+  }
+}
+
+async function handleProtectedRoute(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  url: URL,
+  deps: AgentServiceDeps,
+  state: ServiceState,
+): Promise<void> {
+  if (req.method === 'GET' && url.pathname === '/v1/capabilities') {
+    sendJson(res, 200, capabilities(deps.registry));
+    return;
+  }
+  if (req.method === 'POST' && url.pathname === '/v1/agent/chat') {
+    await handleChat(req, res, deps, state);
+    return;
+  }
+  sendJson(res, 404, {
+    error: { code: 'NOT_FOUND', message: 'route not found' },
+  });
+}
+
+async function handleRequest(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  deps: AgentServiceDeps,
+  state: ServiceState,
+): Promise<void> {
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  if (req.method === 'GET' && url.pathname === '/health/live') {
+    handleLive(res, deps, state);
+    return;
+  }
+  if (req.method === 'GET' && url.pathname === '/health/ready') {
+    await handleReady(res, deps, state);
+    return;
+  }
+  if (!authenticate(req, deps.config)) {
+    sendJson(res, 401, {
+      error: {
+        code: 'UNAUTHORIZED',
+        message: 'service authentication required',
+      },
+    });
+    return;
+  }
+  await handleProtectedRoute(req, res, url, deps, state);
+}
+
+function handleUnhandledError(
+  error: unknown,
+  res: http.ServerResponse,
+  logger: EnthusiaLogger,
+): void {
+  const traceId = newTraceId();
+  logger.error({ error, traceId }, 'agent service request failed');
+  if (res.headersSent) {
+    res.end();
+    return;
+  }
+  sendJson(
+    res,
+    500,
+    {
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'internal agent service error',
+        traceId,
+      },
+    },
+    traceId,
+  );
+}
+
+function createRequestHandler(
+  deps: AgentServiceDeps,
+  state: ServiceState,
+): (req: http.IncomingMessage, res: http.ServerResponse) => void {
+  return (req, res) => {
+    void handleRequest(req, res, deps, state).catch((error: unknown) => {
+      handleUnhandledError(error, res, deps.logger);
+    });
+  };
+}
+
+function listen(server: http.Server, port: number): Promise<void> {
+  return new Promise((resolve, reject) => {
     const onError = (error: Error): void => {
       server.off('listening', onListening);
       reject(error);
@@ -281,19 +406,38 @@ export async function startAgentService(
     };
     server.once('error', onError);
     server.once('listening', onListening);
-    server.listen(deps.config.port);
+    server.listen(port);
   });
+}
 
+function boundPort(server: http.Server, fallback: number): number {
   const address = server.address();
-  const port = typeof address === 'object' && address !== null
+  return typeof address === 'object' && address !== null
     ? address.port
-    : deps.config.port;
+    : fallback;
+}
+
+function closeServer(server: http.Server): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    server.close((error) => error === undefined ? resolve() : reject(error));
+  });
+}
+
+export async function startAgentService(
+  deps: AgentServiceDeps,
+): Promise<RunningAgentService> {
+  const now = deps.now ?? Date.now;
+  const state: ServiceState = {
+    now,
+    startedAt: now(),
+    activeRequests: 0,
+  };
+  const server = http.createServer(createRequestHandler(deps, state));
+  await listen(server, deps.config.port);
 
   return {
     server,
-    port,
-    close: () => new Promise<void>((resolve, reject) => {
-      server.close((error) => error === undefined ? resolve() : reject(error));
-    }),
+    port: boundPort(server, deps.config.port),
+    close: () => closeServer(server),
   };
 }

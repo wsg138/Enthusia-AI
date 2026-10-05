@@ -95,11 +95,36 @@ const GATEWAY_ENV_MAP = {
   agentApiKey: 'ENTHUSIA_AGENT_API_KEY',
 } as const;
 
-export function loadGatewayConfig(
-  env: NodeJS.ProcessEnv = process.env,
-): GatewayConfig {
-  const base = loadConfig(env);
-  const fields = gatewayConfigSchema.parse({
+function validateAgentLink(fields: GatewayConfigFields): void {
+  if (fields.agentApiKey !== undefined && fields.agentBaseUrl === undefined) {
+    throw new Error(
+      'ENTHUSIA_AGENT_API_KEY requires ENTHUSIA_AGENT_BASE_URL.',
+    );
+  }
+}
+
+function validateProductionGateway(
+  nodeEnv: AppConfig['nodeEnv'],
+  fields: GatewayConfigFields,
+): void {
+  if (nodeEnv !== 'production') return;
+  if (fields.apiKeys.length === 0) {
+    throw new Error(
+      'ENTHUSIA_GATEWAY_API_KEYS must contain at least one service key when NODE_ENV=production.',
+    );
+  }
+  if (fields.agentBaseUrl === undefined || fields.agentApiKey === undefined) {
+    throw new Error(
+      'ENTHUSIA_AGENT_BASE_URL and ENTHUSIA_AGENT_API_KEY are required when NODE_ENV=production.',
+    );
+  }
+}
+
+function parseGatewayFields(
+  env: NodeJS.ProcessEnv,
+  base: AppConfig,
+): GatewayConfigFields {
+  return gatewayConfigSchema.parse({
     port: env[GATEWAY_ENV_MAP.port] ?? base.aiGatewayPort,
     apiKeys: env[GATEWAY_ENV_MAP.apiKeys],
     allowedSurfaces: env[GATEWAY_ENV_MAP.allowedSurfaces],
@@ -113,25 +138,15 @@ export function loadGatewayConfig(
     agentBaseUrl: env[GATEWAY_ENV_MAP.agentBaseUrl],
     agentApiKey: env[GATEWAY_ENV_MAP.agentApiKey],
   });
+}
 
-  if (fields.agentApiKey !== undefined && fields.agentBaseUrl === undefined) {
-    throw new Error(
-      'ENTHUSIA_AGENT_API_KEY requires ENTHUSIA_AGENT_BASE_URL.',
-    );
-  }
-
-  if (base.nodeEnv === 'production') {
-    if (fields.apiKeys.length === 0) {
-      throw new Error(
-        'ENTHUSIA_GATEWAY_API_KEYS must contain at least one service key when NODE_ENV=production.',
-      );
-    }
-    if (fields.agentBaseUrl === undefined || fields.agentApiKey === undefined) {
-      throw new Error(
-        'ENTHUSIA_AGENT_BASE_URL and ENTHUSIA_AGENT_API_KEY are required when NODE_ENV=production.',
-      );
-    }
-  }
+export function loadGatewayConfig(
+  env: NodeJS.ProcessEnv = process.env,
+): GatewayConfig {
+  const base = loadConfig(env);
+  const fields = parseGatewayFields(env, base);
+  validateAgentLink(fields);
+  validateProductionGateway(base.nodeEnv, fields);
 
   return {
     ...fields,

@@ -33,19 +33,36 @@ export function createAgentRuntime(
   };
 }
 
-function envCredential(
+function requireEnvCredentialSource(
+  request: RuntimeCredentialRequest,
+): void {
+  if (request.authSource !== 'env') {
+    throw new Error(
+      'configured credential source is not supported by this runtime',
+    );
+  }
+}
+
+function credentialText(
+  record: Record<string, unknown>,
+  key: string,
+): string | undefined {
+  const value = record[key];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function readCredentialReference(
   request: RuntimeCredentialRequest,
   env: NodeJS.ProcessEnv,
-): RuntimeCredentialMaterial {
-  if (request.authSource !== 'env') {
-    throw new Error('configured credential source is not supported by this runtime');
-  }
-
+): string {
   const raw = env[request.authRef];
   if (raw === undefined || raw.trim() === '') {
     throw new Error('configured SFTP credential reference is unavailable');
   }
+  return raw;
+}
 
+function parseCredentialRecord(raw: string): Record<string, unknown> {
   let value: unknown;
   try {
     value = JSON.parse(raw);
@@ -55,23 +72,20 @@ function envCredential(
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error('configured SFTP credential reference is invalid');
   }
+  return value as Record<string, unknown>;
+}
 
-  const record = value as Record<string, unknown>;
-  const privateKey =
-    typeof record['privateKey'] === 'string' && record['privateKey'].length > 0
-      ? record['privateKey']
-      : undefined;
-  const passphrase =
-    typeof record['passphrase'] === 'string' && record['passphrase'].length > 0
-      ? record['passphrase']
-      : undefined;
-  const password =
-    typeof record['password'] === 'string' && record['password'].length > 0
-      ? record['password']
-      : undefined;
+function credentialMaterial(
+  record: Record<string, unknown>,
+): RuntimeCredentialMaterial {
+  const privateKey = credentialText(record, 'privateKey');
+  const passphrase = credentialText(record, 'passphrase');
+  const password = credentialText(record, 'password');
 
   if (privateKey === undefined && password === undefined) {
-    throw new Error('configured SFTP credential reference has no usable authentication material');
+    throw new Error(
+      'configured SFTP credential reference has no usable authentication material',
+    );
   }
 
   return {
@@ -79,6 +93,15 @@ function envCredential(
     ...(passphrase !== undefined ? { passphrase } : {}),
     ...(password !== undefined ? { password } : {}),
   };
+}
+
+function envCredential(
+  request: RuntimeCredentialRequest,
+  env: NodeJS.ProcessEnv,
+): RuntimeCredentialMaterial {
+  requireEnvCredentialSource(request);
+  const raw = readCredentialReference(request, env);
+  return credentialMaterial(parseCredentialRecord(raw));
 }
 
 export async function loadConfiguredSftpTools(
