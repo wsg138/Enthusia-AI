@@ -144,6 +144,117 @@ function provenanceVersion(result: unknown): string | undefined {
   return typeof version === 'string' ? version : undefined;
 }
 
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : [];
+}
+
+function boundedText(value: string, max = 4000): string {
+  return value.length <= max ? value : value.slice(0, max) + '…';
+}
+
+interface CurrentEvidenceValue {
+  value: string;
+  excerpt: string;
+}
+
+function evidenceExcerpt(result: unknown): string {
+  return boundedText(JSON.stringify(result));
+}
+
+function labeledField(
+  record: Record<string, unknown>,
+  key: string,
+  label: string,
+): string | undefined {
+  const value = record[key];
+  return typeof value === 'string' ? label + '=' + value : undefined;
+}
+
+function deploymentEvidence(
+  root: Record<string, unknown>,
+  result: unknown,
+): CurrentEvidenceValue | undefined {
+  const plugin = asRecord(root['plugin']);
+  const deployed = asRecord(root['deployed']);
+  if (plugin === undefined || deployed === undefined) return undefined;
+
+  const fields = [
+    labeledField(plugin, 'name', 'plugin'),
+    labeledField(plugin, 'version', 'version'),
+    labeledField(plugin, 'mainClass', 'main'),
+    labeledField(deployed, 'fileName', 'file'),
+    labeledField(deployed, 'sha256', 'sha256'),
+    labeledField(deployed, 'modifiedAt', 'modifiedAt'),
+  ].filter((item): item is string => item !== undefined);
+  if (fields.length === 0) return undefined;
+
+  return {
+    value: boundedText(fields.join('; '), 2000),
+    excerpt: evidenceExcerpt(result),
+  };
+}
+
+function freshnessEvidence(
+  root: Record<string, unknown>,
+  result: unknown,
+): CurrentEvidenceValue | undefined {
+  const anchor = asRecord(root['anchor']);
+  const state = root['state'];
+  if (typeof state !== 'string' || anchor === undefined) return undefined;
+
+  const fileName = labeledField(anchor, 'fileName', 'anchor') ?? 'anchor=unknown';
+  const modifiedAt =
+    labeledField(anchor, 'modifiedAt', 'modifiedAt') ?? 'modifiedAt=unknown';
+  return {
+    value: 'state=' + state + '; ' + fileName + '; ' + modifiedAt,
+    excerpt: evidenceExcerpt(result),
+  };
+}
+
+function interfaceEvidence(
+  root: Record<string, unknown>,
+  result: unknown,
+): CurrentEvidenceValue | undefined {
+  const plugin = asRecord(root['plugin']);
+  if (plugin === undefined) return undefined;
+
+  const commands = stringArray(root['declaredCommands']);
+  const permissions = stringArray(root['declaredPermissions']);
+  const fields = [
+    labeledField(plugin, 'name', 'plugin'),
+    labeledField(plugin, 'version', 'version'),
+    'declaredCommands=' + (commands.length > 0 ? commands.join(',') : '(none)'),
+    'declaredPermissions=' + (permissions.length > 0 ? permissions.join(',') : '(none)'),
+    'caveat=metadata declarations do not prove runtime registration',
+  ].filter((item): item is string => item !== undefined);
+
+  return {
+    value: boundedText(fields.join('; '), 3000),
+    excerpt: evidenceExcerpt(result),
+  };
+}
+
+function currentEvidenceValue(
+  toolName: string,
+  result: unknown,
+): CurrentEvidenceValue | undefined {
+  const root = asRecord(result);
+  if (root === undefined) return undefined;
+
+  switch (toolName) {
+    case 'server.current_plugin_deployment':
+      return deploymentEvidence(root, result);
+    case 'server.current_target_freshness':
+      return freshnessEvidence(root, result);
+    case 'server.current_plugin_interface':
+      return interfaceEvidence(root, result);
+    default:
+      return undefined;
+  }
+}
+
 function toToolResult(
   meta: ToolMetadata,
   ctx: ToolCallContext,
@@ -162,6 +273,7 @@ function toToolResult(
   }
 
   const version = provenanceVersion(output.result) ?? collectionVersion(output.result);
+  const evidence = currentEvidenceValue(meta.name, output.result);
   return {
     toolName: meta.name,
     timestamp: output.observedAt,
@@ -172,6 +284,9 @@ function toToolResult(
     result: {
       server: output.server,
       data: output.result,
+      ...(evidence !== undefined
+        ? { value: evidence.value, excerpt: evidence.excerpt }
+        : {}),
     },
   };
 }

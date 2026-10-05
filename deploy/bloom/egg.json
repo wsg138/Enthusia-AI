@@ -7,7 +7,7 @@
     "startup": "{\"done\": \"enthusia.ai: service started\"}",
     "stop": "^^C"
   },
-  "description": "Template egg for the Enthusia AI split: agent, Discord bot, local inference (llama.cpp), indexer, and vector store. Each role is one Pterodactyl server on this egg; AI_SERVICE selects the role. PREPARE ONLY — not deployed.",
+  "description": "Template egg for the Enthusia AI split: gateway, agent, Discord bot, local inference (llama.cpp), indexer, and vector store. Each role is one Pterodactyl server on this egg; AI_SERVICE selects the role. PREPARE ONLY — not deployed.",
   "docker_images": {
     "Node.js 22 (agent / bot / indexer)": "ghcr.io/pterodactyl/yolks:nodejs_22",
     "llama.cpp inference (custom build)": "ghcr.io/enthusia/llama-cpp-yolk:template"
@@ -26,10 +26,10 @@
   "variables": [
     {
       "default_value": "agent",
-      "description": "Which Enthusia AI role this server runs: agent, discord, inference, indexer. One role per Pterodactyl server (§35.1).",
+      "description": "Which Enthusia AI role this server runs: gateway, agent, discord, inference, indexer. One role per Pterodactyl server (§35.1).",
       "env_variable": "AI_SERVICE",
       "name": "AI Service Role",
-      "rules": "required|string|in:agent,discord,inference,indexer",
+      "rules": "required|string|in:gateway,agent,discord,inference,indexer",
       "user_editable": true,
       "user_viewable": true
     },

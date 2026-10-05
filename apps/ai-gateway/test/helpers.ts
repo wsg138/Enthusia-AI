@@ -57,7 +57,12 @@ export async function startTestGateway(
   envOverrides: Record<string, string> = {},
   mock?: MockAgent,
 ): Promise<TestGateway> {
-  const config = testConfig(envOverrides);
+  const config: GatewayConfig = {
+    ...testConfig(envOverrides),
+    // Test servers must never depend on the real/default gateway port.
+    // Port 0 asks the OS for an isolated ephemeral port.
+    port: 0,
+  };
   const agent = mock ?? new MockAgent();
   const agents = new AgentRegistry();
   agents.register(agent);

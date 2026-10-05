@@ -35,10 +35,10 @@ if [ -n "${OOM_SCORE_ADJ:-}" ]; then
 fi
 
 # Optional CPU pinning — keeps inference off SMP-critical cores (§35.2).
-PIN_CMD=""
+PIN_ARGS=()
 if [ -n "${CPU_PIN:-}" ]; then
   if command -v taskset >/dev/null 2>&1; then
-    PIN_CMD="taskset -c ${CPU_PIN}"
+    PIN_ARGS=(taskset -c "${CPU_PIN}")
     log "CPU pinning enabled: ${CPU_PIN}"
   else
     log "WARNING: CPU_PIN set but taskset is unavailable; continuing unpinned"
@@ -49,10 +49,12 @@ export LOG_LEVEL METRICS_PORT HEALTH_PORT ENTHUSIA_VERSION="${VERSION}"
 
 case "${ROLE}" in
   agent)
-    # Service entrypoints are provided by later workstreams (W02 gateway,
-    # W12 orchestrator). Placeholder until the agent service ships.
-    log "FATAL: agent service entrypoint not yet implemented (W02/W12)"
-    exit 1
+    log "Starting W12 agent service"
+    exec "${PIN_ARGS[@]}" node apps/agent-service/dist/main.js
+    ;;
+  gateway)
+    log "Starting W02 AI Gateway"
+    exec node apps/ai-gateway/dist/main.js
     ;;
   discord)
     log "FATAL: discord adapter entrypoint not yet implemented (W06)"
@@ -73,7 +75,7 @@ case "${ROLE}" in
     fi
     export LLAMA_API_KEY="${ENTHUSIA_INFERENCE_API_KEY}"
     log "Starting llama.cpp server: threads=${INFERENCE_THREADS:-8} model=${MODEL_PATH} bind=${INFERENCE_BIND_HOST}"
-    exec ${PIN_CMD} llama-server \
+    exec "${PIN_ARGS[@]}" llama-server \
       -m "${MODEL_PATH}" \
       -t "${INFERENCE_THREADS:-8}" \
       --host "${INFERENCE_BIND_HOST}" \
@@ -85,7 +87,7 @@ case "${ROLE}" in
     exit 1
     ;;
   *)
-    log "FATAL: unknown AI_SERVICE='${ROLE}' (expected agent|discord|inference|indexer)"
+    log "FATAL: unknown AI_SERVICE='${ROLE}' (expected agent|gateway|discord|inference|indexer)"
     exit 1
     ;;
 esac

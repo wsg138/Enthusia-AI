@@ -25,12 +25,16 @@ describe('production authentication configuration', () => {
     ).toThrow(/ENTHUSIA_GATEWAY_API_KEYS/);
   });
 
-  it('allows production startup when at least one service API key is configured', () => {
+  it('allows production startup when gateway and downstream agent authentication are configured', () => {
     const config = loadGatewayConfig({
       NODE_ENV: 'production',
       ENTHUSIA_GATEWAY_API_KEYS: 'prod-service-key',
+      ENTHUSIA_AGENT_BASE_URL: 'http://agent.internal:4200',
+      ENTHUSIA_AGENT_API_KEY: 'prod-agent-service-key',
     });
     expect(config.apiKeys).toEqual(['prod-service-key']);
+    expect(config.agentBaseUrl).toBe('http://agent.internal:4200');
+    expect(config.agentApiKey).toBe('prod-agent-service-key');
   });
 });
 

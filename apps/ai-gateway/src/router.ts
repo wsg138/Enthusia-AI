@@ -1,35 +1,22 @@
 import { NotFoundError, type ChatRequest } from '@enthusia/contracts';
 import type { Agent } from './agent.js';
 
-/**
- * @enthusia/ai-gateway — conversation routing.
- *
- * Spec: WORKER-EXECUTION-PLAN.md §5 (W02 owns conversation routing).
- *
- * W02 routes every request to the mock agent. Surface-aware routing
- * (per-surface agents, staff escalation paths) is future work owned with the
- * agent orchestrator (W12); the decision point is explicit here so it can be
- * extended without touching ingress code.
- */
-
-/** Which downstream agent should handle the request, and why. */
 export interface RouteDecision {
   agentName: string;
   reason: string;
 }
 
 export class Router {
+  constructor(private readonly defaultAgentName = 'mock-agent') {}
+
   route(request: ChatRequest): RouteDecision {
-    // W02: single mock agent for every surface. The surface is recorded in
-    // the decision so routing policy can branch on it later.
     return {
-      agentName: 'mock-agent',
+      agentName: this.defaultAgentName,
       reason: `default route for surface '${request.surface}'`,
     };
   }
 }
 
-/** Registry of downstream agents available to the router. */
 export class AgentRegistry {
   private readonly agents = new Map<string, Agent>();
 
@@ -40,7 +27,9 @@ export class AgentRegistry {
   get(name: string): Agent {
     const agent = this.agents.get(name);
     if (agent === undefined) {
-      throw new NotFoundError(`No downstream agent registered under name '${name}'.`);
+      throw new NotFoundError(
+        `No downstream agent registered under name '${name}'.`,
+      );
     }
     return agent;
   }
