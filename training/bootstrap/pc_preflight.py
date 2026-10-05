@@ -85,6 +85,17 @@ def memory_bytes() -> int | None:
     return _posix_memory_bytes()
 
 
+def _cuda_devices(torch) -> list[dict[str, object]]:
+    return [
+        {
+            "index": index,
+            "name": torch.cuda.get_device_name(index),
+            "total_memory_bytes": torch.cuda.get_device_properties(index).total_memory,
+        }
+        for index in range(torch.cuda.device_count())
+    ]
+
+
 def torch_report() -> dict[str, object]:
     try:
         import torch  # type: ignore
@@ -98,34 +109,45 @@ def torch_report() -> dict[str, object]:
             "cuda_available": cuda_available,
             "cuda_version": torch.version.cuda,
             "device_count": int(torch.cuda.device_count()),
-            "devices": [
-                {
-                    "index": index,
-                    "name": torch.cuda.get_device_name(index),
-                    "total_memory_bytes": torch.cuda.get_device_properties(index).total_memory,
-                }
-                for index in range(torch.cuda.device_count())
-            ] if cuda_available else [],
+            "devices": _cuda_devices(torch) if cuda_available else [],
         }
     except (RuntimeError, OSError) as exc:
         return {"installed": True, "error": f"{type(exc).__name__}: {exc}"}
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--output", required=True)
-    args = ap.parse_args()
-
-    out = Path(args.output)
-    out.parent.mkdir(parents=True, exist_ok=True)
-
+def _disk_report() -> dict[str, int | str]:
     disk_root = Path.cwd().anchor or "/"
-    du = shutil.disk_usage(disk_root)
+    usage = shutil.disk_usage(disk_root)
+    return {
+        "root": disk_root,
+        "total_bytes": usage.total,
+        "free_bytes": usage.free,
+    }
 
+
+def _executables_report() -> dict[str, str | None]:
+    return {
+        name: shutil.which(name)
+        for name in ["git", "gh", "git-lfs", "nvidia-smi", "python", "pip"]
+    }
+
+
+def _nvidia_report() -> dict[str, object]:
+    executable = _resolved_executable("nvidia-smi")
+    if executable is None:
+        return {"ok": False, "error": "nvidia-smi not found"}
+    return run_command(
+        executable,
+        [
+            "--query-gpu=name,memory.total,memory.free,driver_version",
+            "--format=csv,noheader,nounits",
+        ],
+    )
+
+
+def _build_report() -> dict[str, object]:
     python_executable = Path(sys.executable).resolve()
-    nvidia_executable = _resolved_executable("nvidia-smi")
-
-    report = {
+    return {
         "schema_version": 1,
         "platform": platform.platform(),
         "python": sys.version,
@@ -136,33 +158,30 @@ def main() -> int:
         ),
         "cpu_count_logical": os.cpu_count(),
         "memory_bytes": memory_bytes(),
-        "disk": {
-            "root": disk_root,
-            "total_bytes": du.total,
-            "free_bytes": du.free,
-        },
-        "executables": {
-            name: shutil.which(name)
-            for name in ["git", "gh", "git-lfs", "nvidia-smi", "python", "pip"]
-        },
-        "nvidia_smi": run_command(
-            nvidia_executable,
-            [
-                "--query-gpu=name,memory.total,memory.free,driver_version",
-                "--format=csv,noheader,nounits",
-            ],
-        ) if nvidia_executable else {"ok": False, "error": "nvidia-smi not found"},
+        "disk": _disk_report(),
+        "executables": _executables_report(),
+        "nvidia_smi": _nvidia_report(),
         "torch": torch_report(),
         "recommendation": {
             "paid_gpu_started": False,
-            "next": "Use this report to choose local smoke-training limits before any rented GPU is started."
+            "next": (
+                "Use this report to choose local smoke-training limits before "
+                "any rented GPU is started."
+            ),
         },
     }
 
-    out.write_text(json.dumps(report, indent=2), encoding="utf-8")
-    print(out)
-    return 0
 
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--output", required=True)
+    args = ap.parse_args()
+
+    output = Path(args.output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(_build_report(), indent=2), encoding="utf-8")
+    print(output)
+    return 0
 
 if __name__ == "__main__":
     raise SystemExit(main())
