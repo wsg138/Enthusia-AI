@@ -12,7 +12,7 @@ if %COUNT% GEQ 90 (
   echo ERROR: local baseline server did not become healthy within 90 seconds.
   exit /b 2
 )
-timeout /t 1 /nobreak >nul
+powershell -NoProfile -Command "Start-Sleep -Seconds 1" >nul 2>&1
 goto wait_health
 
 :server_ready
