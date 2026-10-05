@@ -22,8 +22,7 @@ describe('secret-aware model-visible redaction', () => {
     expect(out.text).not.toContain('TEST_ONLY_DISCORD');
     expect(out.text).not.toContain('example.invalid/secret');
     expect(out.text).not.toContain('jdbc:mysql');
-    expect(out.text.match(new RegExp(REDACTED_VALUE.replace(/[.*+?^$(){}|[\]\\]/g, '\\$&'), 'g'))?.length)
-      .toBeGreaterThanOrEqual(3);
+    expect(out.text.split(REDACTED_VALUE).length - 1).toBeGreaterThanOrEqual(3);
   });
 
   it('redacts an entire nested YAML secret container', () => {

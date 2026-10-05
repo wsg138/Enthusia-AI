@@ -1,13 +1,12 @@
 /**
  * Production-capable, model-safe live server source gateway.
  *
- * The public surface accepts stable server/source identifiers, not arbitrary
- * filesystem paths. Every remote operation is root-confined by
- * DenyGuardSftpClient and every connection is read-only SFTP.
+ * Public operations accept configured source identifiers, never arbitrary
+ * filesystem paths. Transport, parsing, provenance, and public response
+ * construction remain separate.
  */
 
 import posixPath from 'node:path/posix';
-import { Visibility } from '@enthusia/contracts';
 import {
   findConfiguredRoot,
   type CompiledSftpIndexerConfig,
@@ -21,7 +20,22 @@ import {
   SecretDenyError,
   type DenyRule,
 } from './deny.js';
-import { parsePluginJar, type JarBuildMetadata, type PluginMetadata } from './jar-metadata.js';
+import { parseDeploymentIdentity } from './deployment-identity.js';
+import {
+  fail,
+  LiveAbortError,
+  LiveBoundaryError,
+  LiveTimeoutError,
+  mapLiveFailure,
+} from './live-errors.js';
+import {
+  buildArtifactIdentity,
+  liveFileIdentity,
+  liveProvenance,
+  liveServerIdentity,
+  runtimePluginIdentity,
+} from './live-provenance.js';
+import { parsePluginJar } from './jar-metadata.js';
 import { prepareDocumentText } from './parsers.js';
 import {
   connectSftp,
@@ -29,215 +43,45 @@ import {
   SftpPathEscapeError,
   type SftpClient,
   type SftpCredentials,
-  type SftpFileStat,
 } from './sftp-client.js';
+import type {
+  ApprovedFileReadResult,
+  ConfigDiscoveryItem,
+  ConfigDiscoveryResult,
+  LiveReadOptions,
+  LiveServerIdentity,
+  LiveSftpClientFactory,
+  LiveSourceResult,
+  PluginInspectionResult,
+  PluginListItem,
+  PluginListResult,
+  RuntimeCredentialResolver,
+} from './live-types.js';
 
-export interface LiveServerIdentity {
-  id: string;
-  displayName: string;
-  environment: string;
-}
+export type {
+  ApprovedFileReadResult,
+  ConfigDiscoveryItem,
+  ConfigDiscoveryResult,
+  DeploymentIdentity,
+  LiveFileIdentity,
+  LiveFileProvenance,
+  LiveReadOptions,
+  LiveServerIdentity,
+  LiveSftpClientFactory,
+  LiveSourceErrorCode,
+  LiveSourceErrorInfo,
+  LiveSourceResult,
+  PluginInspectionResult,
+  PluginListItem,
+  PluginListResult,
+  RuntimeCredentialMaterial,
+  RuntimeCredentialRequest,
+  RuntimeCredentialResolver,
+} from './live-types.js';
 
-export interface LiveFileIdentity {
-  path: string;
-  fileName: string;
-  sha256: string;
-  version: string;
-  sizeBytes: number;
-  modifiedAt: string;
-}
-
-export interface LiveFileProvenance {
-  source: 'sftp-live';
-  targetServer: LiveServerIdentity;
-  file: LiveFileIdentity;
-  observedAt: string;
-  freshness: {
-    kind: 'live-sha256';
-    version: string;
-  };
-}
-
-export interface PluginListItem {
-  directoryId: string;
-  visibility: Visibility;
-  deployedFile: LiveFileIdentity;
-}
-
-export interface PluginListResult {
-  directoryId: string;
-  plugins: PluginListItem[];
-  truncated: boolean;
-  warnings: string[];
-}
-
-export interface PluginInspectionResult {
-  directoryId: string;
-  visibility: Visibility;
-  plugin: PluginMetadata;
-  gitSource: { sha: string; evidence: 'jar-metadata' } | null;
-  buildArtifact: {
-    fileName: string;
-    sha256: string;
-    sizeBytes: number;
-    buildVersion?: string;
-    buildId?: string;
-    buildTimestamp?: string;
-  };
-  deployedFile: LiveFileIdentity;
-  targetServer: LiveServerIdentity;
-  runtimeIdentity: {
-    pluginVersion?: string;
-    buildVersion?: string;
-    buildId?: string;
-  } | null;
-  provenance: LiveFileProvenance;
-}
-
-export interface ConfigDiscoveryItem {
-  directoryId: string;
-  visibility: Visibility;
-  file: LiveFileIdentity;
-}
-
-export interface ConfigDiscoveryResult {
-  directoryId: string;
-  files: ConfigDiscoveryItem[];
-  truncated: boolean;
-  warnings: string[];
-}
-
-export interface DeploymentIdentity {
-  deploymentId?: string;
-  runtimeVersion?: string;
-  gitSha?: string;
-  buildId?: string;
-  deployedAt?: string;
-}
-
-export interface ApprovedFileReadResult {
-  sourceId: string;
-  kind: LiveApprovedFileConfig['kind'];
-  visibility: Visibility;
-  content?: string;
-  redactedFields: string[];
-  redactionCount: number;
-  deploymentIdentity?: DeploymentIdentity;
-  provenance: LiveFileProvenance;
-}
-
-export type LiveSourceErrorCode =
-  | 'UNKNOWN_SERVER'
-  | 'SOURCE_NOT_CONFIGURED'
-  | 'INVALID_REQUEST'
-  | 'PATH_DENIED'
-  | 'OVERSIZE'
-  | 'TIMEOUT'
-  | 'ABORTED'
-  | 'UNREACHABLE'
-  | 'SOURCE_UNAVAILABLE'
-  | 'SECRET_CONTENT_DENIED'
-  | 'UNSUPPORTED_CONTENT';
-
-export interface LiveSourceErrorInfo {
-  code: LiveSourceErrorCode;
-  message: string;
-  retryable: boolean;
-}
-
-export type LiveSourceResult<T> =
-  | {
-      ok: true;
-      server: LiveServerIdentity;
-      observedAt: string;
-      result: T;
-    }
-  | {
-      ok: false;
-      server: LiveServerIdentity;
-      observedAt: string;
-      error: LiveSourceErrorInfo;
-    };
-
-export interface LiveReadOptions {
-  signal?: AbortSignal;
-  /** May reduce, but never increase, the configured operation timeout. */
-  timeoutMs?: number;
-}
-
-export type LiveSftpClientFactory = (serverId: string) => Promise<SftpClient>;
-
-export interface RuntimeCredentialRequest {
-  serverId: string;
-  authSource: SftpServerConfig['authSource'];
-  authRef: string;
-}
-
-export type RuntimeCredentialMaterial = Omit<SftpCredentials, 'username'>;
-export type RuntimeCredentialResolver = (
-  request: RuntimeCredentialRequest,
-) => Promise<RuntimeCredentialMaterial> | RuntimeCredentialMaterial;
-
-class LiveBoundaryError extends Error {
-  constructor(
-    readonly code: LiveSourceErrorCode,
-    readonly retryable: boolean,
-  ) {
-    super(code);
-    this.name = 'LiveBoundaryError';
-  }
-}
-
-class LiveTimeoutError extends Error {
-  constructor() {
-    super('timeout');
-    this.name = 'LiveTimeoutError';
-  }
-}
-
-class LiveAbortError extends Error {
-  constructor() {
-    super('aborted');
-    this.name = 'LiveAbortError';
-  }
-}
-
-function identityFor(server: SftpServerConfig | undefined, requestedId: string): LiveServerIdentity {
-  return {
-    id: server?.id ?? requestedId,
-    displayName: server?.liveSource?.displayName ?? server?.id ?? requestedId,
-    environment: server?.liveSource?.environment ?? 'unknown',
-  };
-}
-
-function safeMessage(code: LiveSourceErrorCode): string {
-  switch (code) {
-    case 'UNKNOWN_SERVER': return 'server source is not configured';
-    case 'SOURCE_NOT_CONFIGURED': return 'requested source is not configured for this server';
-    case 'INVALID_REQUEST': return 'request did not match the typed source contract';
-    case 'PATH_DENIED': return 'source path was denied by the read-only boundary';
-    case 'OVERSIZE': return 'source exceeds the configured read limit';
-    case 'TIMEOUT': return 'server source operation timed out';
-    case 'ABORTED': return 'server source operation was cancelled';
-    case 'UNREACHABLE': return 'server source is unreachable';
-    case 'SECRET_CONTENT_DENIED': return 'source content was denied by the secret boundary';
-    case 'UNSUPPORTED_CONTENT': return 'source content is not safe text';
-    case 'SOURCE_UNAVAILABLE': return 'server source operation failed safely';
-  }
-}
-
-function fail<T>(
-  server: LiveServerIdentity,
-  observedAt: string,
-  code: LiveSourceErrorCode,
-  retryable: boolean,
-): LiveSourceResult<T> {
-  return {
-    ok: false,
-    server,
-    observedAt,
-    error: { code, message: safeMessage(code), retryable },
-  };
+interface PluginEntryOutcome {
+  item?: PluginListItem;
+  warning?: string;
 }
 
 function withDeadline<T>(
@@ -246,6 +90,7 @@ function withDeadline<T>(
   signal?: AbortSignal,
 ): Promise<T> {
   if (signal?.aborted === true) return Promise.reject(new LiveAbortError());
+
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => reject(new LiveTimeoutError()), timeoutMs);
     const abort = (): void => reject(new LiveAbortError());
@@ -258,46 +103,25 @@ function withDeadline<T>(
   });
 }
 
-function modifiedIso(stat: SftpFileStat): string {
-  return new Date(stat.mtimeMs).toISOString();
+async function safeClose(client: SftpClient | undefined): Promise<void> {
+  try {
+    await client?.close();
+  } catch {
+    // Close failure is isolated from the caller.
+  }
 }
 
-function fileIdentity(path: string, stat: SftpFileStat, sha256: string): LiveFileIdentity {
-  return {
-    path,
-    fileName: posixPath.basename(path),
-    sha256,
-    version: 'sha256:' + sha256,
-    sizeBytes: stat.size,
-    modifiedAt: modifiedIso(stat),
-  };
-}
-
-function provenance(
-  server: LiveServerIdentity,
-  file: LiveFileIdentity,
-  observedAt: string,
-): LiveFileProvenance {
-  return {
-    source: 'sftp-live',
-    targetServer: server,
-    file,
-    observedAt,
-    freshness: { kind: 'live-sha256', version: file.version },
-  };
-}
-
-function validateJarName(fileName: string): void {
-  if (
-    fileName.length === 0 ||
-    fileName.length > 255 ||
-    !fileName.toLowerCase().endsWith('.jar') ||
-    fileName.includes('/') ||
-    fileName.includes('\\') ||
-    fileName.includes('\0') ||
-    fileName === '.' ||
-    fileName === '..'
-  ) {
+function assertJarBasename(fileName: string): void {
+  if (fileName.length === 0 || fileName.length > 255) {
+    throw new LiveBoundaryError('INVALID_REQUEST', false);
+  }
+  if (fileName.includes('\0') || fileName.includes('\\')) {
+    throw new LiveBoundaryError('INVALID_REQUEST', false);
+  }
+  if (posixPath.basename(fileName) !== fileName) {
+    throw new LiveBoundaryError('INVALID_REQUEST', false);
+  }
+  if (posixPath.extname(fileName).toLowerCase() !== '.jar') {
     throw new LiveBoundaryError('INVALID_REQUEST', false);
   }
 }
@@ -312,84 +136,29 @@ function extraRulesFor(
   return compiled.extraDenyByRoot.get(server.id + ':' + root.path) ?? [];
 }
 
-function copyBuildMetadata(
-  target: PluginInspectionResult['buildArtifact'],
-  build: JarBuildMetadata,
-): void {
-  if (build.buildVersion !== undefined) target.buildVersion = build.buildVersion;
-  if (build.buildId !== undefined) target.buildId = build.buildId;
-  if (build.buildTimestamp !== undefined) target.buildTimestamp = build.buildTimestamp;
+function pluginWarning(error: unknown): string | undefined {
+  if (error instanceof LiveBoundaryError && error.code === 'OVERSIZE') {
+    return 'oversize-plugin-skipped';
+  }
+  if (error instanceof SecretDenyError || error instanceof SftpPathEscapeError) {
+    return 'denied-plugin-skipped';
+  }
+  return undefined;
 }
 
-function runtimeIdentity(
-  plugin: PluginMetadata,
-  build: JarBuildMetadata,
-): PluginInspectionResult['runtimeIdentity'] {
-  if (
-    plugin.version === undefined &&
-    build.buildVersion === undefined &&
-    build.buildId === undefined
-  ) {
-    return null;
-  }
-  const identity: NonNullable<PluginInspectionResult['runtimeIdentity']> = {};
-  if (plugin.version !== undefined) identity.pluginVersion = plugin.version;
-  if (build.buildVersion !== undefined) identity.buildVersion = build.buildVersion;
-  if (build.buildId !== undefined) identity.buildId = build.buildId;
-  return identity;
-}
-
-function parseDeploymentIdentity(text: string): DeploymentIdentity {
-  const values = new Map<string, string>();
-  try {
-    const parsed = JSON.parse(text) as Record<string, unknown>;
-    for (const [key, value] of Object.entries(parsed)) {
-      if (typeof value === 'string' || typeof value === 'number') {
-        values.set(key.toLowerCase().replace(/[^a-z0-9]/g, ''), String(value));
-      }
-    }
-  } catch {
-    for (const line of text.split(/\r?\n/)) {
-      const match = /^\s*([A-Za-z0-9_.-]+)\s*[:=]\s*(.*?)\s*$/.exec(line);
-      if (match?.[1] !== undefined) {
-        values.set(match[1].toLowerCase().replace(/[^a-z0-9]/g, ''), match[2] ?? '');
-      }
-    }
-  }
-
-  const result: DeploymentIdentity = {};
-  const take = (keys: readonly string[]): string | undefined => {
-    for (const key of keys) {
-      const value = values.get(key);
-      if (value !== undefined && value.length > 0 && value !== '[REDACTED]') return value;
-    }
-    return undefined;
+function makeConnectOptions(
+  server: SftpServerConfig,
+  credentials: SftpCredentials,
+) {
+  return {
+    serverId: server.id,
+    host: server.host,
+    port: server.port,
+    readyTimeoutMs: server.readyTimeoutMs,
+    credentials: () => credentials,
   };
-  const deploymentId = take(['deploymentid', 'releaseid']);
-  const runtimeVersion = take(['runtimeversion', 'version', 'releaseversion']);
-  const git = take(['gitsha', 'gitcommit', 'commitsha', 'revision']);
-  const buildId = take(['buildid', 'buildnumber']);
-  const deployedAt = take(['deployedat', 'deploymenttime', 'releasedat']);
-  if (deploymentId !== undefined) result.deploymentId = deploymentId;
-  if (runtimeVersion !== undefined) result.runtimeVersion = runtimeVersion;
-  if (git !== undefined && /^[0-9a-f]{7,64}$/i.test(git)) result.gitSha = git.toLowerCase();
-  if (buildId !== undefined) result.buildId = buildId;
-  if (deployedAt !== undefined) result.deployedAt = deployedAt;
-  return result;
 }
 
-async function safeClose(client: SftpClient | undefined): Promise<void> {
-  try {
-    await client?.close();
-  } catch {
-    // Close failure is intentionally isolated from callers.
-  }
-}
-
-/**
- * Build the production client factory without ever placing credential values
- * in configuration or model-visible results.
- */
 export function createConfiguredSftpClientFactory(
   compiled: CompiledSftpIndexerConfig,
   resolveCredentials: RuntimeCredentialResolver,
@@ -400,21 +169,17 @@ export function createConfiguredSftpClientFactory(
     if (server.liveSource !== undefined && server.hostKeySha256 === undefined) {
       throw new Error('live server is missing host-key pin');
     }
+
     const material = await resolveCredentials({
       serverId: server.id,
       authSource: server.authSource,
       authRef: server.authRef,
     });
     const credentials: SftpCredentials = { ...material, username: server.username };
-    const options = {
-      serverId: server.id,
-      host: server.host,
-      port: server.port,
-      readyTimeoutMs: server.readyTimeoutMs,
-      credentials: () => credentials,
-    };
-    if (server.hostKeySha256 === undefined) return connectSftp(options);
-    return connectSftp({ ...options, hostKeySha256: server.hostKeySha256 });
+    const options = makeConnectOptions(server, credentials);
+    return server.hostKeySha256 === undefined
+      ? connectSftp(options)
+      : connectSftp({ ...options, hostKeySha256: server.hostKeySha256 });
   };
 }
 
@@ -428,7 +193,7 @@ export class LiveServerSourceGateway {
   listServers(): LiveServerIdentity[] {
     return this.compiled.config.servers
       .filter((server) => server.liveSource !== undefined)
-      .map((server) => identityFor(server, server.id));
+      .map((server) => liveServerIdentity(server, server.id));
   }
 
   async listPlugins(
@@ -436,41 +201,11 @@ export class LiveServerSourceGateway {
     directoryId: string,
     options: LiveReadOptions = {},
   ): Promise<LiveSourceResult<PluginListResult>> {
-    return this.run(serverId, options, async (client, server) => {
-      const directory = this.pluginDirectory(server, directoryId);
-      const extra = extraRulesFor(this.compiled, server, directory.path);
-      const guarded = await DenyGuardSftpClient.forRoot(client, directory.path, extra);
-      const entries = await guarded.listDir(directory.path);
-      const maxResults = server.liveSource?.maxResults ?? 200;
-      const plugins: PluginListItem[] = [];
-      const warnings: string[] = [];
-
-      for (const entry of entries) {
-        if (plugins.length >= maxResults) break;
-        if (entry.isDirectory || !entry.name.toLowerCase().endsWith('.jar')) continue;
-        if (isDeniedPath(entry.path, extra)) continue;
-        try {
-          const item = await this.pluginIdentity(guarded, server, directory, entry.path);
-          if (item !== undefined) plugins.push(item);
-        } catch (error) {
-          if (error instanceof LiveBoundaryError && error.code === 'OVERSIZE') {
-            warnings.push('oversize-plugin-skipped');
-            continue;
-          }
-          if (error instanceof SecretDenyError || error instanceof SftpPathEscapeError) {
-            warnings.push('denied-plugin-skipped');
-            continue;
-          }
-          throw error;
-        }
-      }
-      return {
-        directoryId,
-        plugins,
-        truncated: plugins.length >= maxResults && entries.length > plugins.length,
-        warnings,
-      };
-    });
+    return this.run(
+      serverId,
+      options,
+      (client, server) => this.listPluginsOnServer(client, server, directoryId),
+    );
   }
 
   async inspectPlugin(
@@ -480,50 +215,24 @@ export class LiveServerSourceGateway {
     options: LiveReadOptions = {},
   ): Promise<LiveSourceResult<PluginInspectionResult>> {
     try {
-      validateJarName(fileName);
+      assertJarBasename(fileName);
     } catch {
-      const server = this.serverById(serverId);
       const observedAt = this.now().toISOString();
-      return fail(identityFor(server, serverId), observedAt, 'INVALID_REQUEST', false);
+      const server = this.serverById(serverId);
+      return fail(
+        liveServerIdentity(server, serverId),
+        observedAt,
+        'INVALID_REQUEST',
+        false,
+      );
     }
 
-    return this.run(serverId, options, async (client, server, observedAt) => {
-      const directory = this.pluginDirectory(server, directoryId);
-      const extra = extraRulesFor(this.compiled, server, directory.path);
-      const guarded = await DenyGuardSftpClient.forRoot(client, directory.path, extra);
-      const path = posixPath.join(directory.path, fileName);
-      const stat = await guarded.stat(path);
-      const live = server.liveSource;
-      if (live === undefined) throw new LiveBoundaryError('SOURCE_NOT_CONFIGURED', false);
-      if (!stat.isFile) throw new LiveBoundaryError('INVALID_REQUEST', false);
-      if (stat.size > live.maxJarBytes) throw new LiveBoundaryError('OVERSIZE', false);
-
-      const sha256 = await guarded.hashFile(path, live.maxJarBytes);
-      const bytes = await guarded.readFile(path, live.maxJarBytes);
-      const parsed = parsePluginJar(bytes, live.maxMetadataBytes);
-      const deployedFile = fileIdentity(path, stat, sha256);
-      const serverIdentity = identityFor(server, server.id);
-      const buildArtifact: PluginInspectionResult['buildArtifact'] = {
-        fileName,
-        sha256,
-        sizeBytes: stat.size,
-      };
-      copyBuildMetadata(buildArtifact, parsed.build);
-
-      return {
-        directoryId,
-        visibility: directory.visibility,
-        plugin: parsed.plugin,
-        gitSource: parsed.build.gitSourceSha === undefined
-          ? null
-          : { sha: parsed.build.gitSourceSha, evidence: 'jar-metadata' },
-        buildArtifact,
-        deployedFile,
-        targetServer: serverIdentity,
-        runtimeIdentity: runtimeIdentity(parsed.plugin, parsed.build),
-        provenance: provenance(serverIdentity, deployedFile, observedAt),
-      };
-    });
+    return this.run(
+      serverId,
+      options,
+      (client, server, observedAt) =>
+        this.inspectPluginOnServer(client, server, directoryId, fileName, observedAt),
+    );
   }
 
   async discoverConfigs(
@@ -531,30 +240,11 @@ export class LiveServerSourceGateway {
     directoryId: string,
     options: LiveReadOptions = {},
   ): Promise<LiveSourceResult<ConfigDiscoveryResult>> {
-    return this.run(serverId, options, async (client, server) => {
-      const directory = this.configDirectory(server, directoryId);
-      const extra = extraRulesFor(this.compiled, server, directory.path);
-      const guarded = await DenyGuardSftpClient.forRoot(client, directory.path, extra);
-      const files: ConfigDiscoveryItem[] = [];
-      const warnings: string[] = [];
-      await this.walkConfigs(
-        guarded,
-        server,
-        directory,
-        directory.path,
-        0,
-        files,
-        warnings,
-        extra,
-      );
-      const maxResults = server.liveSource?.maxResults ?? 200;
-      return {
-        directoryId,
-        files: files.slice(0, maxResults),
-        truncated: files.length > maxResults,
-        warnings,
-      };
-    });
+    return this.run(
+      serverId,
+      options,
+      (client, server) => this.discoverConfigsOnServer(client, server, directoryId),
+    );
   }
 
   async readApprovedFile(
@@ -562,54 +252,218 @@ export class LiveServerSourceGateway {
     sourceId: string,
     options: LiveReadOptions = {},
   ): Promise<LiveSourceResult<ApprovedFileReadResult>> {
-    return this.run(serverId, options, async (client, server, observedAt) => {
-      const source = this.approvedFile(server, sourceId);
-      const extra = extraRulesFor(this.compiled, server, source.path);
-      const root = findConfiguredRoot(server, source.path);
-      if (root === undefined) throw new LiveBoundaryError('PATH_DENIED', false);
-      const guarded = await DenyGuardSftpClient.forRoot(client, root.path, extra);
-      const stat = await guarded.stat(source.path);
-      const maxBytes = server.liveSource?.maxConfigBytes ?? 1024 * 1024;
-      if (!stat.isFile) throw new LiveBoundaryError('INVALID_REQUEST', false);
-      if (stat.size > maxBytes) throw new LiveBoundaryError('OVERSIZE', false);
+    return this.run(
+      serverId,
+      options,
+      (client, server, observedAt) =>
+        this.readApprovedOnServer(client, server, sourceId, observedAt),
+    );
+  }
 
-      const sha256 = await guarded.hashFile(source.path, maxBytes);
-      const bytes = await guarded.readFile(source.path, maxBytes);
-      const prepared = prepareDocumentText(bytes, maxBytes, source.path);
-      if (!prepared.ok) {
-        const code = prepared.skippedReason === 'secret-content'
-          ? 'SECRET_CONTENT_DENIED'
-          : 'UNSUPPORTED_CONTENT';
-        throw new LiveBoundaryError(code, false);
-      }
+  private async listPluginsOnServer(
+    client: SftpClient,
+    server: SftpServerConfig,
+    directoryId: string,
+  ): Promise<PluginListResult> {
+    const directory = this.pluginDirectory(server, directoryId);
+    const extra = extraRulesFor(this.compiled, server, directory.path);
+    const guarded = await DenyGuardSftpClient.forRoot(client, directory.path, extra);
+    const entries = await guarded.listDir(directory.path);
+    const maxResults = server.liveSource?.maxResults ?? 200;
+    const plugins: PluginListItem[] = [];
+    const warnings: string[] = [];
 
-      const file = fileIdentity(source.path, stat, sha256);
-      const result: ApprovedFileReadResult = {
-        sourceId,
-        kind: source.kind,
-        visibility: source.visibility,
-        redactedFields: prepared.redactedFields,
-        redactionCount: prepared.redactionCount,
-        provenance: provenance(identityFor(server, server.id), file, observedAt),
-      };
-      if (source.kind === 'deployment-identity') {
-        result.deploymentIdentity = parseDeploymentIdentity(prepared.text);
-      } else {
-        result.content = prepared.text;
-      }
-      return result;
-    });
+    for (const entry of entries) {
+      if (plugins.length >= maxResults) break;
+      const outcome = await this.pluginEntry(
+        guarded,
+        server,
+        directory,
+        entry,
+        extra,
+      );
+      if (outcome.item !== undefined) plugins.push(outcome.item);
+      if (outcome.warning !== undefined) warnings.push(outcome.warning);
+    }
+    return {
+      directoryId,
+      plugins,
+      truncated: entries.length > plugins.length && plugins.length >= maxResults,
+      warnings,
+    };
+  }
+
+  private async pluginEntry(
+    client: SftpClient,
+    server: SftpServerConfig,
+    directory: LivePluginDirectoryConfig,
+    entry: { path: string; name: string; isDirectory: boolean },
+    extra: readonly DenyRule[],
+  ): Promise<PluginEntryOutcome> {
+    if (entry.isDirectory || posixPath.extname(entry.name).toLowerCase() !== '.jar') return {};
+    if (isDeniedPath(entry.path, extra)) return {};
+
+    try {
+      const item = await this.pluginIdentity(client, server, directory, entry.path);
+      return item === undefined ? {} : { item };
+    } catch (error) {
+      const warning = pluginWarning(error);
+      if (warning === undefined) throw error;
+      return { warning };
+    }
+  }
+
+  private async inspectPluginOnServer(
+    client: SftpClient,
+    server: SftpServerConfig,
+    directoryId: string,
+    fileName: string,
+    observedAt: string,
+  ): Promise<PluginInspectionResult> {
+    const directory = this.pluginDirectory(server, directoryId);
+    const live = this.liveConfig(server);
+    const extra = extraRulesFor(this.compiled, server, directory.path);
+    const guarded = await DenyGuardSftpClient.forRoot(client, directory.path, extra);
+    const path = posixPath.join(directory.path, fileName);
+    const stat = await guarded.stat(path);
+    this.assertReadableFile(stat.isFile, stat.size, live.maxJarBytes);
+
+    const sha256 = await guarded.hashFile(path, live.maxJarBytes);
+    const bytes = await guarded.readFile(path, live.maxJarBytes);
+    const parsed = parsePluginJar(bytes, live.maxMetadataBytes);
+    const deployedFile = liveFileIdentity(path, stat, sha256);
+    const serverIdentity = liveServerIdentity(server, server.id);
+
+    return {
+      directoryId,
+      visibility: directory.visibility,
+      plugin: parsed.plugin,
+      gitSource: parsed.build.gitSourceSha === undefined
+        ? null
+        : { sha: parsed.build.gitSourceSha, evidence: 'jar-metadata' },
+      buildArtifact: buildArtifactIdentity(fileName, sha256, stat.size, parsed.build),
+      deployedFile,
+      targetServer: serverIdentity,
+      runtimeIdentity: runtimePluginIdentity(parsed.plugin, parsed.build),
+      provenance: liveProvenance(serverIdentity, deployedFile, observedAt),
+    };
+  }
+
+  private async discoverConfigsOnServer(
+    client: SftpClient,
+    server: SftpServerConfig,
+    directoryId: string,
+  ): Promise<ConfigDiscoveryResult> {
+    const directory = this.configDirectory(server, directoryId);
+    const extra = extraRulesFor(this.compiled, server, directory.path);
+    const guarded = await DenyGuardSftpClient.forRoot(client, directory.path, extra);
+    const files: ConfigDiscoveryItem[] = [];
+    const warnings: string[] = [];
+
+    await this.walkConfigs(
+      guarded,
+      server,
+      directory,
+      directory.path,
+      0,
+      files,
+      warnings,
+      extra,
+    );
+    const maxResults = server.liveSource?.maxResults ?? 200;
+    return {
+      directoryId,
+      files: files.slice(0, maxResults),
+      truncated: files.length > maxResults,
+      warnings,
+    };
+  }
+
+  private async readApprovedOnServer(
+    client: SftpClient,
+    server: SftpServerConfig,
+    sourceId: string,
+    observedAt: string,
+  ): Promise<ApprovedFileReadResult> {
+    const source = this.approvedFile(server, sourceId);
+    const live = this.liveConfig(server);
+    const extra = extraRulesFor(this.compiled, server, source.path);
+    const root = findConfiguredRoot(server, source.path);
+    if (root === undefined) throw new LiveBoundaryError('PATH_DENIED', false);
+
+    const guarded = await DenyGuardSftpClient.forRoot(client, root.path, extra);
+    const stat = await guarded.stat(source.path);
+    this.assertReadableFile(stat.isFile, stat.size, live.maxConfigBytes);
+    const sha256 = await guarded.hashFile(source.path, live.maxConfigBytes);
+    const bytes = await guarded.readFile(source.path, live.maxConfigBytes);
+    const prepared = prepareDocumentText(bytes, live.maxConfigBytes, source.path);
+    if (!prepared.ok) throw this.prepareError(prepared.skippedReason);
+
+    const file = liveFileIdentity(source.path, stat, sha256);
+    return this.approvedResult(server, source, file, prepared, observedAt);
+  }
+
+  private approvedResult(
+    server: SftpServerConfig,
+    source: LiveApprovedFileConfig,
+    file: ReturnType<typeof liveFileIdentity>,
+    prepared: Extract<ReturnType<typeof prepareDocumentText>, { ok: true }>,
+    observedAt: string,
+  ): ApprovedFileReadResult {
+    const result: ApprovedFileReadResult = {
+      sourceId: source.id,
+      kind: source.kind,
+      visibility: source.visibility,
+      redactedFields: prepared.redactedFields,
+      redactionCount: prepared.redactionCount,
+      provenance: liveProvenance(
+        liveServerIdentity(server, server.id),
+        file,
+        observedAt,
+      ),
+    };
+    if (source.kind === 'deployment-identity') {
+      result.deploymentIdentity = parseDeploymentIdentity(prepared.text);
+    } else {
+      result.content = prepared.text;
+    }
+    return result;
+  }
+
+  private prepareError(reason: string): LiveBoundaryError {
+    const code = reason === 'secret-content'
+      ? 'SECRET_CONTENT_DENIED'
+      : 'UNSUPPORTED_CONTENT';
+    return new LiveBoundaryError(code, false);
+  }
+
+  private assertReadableFile(
+    isFile: boolean,
+    size: number,
+    maxBytes: number,
+  ): void {
+    if (!isFile) throw new LiveBoundaryError('INVALID_REQUEST', false);
+    if (size > maxBytes) throw new LiveBoundaryError('OVERSIZE', false);
   }
 
   private serverById(serverId: string): SftpServerConfig | undefined {
     return this.compiled.config.servers.find((server) => server.id === serverId);
   }
 
+  private liveConfig(server: SftpServerConfig): NonNullable<SftpServerConfig['liveSource']> {
+    if (server.liveSource === undefined) {
+      throw new LiveBoundaryError('SOURCE_NOT_CONFIGURED', false);
+    }
+    return server.liveSource;
+  }
+
   private pluginDirectory(
     server: SftpServerConfig,
     directoryId: string,
   ): LivePluginDirectoryConfig {
-    const found = server.liveSource?.pluginDirectories.find((source) => source.id === directoryId);
+    const found = server.liveSource?.pluginDirectories.find(
+      (source) => source.id === directoryId,
+    );
     if (found === undefined) throw new LiveBoundaryError('SOURCE_NOT_CONFIGURED', false);
     return found;
   }
@@ -618,13 +472,20 @@ export class LiveServerSourceGateway {
     server: SftpServerConfig,
     directoryId: string,
   ): LiveConfigDirectoryConfig {
-    const found = server.liveSource?.configDirectories.find((source) => source.id === directoryId);
+    const found = server.liveSource?.configDirectories.find(
+      (source) => source.id === directoryId,
+    );
     if (found === undefined) throw new LiveBoundaryError('SOURCE_NOT_CONFIGURED', false);
     return found;
   }
 
-  private approvedFile(server: SftpServerConfig, sourceId: string): LiveApprovedFileConfig {
-    const found = server.liveSource?.approvedFiles.find((source) => source.id === sourceId);
+  private approvedFile(
+    server: SftpServerConfig,
+    sourceId: string,
+  ): LiveApprovedFileConfig {
+    const found = server.liveSource?.approvedFiles.find(
+      (source) => source.id === sourceId,
+    );
     if (found === undefined) throw new LiveBoundaryError('SOURCE_NOT_CONFIGURED', false);
     return found;
   }
@@ -637,13 +498,13 @@ export class LiveServerSourceGateway {
   ): Promise<PluginListItem | undefined> {
     const stat = await client.stat(path);
     if (!stat.isFile) return undefined;
-    const maxJarBytes = server.liveSource?.maxJarBytes ?? 64 * 1024 * 1024;
+    const maxJarBytes = this.liveConfig(server).maxJarBytes;
     if (stat.size > maxJarBytes) throw new LiveBoundaryError('OVERSIZE', false);
     const sha256 = await client.hashFile(path, maxJarBytes);
     return {
       directoryId: directory.id,
       visibility: directory.visibility,
-      deployedFile: fileIdentity(path, stat, sha256),
+      deployedFile: liveFileIdentity(path, stat, sha256),
     };
   }
 
@@ -657,36 +518,50 @@ export class LiveServerSourceGateway {
     warnings: string[],
     extra: readonly DenyRule[],
   ): Promise<void> {
-    const hardMax = server.liveSource?.maxResults ?? 200;
-    if (output.length > hardMax) return;
-    const entries = await client.listDir(path);
-    for (const entry of entries) {
-      if (output.length > hardMax) return;
+    const maxResults = this.liveConfig(server).maxResults;
+    if (output.length > maxResults) return;
+
+    for (const entry of await client.listDir(path)) {
+      if (output.length > maxResults) return;
       if (isDeniedPath(entry.path, extra)) continue;
       if (entry.isDirectory) {
-        if (depth < directory.maxDepth) {
-          await this.walkConfigs(
-            client,
-            server,
-            directory,
-            entry.path,
-            depth + 1,
-            output,
-            warnings,
-            extra,
-          );
-        }
-        continue;
+        await this.descendConfigDirectory(
+          client,
+          server,
+          directory,
+          entry.path,
+          depth,
+          output,
+          warnings,
+          extra,
+        );
+      } else {
+        await this.addConfigIdentity(client, server, directory, entry.path, output, warnings);
       }
-      await this.addConfigIdentity(
-        client,
-        server,
-        directory,
-        entry.path,
-        output,
-        warnings,
-      );
     }
+  }
+
+  private async descendConfigDirectory(
+    client: SftpClient,
+    server: SftpServerConfig,
+    directory: LiveConfigDirectoryConfig,
+    path: string,
+    depth: number,
+    output: ConfigDiscoveryItem[],
+    warnings: string[],
+    extra: readonly DenyRule[],
+  ): Promise<void> {
+    if (depth >= directory.maxDepth) return;
+    await this.walkConfigs(
+      client,
+      server,
+      directory,
+      path,
+      depth + 1,
+      output,
+      warnings,
+      extra,
+    );
   }
 
   private async addConfigIdentity(
@@ -697,29 +572,49 @@ export class LiveServerSourceGateway {
     output: ConfigDiscoveryItem[],
     warnings: string[],
   ): Promise<void> {
-    const extension = posixPath.extname(path).toLowerCase();
-    if (!directory.includeExtensions.map((item) => item.toLowerCase()).includes(extension)) return;
+    if (!this.configExtensionAllowed(directory, path)) return;
     try {
-      const stat = await client.stat(path);
-      if (!stat.isFile) return;
-      const maxBytes = server.liveSource?.maxConfigBytes ?? 1024 * 1024;
-      if (stat.size > maxBytes) {
+      const item = await this.configIdentity(client, server, directory, path);
+      if (item !== undefined) output.push(item);
+    } catch (error) {
+      if (error instanceof LiveBoundaryError && error.code === 'OVERSIZE') {
         warnings.push('oversize-config-skipped');
         return;
       }
-      const sha256 = await client.hashFile(path, maxBytes);
-      output.push({
-        directoryId: directory.id,
-        visibility: directory.visibility,
-        file: fileIdentity(path, stat, sha256),
-      });
-    } catch (error) {
       if (error instanceof SecretDenyError || error instanceof SftpPathEscapeError) {
         warnings.push('denied-config-skipped');
         return;
       }
       throw error;
     }
+  }
+
+  private configExtensionAllowed(
+    directory: LiveConfigDirectoryConfig,
+    path: string,
+  ): boolean {
+    const extension = posixPath.extname(path).toLowerCase();
+    return directory.includeExtensions.some(
+      (allowed) => allowed.toLowerCase() === extension,
+    );
+  }
+
+  private async configIdentity(
+    client: SftpClient,
+    server: SftpServerConfig,
+    directory: LiveConfigDirectoryConfig,
+    path: string,
+  ): Promise<ConfigDiscoveryItem | undefined> {
+    const stat = await client.stat(path);
+    if (!stat.isFile) return undefined;
+    const maxBytes = this.liveConfig(server).maxConfigBytes;
+    if (stat.size > maxBytes) throw new LiveBoundaryError('OVERSIZE', false);
+    const sha256 = await client.hashFile(path, maxBytes);
+    return {
+      directoryId: directory.id,
+      visibility: directory.visibility,
+      file: liveFileIdentity(path, stat, sha256),
+    };
   }
 
   private async run<T>(
@@ -733,7 +628,7 @@ export class LiveServerSourceGateway {
   ): Promise<LiveSourceResult<T>> {
     const observedAt = this.now().toISOString();
     const server = this.serverById(serverId);
-    const serverIdentity = identityFor(server, serverId);
+    const serverIdentity = liveServerIdentity(server, serverId);
     if (server === undefined) return fail(serverIdentity, observedAt, 'UNKNOWN_SERVER', false);
     if (server.liveSource === undefined) {
       return fail(serverIdentity, observedAt, 'SOURCE_NOT_CONFIGURED', false);
@@ -744,25 +639,65 @@ export class LiveServerSourceGateway {
       server.liveSource.operationTimeoutMs,
     );
     const deadline = Date.now() + Math.max(1, timeoutMs);
-    let client: SftpClient | undefined;
-    const pendingClient = this.makeClient(server.id);
+    const client = await this.openClient(server, serverIdentity, observedAt, deadline, options);
+    if (!client.ok) return client.result;
 
+    return this.runWithClient(
+      client.client,
+      server,
+      serverIdentity,
+      observedAt,
+      deadline,
+      options,
+      operation,
+    );
+  }
+
+  private async openClient<T>(
+    server: SftpServerConfig,
+    identity: LiveServerIdentity,
+    observedAt: string,
+    deadline: number,
+    options: LiveReadOptions,
+  ): Promise<
+    | { ok: true; client: SftpClient }
+    | { ok: false; result: LiveSourceResult<T> }
+  > {
+    const pending = this.makeClient(server.id);
     try {
-      client = await withDeadline(pendingClient, this.remaining(deadline), options.signal);
+      const client = await withDeadline(pending, this.remaining(deadline), options.signal);
+      return { ok: true, client };
     } catch (error) {
-      void pendingClient.then((late) => safeClose(late), () => undefined);
-      return this.mapFailure(serverIdentity, observedAt, error, true);
+      void pending.then((late) => safeClose(late), () => undefined);
+      return {
+        ok: false,
+        result: mapLiveFailure(identity, observedAt, error, true),
+      };
     }
+  }
 
+  private async runWithClient<T>(
+    client: SftpClient,
+    server: SftpServerConfig,
+    identity: LiveServerIdentity,
+    observedAt: string,
+    deadline: number,
+    options: LiveReadOptions,
+    operation: (
+      client: SftpClient,
+      server: SftpServerConfig,
+      observedAt: string,
+    ) => Promise<T>,
+  ): Promise<LiveSourceResult<T>> {
     try {
-      const value = await withDeadline(
+      const result = await withDeadline(
         operation(client, server, observedAt),
         this.remaining(deadline),
         options.signal,
       );
-      return { ok: true, server: serverIdentity, observedAt, result: value };
+      return { ok: true, server: identity, observedAt, result };
     } catch (error) {
-      return this.mapFailure(serverIdentity, observedAt, error, false);
+      return mapLiveFailure(identity, observedAt, error, false);
     } finally {
       await safeClose(client);
     }
@@ -770,23 +705,5 @@ export class LiveServerSourceGateway {
 
   private remaining(deadline: number): number {
     return Math.max(1, deadline - Date.now());
-  }
-
-  private mapFailure<T>(
-    server: LiveServerIdentity,
-    observedAt: string,
-    error: unknown,
-    connecting: boolean,
-  ): LiveSourceResult<T> {
-    if (error instanceof LiveTimeoutError) return fail(server, observedAt, 'TIMEOUT', true);
-    if (error instanceof LiveAbortError) return fail(server, observedAt, 'ABORTED', false);
-    if (error instanceof SecretDenyError || error instanceof SftpPathEscapeError) {
-      return fail(server, observedAt, 'PATH_DENIED', false);
-    }
-    if (error instanceof LiveBoundaryError) {
-      return fail(server, observedAt, error.code, error.retryable);
-    }
-    if (connecting) return fail(server, observedAt, 'UNREACHABLE', true);
-    return fail(server, observedAt, 'SOURCE_UNAVAILABLE', true);
   }
 }

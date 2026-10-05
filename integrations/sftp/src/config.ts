@@ -36,11 +36,17 @@ const absolutePosixPathSchema = z
 
 const modelVisibleVisibilitySchema = z
   .nativeEnum(Visibility)
-  .refine((visibility) => visibility !== Visibility.SECRET_DENY, 'SECRET_DENY sources must not be configured as readable');
+  .refine(
+    (visibility) => visibility !== Visibility.SECRET_DENY,
+    'SECRET_DENY sources must not be configured as readable',
+  );
 
 const hostKeySha256Schema = z
   .string()
-  .regex(/^SHA256:[A-Za-z0-9+/]{20,}={0,2}$/, 'host key must be an OpenSSH SHA256 fingerprint');
+  .regex(
+    /^SHA256:[A-Za-z0-9+/]{20,}={0,2}$/,
+    'host key must be an OpenSSH SHA256 fingerprint',
+  );
 
 export const sftpRootSchema = z.strictObject({
   path: absolutePosixPathSchema,
@@ -130,9 +136,13 @@ export interface CompiledSftpIndexerConfig {
 }
 
 function isWithinRoot(candidate: string, root: string): boolean {
-  const relative = posixPath.relative(posixPath.normalize(root), posixPath.normalize(candidate));
-  return relative === '' ||
-    (relative !== '..' && !relative.startsWith('../') && !posixPath.isAbsolute(relative));
+  const relative = posixPath.relative(
+    posixPath.normalize(root),
+    posixPath.normalize(candidate),
+  );
+  if (relative === '') return true;
+  if (relative === '..' || relative.startsWith('../')) return false;
+  return !posixPath.isAbsolute(relative);
 }
 
 function findContainingRoot(
@@ -144,47 +154,81 @@ function findContainingRoot(
     .sort((left, right) => right.path.length - left.path.length)[0];
 }
 
+function rootDenyRules(
+  serverId: string,
+  rootPath: string,
+  rules: ReadonlyMap<string, readonly DenyRule[]>,
+): readonly DenyRule[] {
+  return rules.get(serverId + ':' + rootPath) ?? [];
+}
+
 function validateLivePath(
   server: SftpServerConfig,
   remotePath: string,
-  extraDenyByRoot: ReadonlyMap<string, readonly DenyRule[]>,
+  rules: ReadonlyMap<string, readonly DenyRule[]>,
 ): void {
   const root = findContainingRoot(server, remotePath);
   if (root === undefined) {
     throw new Error('live source path is outside every allowlisted root: server=' + server.id);
   }
-  const extra = extraDenyByRoot.get(server.id + ':' + root.path) ?? [];
-  assertAllowedPath(remotePath, extra);
+  assertAllowedPath(remotePath, rootDenyRules(server.id, root.path, rules));
 }
 
-function validateLiveServer(
-  server: SftpServerConfig,
-  extraDenyByRoot: ReadonlyMap<string, readonly DenyRule[]>,
-): void {
+function liveSourceIds(server: SftpServerConfig): string[] {
   const live = server.liveSource;
-  if (live === undefined) return;
-  if (server.hostKeySha256 === undefined) {
-    throw new Error('live source requires pinned hostKeySha256: server=' + server.id);
-  }
-
-  const ids = [
+  if (live === undefined) return [];
+  return [
     ...live.pluginDirectories.map((source) => source.id),
     ...live.configDirectories.map((source) => source.id),
     ...live.approvedFiles.map((source) => source.id),
   ];
+}
+
+function assertUniqueLiveIds(server: SftpServerConfig): void {
+  const ids = liveSourceIds(server);
   if (new Set(ids).size !== ids.length) {
     throw new Error('live source ids must be unique within server=' + server.id);
   }
+}
 
-  for (const source of live.pluginDirectories) {
-    validateLivePath(server, source.path, extraDenyByRoot);
+function livePaths(server: SftpServerConfig): string[] {
+  const live = server.liveSource;
+  if (live === undefined) return [];
+  return [
+    ...live.pluginDirectories.map((source) => source.path),
+    ...live.configDirectories.map((source) => source.path),
+    ...live.approvedFiles.map((source) => source.path),
+  ];
+}
+
+function validateLiveServer(
+  server: SftpServerConfig,
+  rules: ReadonlyMap<string, readonly DenyRule[]>,
+): void {
+  if (server.liveSource === undefined) return;
+  if (server.hostKeySha256 === undefined) {
+    throw new Error('live source requires pinned hostKeySha256: server=' + server.id);
   }
-  for (const source of live.configDirectories) {
-    validateLivePath(server, source.path, extraDenyByRoot);
+
+  assertUniqueLiveIds(server);
+  for (const path of livePaths(server)) validateLivePath(server, path, rules);
+}
+
+function compileDenyRules(
+  config: SftpIndexerConfig,
+): Map<string, readonly DenyRule[]> {
+  const compiled = new Map<string, readonly DenyRule[]>();
+  for (const server of config.servers) {
+    for (const root of server.roots) {
+      const patterns = root.extraDenyPatterns;
+      if (patterns === undefined || patterns.length === 0) continue;
+      compiled.set(
+        server.id + ':' + root.path,
+        compileExtraDenyPatterns(patterns),
+      );
+    }
   }
-  for (const source of live.approvedFiles) {
-    validateLivePath(server, source.path, extraDenyByRoot);
-  }
+  return compiled;
 }
 
 export function findConfiguredRoot(
@@ -196,20 +240,7 @@ export function findConfiguredRoot(
 
 export function compileConfig(input: unknown): CompiledSftpIndexerConfig {
   const config = sftpIndexerConfigSchema.parse(input);
-  const extraDenyByRoot = new Map<string, readonly DenyRule[]>();
-
-  for (const server of config.servers) {
-    for (const root of server.roots) {
-      if (root.extraDenyPatterns !== undefined && root.extraDenyPatterns.length > 0) {
-        extraDenyByRoot.set(
-          server.id + ':' + root.path,
-          compileExtraDenyPatterns(root.extraDenyPatterns),
-        );
-      }
-    }
-  }
-  for (const server of config.servers) {
-    validateLiveServer(server, extraDenyByRoot);
-  }
+  const extraDenyByRoot = compileDenyRules(config);
+  for (const server of config.servers) validateLiveServer(server, extraDenyByRoot);
   return { config, extraDenyByRoot };
 }

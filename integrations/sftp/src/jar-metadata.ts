@@ -16,7 +16,6 @@ import {
   emptyPlugin,
   type JarBuildMetadata,
   type ParsedPluginJar,
-  type PluginDescriptorKind,
   type PluginMetadata,
 } from './jar-types.js';
 
