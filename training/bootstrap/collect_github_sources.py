@@ -9,8 +9,9 @@ import os
 import re
 import shutil
 import stat
-import subprocess
+import subprocess  # nosec B404 -- required for validated, argv-only gh/git execution.
 import tempfile
+from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 
 TEXT_EXTENSIONS = {
@@ -37,13 +38,83 @@ DENY_SUFFIXES = {
     ".sqlite3", ".pem", ".key", ".p12", ".pfx", ".jks", ".keystore", ".lock"
 }
 MAX_BYTES_DEFAULT = 512_000
+GITHUB_OWNER_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$")
+GITHUB_REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]{1,100}$")
+SAFE_BRANCH_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$")
+COMMIT_SHA_RE = re.compile(r"^[0-9a-fA-F]{40,64}$")
 
 
-def run(cmd: list[str], cwd: Path | None = None) -> str:
-    p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=600, check=False)
-    if p.returncode != 0:
-        raise RuntimeError(f"command failed ({p.returncode}): {' '.join(cmd)}\n{p.stderr[-2000:]}")
-    return p.stdout.strip()
+class CommandError(RuntimeError):
+    """Raised when a validated local command exits unsuccessfully."""
+
+
+def validate_github_owner(value: object) -> str:
+    if not isinstance(value, str) or not GITHUB_OWNER_RE.fullmatch(value):
+        raise ValueError("invalid GitHub owner")
+    if value.startswith("-") or value.endswith("-") or "--" in value:
+        raise ValueError("invalid GitHub owner")
+    return value
+
+
+def validate_github_repository(value: object) -> str:
+    if not isinstance(value, str) or not GITHUB_REPOSITORY_RE.fullmatch(value):
+        raise ValueError("invalid GitHub repository")
+    if value in {".", ".."} or "/" in value or "\\" in value:
+        raise ValueError("invalid GitHub repository")
+    return value
+
+
+def validate_git_branch(value: object) -> str:
+    if not isinstance(value, str) or not SAFE_BRANCH_RE.fullmatch(value):
+        raise ValueError("invalid Git branch")
+    if (
+        ".." in value
+        or "@{" in value
+        or value.endswith((".", "/"))
+        or any(
+            part in {"", ".", ".."}
+            or part.startswith(".")
+            or part.endswith(".lock")
+            for part in value.split("/")
+        )
+    ):
+        raise ValueError("invalid Git branch")
+    return value
+
+
+def _resolve_executable(name: str) -> Path:
+    discovered = shutil.which(name)
+    if not discovered:
+        raise RuntimeError(f"{name} CLI is required")
+    resolved = Path(discovered).resolve()
+    if not resolved.is_file():
+        raise RuntimeError(f"{name} CLI path is not a file")
+    return resolved
+
+
+def _run_checked(
+    executable: Path,
+    arguments: list[str],
+    cwd: Path | None = None,
+    timeout: int = 600,
+) -> str:
+    command = [str(executable), *arguments]
+    completed = subprocess.run(  # nosec B603 -- resolved executable + argv, never shell interpolation.
+        command,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+        shell=False,
+    )
+    if completed.returncode != 0:
+        # Do not copy stderr into generated audit/corpus metadata. Authentication
+        # remains inside gh and process diagnostics must not become model-visible.
+        raise CommandError(
+            f"{executable.name} failed with exit code {completed.returncode}"
+        )
+    return completed.stdout.strip()
 
 
 def allowed(actual_path: Path, relative_path: Path, max_bytes: int) -> tuple[bool, str]:
@@ -121,47 +192,60 @@ def config_has_sensitive_key(relative_path: Path, text: str) -> bool:
     return False
 
 
-def _force_remove_readonly(func, path, exc_info) -> None:
-    """Windows Git checkouts can contain read-only files; make them writable and retry."""
-    try:
-        os.chmod(path, stat.S_IWRITE)
-        func(path)
-    except OSError:
-        raise exc_info[1]
+def _force_remove_readonly(
+    function: Callable[[str], object],
+    path: str,
+    original_error: BaseException,
+) -> None:
+    """Make a Windows read-only checkout path writable and retry once."""
+    if not isinstance(original_error, PermissionError):
+        raise original_error
+    os.chmod(path, stat.S_IWRITE)
+    function(path)
 
 
 def remove_tree(path: Path) -> None:
-    if not path.exists():
-        return
-    # Python 3.12+ supports onexc; fall back to onerror for older interpreters.
-    try:
+    if path.exists():
         shutil.rmtree(path, onexc=_force_remove_readonly)
-    except TypeError:
-        shutil.rmtree(path, onerror=_force_remove_readonly)
+
+
+def _validated_repo_entry(entry: object) -> tuple[str, str, str]:
+    if not isinstance(entry, dict):
+        raise ValueError("repository manifest entry must be an object")
+    return (
+        validate_github_owner(entry.get("owner")),
+        validate_github_repository(entry.get("name")),
+        validate_git_branch(entry.get("default_branch")),
+    )
 
 
 def ensure_repo(owner: str, name: str, branch: str, root: Path) -> tuple[Path, str]:
+    owner = validate_github_owner(owner)
+    name = validate_github_repository(name)
+    branch = validate_git_branch(branch)
+    gh_executable = _resolve_executable("gh")
+    git_executable = _resolve_executable("git")
+
+    root = root.resolve()
     root.mkdir(parents=True, exist_ok=True)
-    # Always clone into a fresh unique directory. A previous interrupted run
-    # can therefore never block the next run with a stale non-empty checkout.
-    repo_dir = Path(tempfile.mkdtemp(prefix=f"{name}-", dir=root))
-    # gh repo clone requires the destination not to exist, so remove the empty
-    # directory created by mkdtemp and immediately reuse its unique pathname.
+    repo_dir = Path(tempfile.mkdtemp(prefix=f"{name}-", dir=root)).resolve()
     remove_tree(repo_dir)
 
-    if not shutil.which("gh"):
-        raise RuntimeError("gh CLI is required so GitHub authentication stays outside the corpus")
     try:
-        # Shallow + blob-filtered keeps temporary repo storage low. The working
-        # tree fetches only blobs actually needed for the current checkout.
-        run([
-            "gh", "repo", "clone", f"{owner}/{name}", str(repo_dir), "--",
-            "-c", "core.longpaths=true",
-            "--depth", "1", "--single-branch", "--branch", branch, "--filter=blob:none"
-        ])
-        sha = run(["git", "rev-parse", "HEAD"], cwd=repo_dir)
-        return repo_dir, sha
-    except Exception:
+        _run_checked(
+            gh_executable,
+            [
+                "repo", "clone", f"{owner}/{name}", str(repo_dir), "--",
+                "-c", "core.longpaths=true",
+                "--depth", "1", "--single-branch", "--branch", branch,
+                "--filter=blob:none",
+            ],
+        )
+        sha = _run_checked(git_executable, ["rev-parse", "HEAD"], cwd=repo_dir)
+        if not COMMIT_SHA_RE.fullmatch(sha):
+            raise CommandError("git returned an invalid commit SHA")
+        return repo_dir, sha.lower()
+    except (CommandError, OSError, subprocess.SubprocessError, ValueError):
         remove_tree(repo_dir)
         raise
 
@@ -184,6 +268,8 @@ def main() -> int:
         help="Keep temporary clones after harvesting. Default deletes each repo immediately.",
     )
     args = ap.parse_args()
+    if args.max_bytes <= 0:
+        ap.error("--max-bytes must be greater than zero")
 
     manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
     workspace = Path(args.workspace)
@@ -217,22 +303,45 @@ def main() -> int:
 
     with opener() as out:
         for entry in manifest["repositories"]:
-            if not entry.get("include", False):
-                continue
-            try:
-                repo_dir, sha = ensure_repo(
-                    entry["owner"], entry["name"], entry["default_branch"], workspace
-                )
-            except Exception as exc:
+            if not isinstance(entry, dict):
                 counts["repositories_failed"] += 1
                 failure = {
-                    "repository": entry["name"],
+                    "repository": "<invalid-manifest-entry>",
+                    "status": "FAILED",
+                    "error": "ValueError: repository manifest entry must be an object",
+                }
+                repo_summary.append(failure)
+                audit["repository_failures"].append(failure)
+                print("<invalid-manifest-entry>: FAILED — invalid manifest entry")
+                continue
+            if not entry.get("include", False):
+                continue
+
+            display_name = (
+                entry.get("name")
+                if isinstance(entry.get("name"), str)
+                else "<invalid-repository>"
+            )
+            try:
+                owner, name, default_branch = _validated_repo_entry(entry)
+                repo_dir, sha = ensure_repo(owner, name, default_branch, workspace)
+            except (
+                KeyError,
+                TypeError,
+                ValueError,
+                RuntimeError,
+                OSError,
+                subprocess.SubprocessError,
+            ) as exc:
+                counts["repositories_failed"] += 1
+                failure = {
+                    "repository": display_name,
                     "status": "FAILED",
                     "error": f"{type(exc).__name__}: {exc}",
                 }
                 repo_summary.append(failure)
                 audit["repository_failures"].append(failure)
-                print(f"{entry['name']}: FAILED — {type(exc).__name__}: {exc}")
+                print(f"{display_name}: FAILED — {type(exc).__name__}: {exc}")
                 continue
             accepted = skipped = sensitive = 0
             skip_reasons: dict[str, int] = {}
@@ -271,7 +380,7 @@ def main() -> int:
                     if sensitive_reason is not None:
                         sensitive += 1
                         audit["sensitive_rejections"].append({
-                            "repository": entry["name"],
+                            "repository": name,
                             "commit_sha": sha,
                             "path": rel.as_posix(),
                             "content_sha256": hashlib.sha256(raw).hexdigest(),
@@ -281,10 +390,10 @@ def main() -> int:
                     record = {
                         "schema_version": 1,
                         "kind": "authoritative_source_material",
-                        "owner": entry["owner"],
-                        "repository": entry["name"],
+                        "owner": owner,
+                        "repository": name,
                         "role": entry["role"],
-                        "default_branch": entry["default_branch"],
+                        "default_branch": default_branch,
                         "commit_sha": sha,
                         "path": rel.as_posix(),
                         "content_sha256": hashlib.sha256(raw).hexdigest(),
@@ -302,7 +411,7 @@ def main() -> int:
             counts["skipped_files"] += skipped
             counts["sensitive_rejected"] += sensitive
             repo_summary.append({
-                "repository": entry["name"],
+                "repository": name,
                 "commit_sha": sha,
                 "accepted_files": accepted,
                 "skipped_files": skipped,
@@ -313,7 +422,7 @@ def main() -> int:
                 f"{name}={count}" for name, count in sorted(skip_reasons.items())
             )
             print(
-                f"{entry['name']}: {accepted} accepted, {skipped} skipped, "
+                f"{name}: {accepted} accepted, {skipped} skipped, "
                 f"{sensitive} sensitive-rejected"
                 + (f" [{reasons}]" if reasons else "")
             )
