@@ -4,45 +4,26 @@ from __future__ import annotations
 import importlib.util
 import pathlib
 import sys
+import types
 import unittest
 from unittest import mock
 
 HERE = pathlib.Path(__file__).resolve().parent
-SPEC = importlib.util.spec_from_file_location(
-    "generation_benchmark",
-    HERE / "run_generation_benchmark.py",
-)
-assert SPEC is not None and SPEC.loader is not None
-mod = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(mod)
 
 
-
-BUILD_SPEC = importlib.util.spec_from_file_location(
-    "generation_jobs",
-    HERE / "build_generation_jobs.py",
-)
-assert BUILD_SPEC is not None and BUILD_SPEC.loader is not None
-jobs_mod = importlib.util.module_from_spec(BUILD_SPEC)
-BUILD_SPEC.loader.exec_module(jobs_mod)
-
-
-COLLECT_SPEC = importlib.util.spec_from_file_location(
-    "collect_github_sources",
-    HERE / "collect_github_sources.py",
-)
-assert COLLECT_SPEC is not None and COLLECT_SPEC.loader is not None
-collect_mod = importlib.util.module_from_spec(COLLECT_SPEC)
-COLLECT_SPEC.loader.exec_module(collect_mod)
+def _load_module(name: str, filename: str) -> types.ModuleType:
+    spec = importlib.util.spec_from_file_location(name, HERE / filename)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"unable to load bootstrap module: {filename}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
-PREFLIGHT_SPEC = importlib.util.spec_from_file_location(
-    "pc_preflight",
-    HERE / "pc_preflight.py",
-)
-assert PREFLIGHT_SPEC is not None and PREFLIGHT_SPEC.loader is not None
-preflight_mod = importlib.util.module_from_spec(PREFLIGHT_SPEC)
-PREFLIGHT_SPEC.loader.exec_module(preflight_mod)
+mod = _load_module("generation_benchmark", "run_generation_benchmark.py")
+jobs_mod = _load_module("generation_jobs", "build_generation_jobs.py")
+collect_mod = _load_module("collect_github_sources", "collect_github_sources.py")
+preflight_mod = _load_module("pc_preflight", "pc_preflight.py")
 
 
 class BootstrapSecurityTests(unittest.TestCase):

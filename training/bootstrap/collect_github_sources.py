@@ -102,7 +102,7 @@ def _run_checked(
     # Semgrep cannot prove the executable/arguments were validated above. This
     # exact call is argv-only, shell=False, and receives validated repo/ref data.
     completed = subprocess.run(  # nosec B603  # nosemgrep
-        command,
+        command,  # nosemgrep -- validated argv; Semgrep taint does not model validators.
         cwd=cwd,
         capture_output=True,
         text=True,

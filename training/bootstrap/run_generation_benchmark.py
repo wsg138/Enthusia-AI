@@ -484,7 +484,10 @@ def main() -> int:
                 result["latency_seconds"] = elapsed
                 result["raw_response"] = raw
                 try:
-                    parsed = json.loads(strip_code_fence(raw))
+                    parsed_value = json.loads(strip_code_fence(raw))
+                    if not isinstance(parsed_value, dict):
+                        raise TypeError("model response must be a JSON object")
+                    parsed = parsed_value
                     validation = validate_output(job, parsed)
                     if not validation and parsed.get("skip") is not True:
                         facts, assistant = _resolve_evidence(job, parsed)
@@ -503,7 +506,7 @@ def main() -> int:
                         stats["skipped"] += 1
                     else:
                         stats["valid"] += 1
-                except Exception as exc:
+                except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
                     result["validation_problems"] = [f"json_parse:{type(exc).__name__}"]
                     stats["invalid"] += 1
                     problems["json_parse"] = problems.get("json_parse", 0) + 1
