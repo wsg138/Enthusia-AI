@@ -90,8 +90,28 @@ function parseJson<T>(text: string, schema: z.ZodType<T>): T {
   return result.data;
 }
 
+const JSON_ESCAPES: Readonly<Record<string, string>> = {
+  '"': '\\"',
+  '\\': '\\\\',
+  '\b': '\\b',
+  '\f': '\\f',
+  '\n': '\\n',
+  '\r': '\\r',
+  '\t': '\\t',
+};
+
+function escapeJsonCharacter(value: string): string {
+  const known = JSON_ESCAPES[value];
+  if (known !== undefined) return known;
+  return '\\u' + value.charCodeAt(0).toString(16).padStart(4, '0');
+}
+
 function quoteJson(value: string): string {
-  return JSON.stringify(value);
+  const escaped = value.replace(
+    /["\\\u0000-\u001f]/g,
+    escapeJsonCharacter,
+  );
+  return '"' + escaped + '"';
 }
 
 function stableObjectJson(value: Record<string, unknown>): string {
@@ -101,17 +121,21 @@ function stableObjectJson(value: Record<string, unknown>): string {
   return '{' + fields.join(',') + '}';
 }
 
-function stableJson(value: unknown): string {
+function scalarJson(value: unknown): string | undefined {
   if (value === null || value === undefined) return 'null';
   if (typeof value === 'string') return quoteJson(value);
   if (typeof value === 'boolean') return value ? 'true' : 'false';
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? String(value) : 'null';
-  }
+  if (typeof value !== 'number') return undefined;
+  return Number.isFinite(value) ? String(value) : 'null';
+}
+
+function stableJson(value: unknown): string {
+  const scalar = scalarJson(value);
+  if (scalar !== undefined) return scalar;
   if (Array.isArray(value)) {
     return '[' + value.map((item) => stableJson(item)).join(',') + ']';
   }
-  if (typeof value === 'object') {
+  if (typeof value === 'object' && value !== null) {
     return stableObjectJson(value as Record<string, unknown>);
   }
   return 'null';
