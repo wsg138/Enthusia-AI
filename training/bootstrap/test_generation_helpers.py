@@ -35,6 +35,27 @@ class FormatterTests(unittest.TestCase):
             "/autoclick: toggle normal cooldown-based attacks",
         )
 
+    def test_command_table_detects_permission_column_by_shape(self) -> None:
+        raw = (
+            "| `/guild create <name> [banner]` | "
+            "`lumaguilds.guild.create` | Create a new guild | "
+            "`/guild create MyGuild diamond_banner` |"
+        )
+        self.assertEqual(
+            mod._clean_display_line(raw),
+            "/guild create <name> [banner]: Create a new guild "
+            "Permission: lumaguilds.guild.create "
+            "Example: /guild create MyGuild diamond_banner",
+        )
+
+    def test_yaml_usage_removes_color_codes_and_duplicate_usage(self) -> None:
+        self.assertEqual(
+            mod._clean_display_line(
+                'usage: "&eUsage: /itemshops search <item> [sell|buy|any] [page]"'
+            ),
+            "Usage: /itemshops search <item> [sell|buy|any] [page]",
+        )
+
     def test_resolve_evidence_keeps_raw_provenance(self) -> None:
         job = {
             "target_line": "/autoclick # toggle attacks",
