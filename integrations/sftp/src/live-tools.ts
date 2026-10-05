@@ -26,8 +26,18 @@ import type {
 
 const STAFF_TOOL_VISIBILITY = Visibility.STAFF;
 
+interface LiveToolDefinition {
+  meta: ToolMetadata;
+  keys: readonly string[];
+  invoke: (
+    gateway: LiveServerSourceGateway,
+    params: Readonly<Record<string, string>>,
+    options: LiveReadOptions,
+  ) => Promise<LiveSourceResult<unknown>>;
+}
+
 function liveReadOptions(ctx: ToolCallContext): LiveReadOptions {
-  return ctx.signal === undefined ? {} : liveReadOptions(ctx);
+  return ctx.signal === undefined ? {} : { signal: ctx.signal };
 }
 
 function stringParams(
@@ -35,6 +45,7 @@ function stringParams(
   keys: readonly string[],
 ): Record<string, string> | null {
   if (Object.keys(raw).some((key) => !keys.includes(key))) return null;
+
   const parsed: Record<string, string> = {};
   for (const key of keys) {
     const value = raw[key];
@@ -47,24 +58,22 @@ function stringParams(
 function parameterSchema(
   properties: Record<string, string>,
 ): ToolParametersSchema {
-  const schemaProperties: ToolParametersSchema['properties'] = {};
-  for (const [name, description] of Object.entries(properties)) {
-    schemaProperties[name] = { type: 'string', description };
-  }
   return {
     type: 'object',
-    properties: schemaProperties,
+    properties: Object.fromEntries(
+      Object.entries(properties).map(([name, description]) => [
+        name,
+        { type: 'string' as const, description },
+      ]),
+    ),
     required: Object.keys(properties),
   };
 }
 
 function staffAuthorized(ctx: ToolCallContext): boolean {
   const staffActor = ctx.actor.type === 'staff' || ctx.actor.type === 'system';
-  return staffActor && canDisclose(
-    STAFF_TOOL_VISIBILITY,
-    ctx.visibilityCeiling,
-    { isStaff: true },
-  );
+  if (!staffActor) return false;
+  return canDisclose(STAFF_TOOL_VISIBILITY, ctx.visibilityCeiling, { isStaff: true });
 }
 
 function safeError(
@@ -86,8 +95,9 @@ function safeError(
 }
 
 function collectionVersion(result: unknown): string {
-  const serialized = JSON.stringify(result);
-  return 'sha256:' + createHash('sha256').update(serialized, 'utf8').digest('hex');
+  return 'sha256:' + createHash('sha256')
+    .update(JSON.stringify(result), 'utf8')
+    .digest('hex');
 }
 
 function encodeFreshness(version: string, observedAt: string): string {
@@ -133,17 +143,124 @@ function toToolResult(
     visibility: STAFF_TOOL_VISIBILITY,
     correlationId: ctx.traceId,
     freshness: encodeFreshness(version, output.observedAt),
-    result: output.result,
+    result: {
+      server: output.server,
+      data: output.result,
+    },
   };
 }
 
-abstract class LiveSourceTool implements Tool<Record<string, unknown>> {
-  abstract readonly meta: ToolMetadata;
+function meta(
+  name: string,
+  description: string,
+  properties: Record<string, string>,
+): ToolMetadata {
+  return {
+    name,
+    description,
+    parameters: parameterSchema(properties),
+    verificationTier: 'A',
+    privacySensitive: true,
+    maxVisibility: STAFF_TOOL_VISIBILITY,
+  };
+}
 
-  constructor(protected readonly gateway: LiveServerSourceGateway) {}
+const DEFINITIONS: readonly LiveToolDefinition[] = [
+  {
+    meta: meta(
+      'server.list_plugins',
+      'List deployed plugin JAR identities in one configured plugin directory.',
+      {
+        serverId: 'Configured server identity.',
+        directoryId: 'Configured plugin-directory identity.',
+      },
+    ),
+    keys: ['serverId', 'directoryId'],
+    invoke: (gateway, params, options) => gateway.listPlugins(
+      params['serverId'] ?? '',
+      params['directoryId'] ?? '',
+      options,
+    ),
+  },
+  {
+    meta: meta(
+      'server.inspect_plugin',
+      'Inspect safe metadata from one deployed JAR selected by basename.',
+      {
+        serverId: 'Configured server identity.',
+        directoryId: 'Configured plugin-directory identity.',
+        fileName: 'JAR basename returned by server.list_plugins.',
+      },
+    ),
+    keys: ['serverId', 'directoryId', 'fileName'],
+    invoke: (gateway, params, options) => gateway.inspectPlugin(
+      params['serverId'] ?? '',
+      params['directoryId'] ?? '',
+      params['fileName'] ?? '',
+      options,
+    ),
+  },
+  {
+    meta: meta(
+      'server.discover_configs',
+      'Discover safe config-file identities below one configured directory.',
+      {
+        serverId: 'Configured server identity.',
+        directoryId: 'Configured config-directory identity.',
+      },
+    ),
+    keys: ['serverId', 'directoryId'],
+    invoke: (gateway, params, options) => gateway.discoverConfigs(
+      params['serverId'] ?? '',
+      params['directoryId'] ?? '',
+      options,
+    ),
+  },
+  {
+    meta: meta(
+      'server.read_approved_file',
+      'Read one explicitly configured server/config/deployment source by source ID.',
+      {
+        serverId: 'Configured server identity.',
+        sourceId: 'Configured approved-file identity. Filesystem paths are not accepted.',
+      },
+    ),
+    keys: ['serverId', 'sourceId'],
+    invoke: (gateway, params, options) => gateway.readApprovedFile(
+      params['serverId'] ?? '',
+      params['sourceId'] ?? '',
+      options,
+    ),
+  },
+];
 
-  protected rejectUnauthorized(ctx: ToolCallContext): ToolResult<unknown> | undefined {
-    if (staffAuthorized(ctx)) return undefined;
+class ConfiguredLiveSourceTool implements Tool<Record<string, unknown>> {
+  readonly meta: ToolMetadata;
+
+  constructor(
+    private readonly gateway: LiveServerSourceGateway,
+    private readonly definition: LiveToolDefinition,
+  ) {
+    this.meta = definition.meta;
+  }
+
+  async execute(
+    params: Record<string, unknown>,
+    ctx: ToolCallContext,
+  ): Promise<ToolResult<unknown>> {
+    if (!staffAuthorized(ctx)) return this.unauthorized(ctx);
+    const parsed = stringParams(params, this.definition.keys);
+    if (parsed === null) return this.invalidParams(ctx);
+
+    const output = await this.definition.invoke(
+      this.gateway,
+      parsed,
+      liveReadOptions(ctx),
+    );
+    return toToolResult(this.meta, ctx, output);
+  }
+
+  private unauthorized(ctx: ToolCallContext): ToolResult<unknown> {
     return safeError(
       this.meta.name,
       ctx,
@@ -154,7 +271,7 @@ abstract class LiveSourceTool implements Tool<Record<string, unknown>> {
     );
   }
 
-  protected invalidParams(ctx: ToolCallContext): ToolResult<unknown> {
+  private invalidParams(ctx: ToolCallContext): ToolResult<unknown> {
     return safeError(
       this.meta.name,
       ctx,
@@ -164,140 +281,6 @@ abstract class LiveSourceTool implements Tool<Record<string, unknown>> {
       false,
     );
   }
-
-  protected finish(
-    ctx: ToolCallContext,
-    output: LiveSourceResult<unknown>,
-  ): ToolResult<unknown> {
-    return toToolResult(this.meta, ctx, output);
-  }
-
-  abstract execute(
-    params: Record<string, unknown>,
-    ctx: ToolCallContext,
-  ): Promise<ToolResult<unknown>>;
-}
-
-class ListPluginsTool extends LiveSourceTool {
-  readonly meta: ToolMetadata = {
-    name: 'server.list_plugins',
-    description: 'List deployed plugin JAR identities in one configured plugin directory.',
-    parameters: parameterSchema({
-      serverId: 'Configured server identity.',
-      directoryId: 'Configured plugin-directory identity.',
-    }),
-    verificationTier: 'A',
-    privacySensitive: true,
-    maxVisibility: STAFF_TOOL_VISIBILITY,
-  };
-
-  async execute(
-    params: Record<string, unknown>,
-    ctx: ToolCallContext,
-  ): Promise<ToolResult<unknown>> {
-    const denied = this.rejectUnauthorized(ctx);
-    if (denied !== undefined) return denied;
-    const parsed = stringParams(params, ['serverId', 'directoryId']);
-    if (parsed === null) return this.invalidParams(ctx);
-    const output = await this.gateway.listPlugins(
-      parsed['serverId'] as string,
-      parsed['directoryId'] as string,
-      liveReadOptions(ctx),
-    );
-    return this.finish(ctx, output);
-  }
-}
-
-class InspectPluginTool extends LiveSourceTool {
-  readonly meta: ToolMetadata = {
-    name: 'server.inspect_plugin',
-    description: 'Inspect safe metadata from one deployed JAR selected by basename.',
-    parameters: parameterSchema({
-      serverId: 'Configured server identity.',
-      directoryId: 'Configured plugin-directory identity.',
-      fileName: 'JAR basename returned by server.list_plugins.',
-    }),
-    verificationTier: 'A',
-    privacySensitive: true,
-    maxVisibility: STAFF_TOOL_VISIBILITY,
-  };
-
-  async execute(
-    params: Record<string, unknown>,
-    ctx: ToolCallContext,
-  ): Promise<ToolResult<unknown>> {
-    const denied = this.rejectUnauthorized(ctx);
-    if (denied !== undefined) return denied;
-    const parsed = stringParams(params, ['serverId', 'directoryId', 'fileName']);
-    if (parsed === null) return this.invalidParams(ctx);
-    const output = await this.gateway.inspectPlugin(
-      parsed['serverId'] as string,
-      parsed['directoryId'] as string,
-      parsed['fileName'] as string,
-      liveReadOptions(ctx),
-    );
-    return this.finish(ctx, output);
-  }
-}
-
-class DiscoverConfigsTool extends LiveSourceTool {
-  readonly meta: ToolMetadata = {
-    name: 'server.discover_configs',
-    description: 'Discover safe config-file identities below one configured directory.',
-    parameters: parameterSchema({
-      serverId: 'Configured server identity.',
-      directoryId: 'Configured config-directory identity.',
-    }),
-    verificationTier: 'A',
-    privacySensitive: true,
-    maxVisibility: STAFF_TOOL_VISIBILITY,
-  };
-
-  async execute(
-    params: Record<string, unknown>,
-    ctx: ToolCallContext,
-  ): Promise<ToolResult<unknown>> {
-    const denied = this.rejectUnauthorized(ctx);
-    if (denied !== undefined) return denied;
-    const parsed = stringParams(params, ['serverId', 'directoryId']);
-    if (parsed === null) return this.invalidParams(ctx);
-    const output = await this.gateway.discoverConfigs(
-      parsed['serverId'] as string,
-      parsed['directoryId'] as string,
-      liveReadOptions(ctx),
-    );
-    return this.finish(ctx, output);
-  }
-}
-
-class ReadApprovedFileTool extends LiveSourceTool {
-  readonly meta: ToolMetadata = {
-    name: 'server.read_approved_file',
-    description: 'Read one explicitly configured server/config/deployment source by source ID.',
-    parameters: parameterSchema({
-      serverId: 'Configured server identity.',
-      sourceId: 'Configured approved-file identity. Filesystem paths are not accepted.',
-    }),
-    verificationTier: 'A',
-    privacySensitive: true,
-    maxVisibility: STAFF_TOOL_VISIBILITY,
-  };
-
-  async execute(
-    params: Record<string, unknown>,
-    ctx: ToolCallContext,
-  ): Promise<ToolResult<unknown>> {
-    const denied = this.rejectUnauthorized(ctx);
-    if (denied !== undefined) return denied;
-    const parsed = stringParams(params, ['serverId', 'sourceId']);
-    if (parsed === null) return this.invalidParams(ctx);
-    const output = await this.gateway.readApprovedFile(
-      parsed['serverId'] as string,
-      parsed['sourceId'] as string,
-      liveReadOptions(ctx),
-    );
-    return this.finish(ctx, output);
-  }
 }
 
 export class LiveServerSourceToolset {
@@ -305,12 +288,9 @@ export class LiveServerSourceToolset {
   private readonly byName: Map<string, Tool<Record<string, unknown>>>;
 
   constructor(gateway: LiveServerSourceGateway) {
-    this.tools = [
-      new ListPluginsTool(gateway),
-      new InspectPluginTool(gateway),
-      new DiscoverConfigsTool(gateway),
-      new ReadApprovedFileTool(gateway),
-    ];
+    this.tools = DEFINITIONS.map(
+      (definition) => new ConfiguredLiveSourceTool(gateway, definition),
+    );
     this.byName = new Map(this.tools.map((tool) => [tool.meta.name, tool]));
   }
 

@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import { Visibility } from '@enthusia/contracts';
 import { compileConfig } from '../src/config.js';
+import { parsePluginJar } from '../src/jar-metadata.js';
 import {
   LiveServerSourceGateway,
   type LiveSftpClientFactory,
@@ -329,6 +330,35 @@ describe('plugin intelligence primitives', () => {
     expect(out.ok).toBe(true);
     if (!out.ok) return;
     expect(out.result.plugin).toMatchObject({
+      status: 'MALFORMED',
+      metadataError: 'invalid-descriptor',
+    });
+  });
+});
+
+describe('bounded untrusted JAR metadata parsing', () => {
+  it('rejects an overlong descriptor line without dynamic-regex work', () => {
+    const jar = storedZip({
+      'plugin.yml': [
+        'name: ' + 'x'.repeat(20_000),
+        'version: 1.0.0',
+        'main: net.example.Main',
+      ].join('\n'),
+    });
+    const parsed = parsePluginJar(jar, 64 * 1024);
+
+    expect(parsed.plugin).toMatchObject({
+      status: 'MALFORMED',
+      metadataError: 'invalid-descriptor',
+    });
+  });
+
+  it('rejects excessive descriptor line counts within the byte budget', () => {
+    const lines = ['name: Example', 'version: 1.0.0', 'main: net.example.Main'];
+    for (let index = 0; index < 8_300; index += 1) lines.push('# filler');
+    const parsed = parsePluginJar(storedZip({ 'plugin.yml': lines.join('\n') }), 128 * 1024);
+
+    expect(parsed.plugin).toMatchObject({
       status: 'MALFORMED',
       metadataError: 'invalid-descriptor',
     });

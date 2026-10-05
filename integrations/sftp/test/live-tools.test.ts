@@ -47,6 +47,13 @@ function context(actor: Actor, ceiling = Visibility.STAFF): ToolCallContext {
   };
 }
 
+function contextWithSignal(actor: Actor, signal: AbortSignal): ToolCallContext {
+  return {
+    ...context(actor),
+    signal,
+  };
+}
+
 const STAFF: Actor = { id: 'staff-1', type: 'staff' };
 const PLAYER: Actor = { id: 'player-1', type: 'player' };
 
@@ -110,7 +117,28 @@ describe('live server source tool contract', () => {
     expect(connections).toBe(0);
   });
 
-  it('returns a provenance envelope with CURRENT freshness for authorized staff', async () => {
+  it('propagates cancellation through the typed tool without recursion', async () => {
+    const gateway = new LiveServerSourceGateway(
+      compiled(),
+      async () => new Promise<MockSftpServer>(() => undefined),
+    );
+    const tool = createLiveServerSourceTools(gateway).get('server.list_plugins')!;
+    const controller = new AbortController();
+
+    const pending = tool.execute(
+      { serverId: 'smp', directoryId: 'plugins' },
+      contextWithSignal(STAFF, controller.signal),
+    );
+    controller.abort();
+    const out = await pending;
+
+    expect(out.error).toMatchObject({
+      code: 'ABORTED',
+      retryable: false,
+    });
+  });
+
+  it('returns server identity, safe data, and CURRENT freshness for staff', async () => {
     const server = new MockSftpServer();
     server.writeFile(
       '/srv/smp/server.properties',
@@ -133,6 +161,9 @@ describe('live server source tool contract', () => {
     expect(out.source).toBe('sftp-live:smp');
     expect(out.visibility).toBe(Visibility.STAFF);
     expect(out.correlationId).toBe('trace-live-source');
+    expect(out.result).toMatchObject({
+      server: { id: 'smp', displayName: 'smp', environment: 'production' },
+    });
     expect(JSON.stringify(out.result)).not.toContain('TEST_ONLY_SECRET');
 
     const freshness = JSON.parse(out.freshness ?? '{}') as Record<string, unknown>;
