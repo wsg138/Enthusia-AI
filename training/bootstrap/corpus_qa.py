@@ -51,6 +51,299 @@ def bucket(path: str) -> str:
         return "build_config"
     return "other"
 
+def _new_state() -> dict:
+    return {
+        "repo_counts": collections.Counter(),
+        "role_counts": collections.Counter(),
+        "ext_counts": collections.Counter(),
+        "bucket_counts": collections.Counter(),
+        "authority_counts": collections.Counter(),
+        "file_sizes": [],
+        "char_total": 0,
+        "line_total": 0,
+        "exact_groups": collections.defaultdict(list),
+        "normalized_groups": collections.defaultdict(list),
+        "secret_hits": [],
+        "noise_candidates": [],
+        "per_repo_samples": collections.defaultdict(list),
+        "path_seen": set(),
+        "duplicate_path_records": [],
+    }
+
+
+def _record_duplicate_path(
+    state: dict,
+    key: tuple,
+    repository: str,
+    path: str,
+    line_number: int,
+) -> None:
+    if key in state["path_seen"]:
+        state["duplicate_path_records"].append(
+            {
+                "repository": repository,
+                "path": path,
+                "line": line_number,
+            }
+        )
+    state["path_seen"].add(key)
+
+
+def _update_distributions(
+    state: dict,
+    record: dict,
+    text: str,
+    repository: str,
+    path: str,
+) -> int:
+    raw_bytes = len(text.encode("utf-8"))
+    state["repo_counts"][repository] += 1
+    state["role_counts"][record.get("role", "unknown")] += 1
+    state["ext_counts"][suffix(path)] += 1
+    state["bucket_counts"][bucket(path)] += 1
+    state["authority_counts"][record.get("production_authority", "unknown")] += 1
+    state["file_sizes"].append((raw_bytes, repository, path))
+    state["char_total"] += len(text)
+    state["line_total"] += text.count("\n") + (1 if text else 0)
+    return raw_bytes
+
+
+def _update_duplicate_groups(
+    state: dict,
+    record: dict,
+    text: str,
+    repository: str,
+    path: str,
+    raw_bytes: int,
+) -> None:
+    exact_hash = record.get("content_sha256") or hashlib.sha256(
+        text.encode("utf-8")
+    ).hexdigest()
+    normalized_hash = hashlib.sha256(
+        normalized_text(text).encode("utf-8")
+    ).hexdigest()
+    meta = {"repository": repository, "path": path, "bytes": raw_bytes}
+    state["exact_groups"][exact_hash].append(meta)
+    state["normalized_groups"][normalized_hash].append(meta)
+
+
+def _secret_hit(text: str, repository: str, path: str) -> dict | None:
+    for label, pattern in SECRET_PATTERNS:
+        match = pattern.search(text)
+        if match is None:
+            continue
+        context_start = max(0, match.start() - 80)
+        context_end = min(len(text), match.end() + 80)
+        context = text[context_start:context_end]
+        before = context[: max(0, match.start() - context_start)]
+        after = context[match.end() - context_start :]
+        return {
+            "repository": repository,
+            "path": path,
+            "pattern": label,
+            "context_redacted": (before + "[REDACTED]" + after)
+            .replace("\n", "\\n")[:240],
+        }
+    return None
+
+
+def _noise_candidate(
+    path: str,
+    repository: str,
+    raw_bytes: int,
+) -> dict | None:
+    for label, pattern in NOISE_PATH_PATTERNS:
+        if pattern.search(path):
+            return {
+                "repository": repository,
+                "path": path,
+                "reason": label,
+                "bytes": raw_bytes,
+            }
+    return None
+
+
+def _append_sample(
+    state: dict,
+    record: dict,
+    text: str,
+    repository: str,
+    path: str,
+    raw_bytes: int,
+    sample_per_repo: int,
+) -> None:
+    samples = state["per_repo_samples"][repository]
+    if len(samples) >= sample_per_repo:
+        return
+    samples.append(
+        {
+            "repository": repository,
+            "role": record.get("role"),
+            "path": path,
+            "bytes": raw_bytes,
+            "content_preview": text[:1200],
+        }
+    )
+
+
+def _analyze_record(
+    state: dict,
+    record: dict,
+    line_number: int,
+    sample_per_repo: int,
+) -> None:
+    text = record.get("content", "")
+    repository = record["repository"]
+    path = record["path"]
+    key = (repository, record.get("commit_sha"), path)
+    _record_duplicate_path(state, key, repository, path, line_number)
+    raw_bytes = _update_distributions(state, record, text, repository, path)
+    _update_duplicate_groups(
+        state,
+        record,
+        text,
+        repository,
+        path,
+        raw_bytes,
+    )
+
+    secret = _secret_hit(text, repository, path)
+    if secret is not None:
+        state["secret_hits"].append(secret)
+    noise = _noise_candidate(path, repository, raw_bytes)
+    if noise is not None:
+        state["noise_candidates"].append(noise)
+    _append_sample(
+        state,
+        record,
+        text,
+        repository,
+        path,
+        raw_bytes,
+        sample_per_repo,
+    )
+
+
+def _duplicate_groups(groups: dict[str, list[dict]]) -> list[list[dict]]:
+    return [group for group in groups.values() if len(group) > 1]
+
+
+def _duplicate_summary(state: dict, total_files: int) -> dict:
+    exact_groups = _duplicate_groups(state["exact_groups"])
+    normalized_groups = _duplicate_groups(state["normalized_groups"])
+    exact_files = sum(len(group) - 1 for group in exact_groups)
+    normalized_files = sum(len(group) - 1 for group in normalized_groups)
+    return {
+        "unique_exact_contents": len(state["exact_groups"]),
+        "exact_duplicate_files_beyond_first": exact_files,
+        "exact_duplicate_ratio": exact_files / total_files if total_files else 0,
+        "unique_normalized_contents": len(state["normalized_groups"]),
+        "normalized_duplicate_files_beyond_first": normalized_files,
+        "normalized_duplicate_ratio": (
+            normalized_files / total_files if total_files else 0
+        ),
+        "duplicate_path_records": state["duplicate_path_records"][:100],
+        "largest_exact_duplicate_groups": sorted(
+            exact_groups,
+            key=len,
+            reverse=True,
+        )[:100],
+        "largest_normalized_duplicate_groups": sorted(
+            normalized_groups,
+            key=len,
+            reverse=True,
+        )[:100],
+    }
+
+
+def _build_report(corpus_path: Path, state: dict) -> dict:
+    total_files = sum(state["repo_counts"].values())
+    char_total = state["char_total"]
+    largest = sorted(state["file_sizes"], reverse=True)[:100]
+    return {
+        "schema_version": 1,
+        "corpus": str(corpus_path),
+        "totals": {
+            "files": total_files,
+            "repositories": len(state["repo_counts"]),
+            "characters": char_total,
+            "lines": state["line_total"],
+            "approx_tokens_chars_per_4": math.ceil(char_total / 4),
+            "approx_tokens_chars_per_3_5": math.ceil(char_total / 3.5),
+            "compressed_bytes": corpus_path.stat().st_size,
+        },
+        "distribution": {
+            "repositories": dict(state["repo_counts"].most_common()),
+            "roles": dict(state["role_counts"].most_common()),
+            "extensions": dict(state["ext_counts"].most_common()),
+            "content_buckets": dict(state["bucket_counts"].most_common()),
+            "production_authority": dict(state["authority_counts"].most_common()),
+        },
+        "duplicates": _duplicate_summary(state, total_files),
+        "security": {
+            "second_pass_secret_hits_count": len(state["secret_hits"]),
+            "second_pass_secret_hits": state["secret_hits"][:500],
+        },
+        "noise": {
+            "candidate_count": len(state["noise_candidates"]),
+            "candidates": state["noise_candidates"][:1000],
+        },
+        "largest_files": [
+            {"bytes": size, "repository": repository, "path": path}
+            for size, repository, path in largest
+        ],
+        "recommendation_inputs": {
+            "rag_source_files": total_files,
+            "direct_sft_files": 0,
+            "note": (
+                "This source corpus remains RAG/synthetic-grounding material. "
+                "Synthetic generation should preferentially use docs/config/source "
+                "evidence with provenance and current-truth rules."
+            ),
+        },
+    }
+
+
+def _write_samples(sample_path: Path, per_repo_samples: dict) -> None:
+    samples = [
+        item
+        for repository in sorted(per_repo_samples)
+        for item in per_repo_samples[repository]
+    ]
+    sample_path.write_text(
+        "\n".join(json.dumps(item, ensure_ascii=False) for item in samples) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _print_summary(
+    report: dict,
+    output_path: Path,
+    sample_path: Path,
+) -> None:
+    duplicates = report["duplicates"]
+    print(
+        json.dumps(
+            {
+                "files": report["totals"]["files"],
+                "repos": report["totals"]["repositories"],
+                "approx_tokens_4": report["totals"]["approx_tokens_chars_per_4"],
+                "exact_duplicate_files": duplicates[
+                    "exact_duplicate_files_beyond_first"
+                ],
+                "normalized_duplicate_files": duplicates[
+                    "normalized_duplicate_files_beyond_first"
+                ],
+                "secret_hits": report["security"]["second_pass_secret_hits_count"],
+                "noise_candidates": report["noise"]["candidate_count"],
+                "qa_report": str(output_path),
+                "sample_output": str(sample_path),
+            },
+            indent=2,
+        )
+    )
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--corpus", required=True)
@@ -65,167 +358,20 @@ def main() -> int:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     sample_path.parent.mkdir(parents=True, exist_ok=True)
 
-    repo_counts = collections.Counter()
-    role_counts = collections.Counter()
-    ext_counts = collections.Counter()
-    bucket_counts = collections.Counter()
-    authority_counts = collections.Counter()
-    file_sizes = []
-    char_total = 0
-    line_total = 0
-    exact_groups: dict[str, list[dict]] = collections.defaultdict(list)
-    normalized_groups: dict[str, list[dict]] = collections.defaultdict(list)
-    secret_hits = []
-    noise_candidates = []
-    per_repo_samples: dict[str, list[dict]] = collections.defaultdict(list)
-    path_seen = set()
-    duplicate_path_records = []
-
+    state = _new_state()
     with gzip.open(corpus_path, "rt", encoding="utf-8") as fh:
         for line_number, line in enumerate(fh, 1):
-            record = json.loads(line)
-            text = record.get("content", "")
-            repo = record["repository"]
-            path = record["path"]
-            key = (repo, record.get("commit_sha"), path)
-            if key in path_seen:
-                duplicate_path_records.append({"repository": repo, "path": path, "line": line_number})
-            path_seen.add(key)
+            _analyze_record(
+                state,
+                json.loads(line),
+                line_number,
+                args.sample_per_repo,
+            )
 
-            raw_bytes = len(text.encode("utf-8"))
-            chars = len(text)
-            lines = text.count("\n") + (1 if text else 0)
-            repo_counts[repo] += 1
-            role_counts[record.get("role", "unknown")] += 1
-            ext_counts[suffix(path)] += 1
-            bucket_counts[bucket(path)] += 1
-            authority_counts[record.get("production_authority", "unknown")] += 1
-            file_sizes.append((raw_bytes, repo, path))
-            char_total += chars
-            line_total += lines
-
-            exact = record.get("content_sha256") or hashlib.sha256(text.encode("utf-8")).hexdigest()
-            norm = hashlib.sha256(normalized_text(text).encode("utf-8")).hexdigest()
-            meta = {"repository": repo, "path": path, "bytes": raw_bytes}
-            exact_groups[exact].append(meta)
-            normalized_groups[norm].append(meta)
-
-            for label, pattern in SECRET_PATTERNS:
-                match = pattern.search(text)
-                if match:
-                    context_start = max(0, match.start() - 80)
-                    context_end = min(len(text), match.end() + 80)
-                    context = text[context_start:context_end]
-                    # Never write the matched secret itself into the report.
-                    redacted = context[: max(0, match.start()-context_start)] + "[REDACTED]" + context[(match.end()-context_start):]
-                    secret_hits.append({
-                        "repository": repo,
-                        "path": path,
-                        "pattern": label,
-                        "context_redacted": redacted.replace("\n", "\\n")[:240],
-                    })
-                    break
-
-            for label, pattern in NOISE_PATH_PATTERNS:
-                if pattern.search(path):
-                    noise_candidates.append({
-                        "repository": repo,
-                        "path": path,
-                        "reason": label,
-                        "bytes": raw_bytes,
-                    })
-                    break
-
-            samples = per_repo_samples[repo]
-            if len(samples) < args.sample_per_repo:
-                samples.append({
-                    "repository": repo,
-                    "role": record.get("role"),
-                    "path": path,
-                    "bytes": raw_bytes,
-                    "content_preview": text[:1200],
-                })
-
-    total_files = sum(repo_counts.values())
-    unique_exact = len(exact_groups)
-    unique_normalized = len(normalized_groups)
-    exact_dup_groups = [v for v in exact_groups.values() if len(v) > 1]
-    normalized_dup_groups = [v for v in normalized_groups.values() if len(v) > 1]
-
-    exact_duplicate_files = sum(len(g) - 1 for g in exact_dup_groups)
-    normalized_duplicate_files = sum(len(g) - 1 for g in normalized_dup_groups)
-
-    largest = sorted(file_sizes, reverse=True)[:100]
-    approx_tokens_4 = math.ceil(char_total / 4)
-    approx_tokens_3_5 = math.ceil(char_total / 3.5)
-
-    report = {
-        "schema_version": 1,
-        "corpus": str(corpus_path),
-        "totals": {
-            "files": total_files,
-            "repositories": len(repo_counts),
-            "characters": char_total,
-            "lines": line_total,
-            "approx_tokens_chars_per_4": approx_tokens_4,
-            "approx_tokens_chars_per_3_5": approx_tokens_3_5,
-            "compressed_bytes": corpus_path.stat().st_size,
-        },
-        "distribution": {
-            "repositories": dict(repo_counts.most_common()),
-            "roles": dict(role_counts.most_common()),
-            "extensions": dict(ext_counts.most_common()),
-            "content_buckets": dict(bucket_counts.most_common()),
-            "production_authority": dict(authority_counts.most_common()),
-        },
-        "duplicates": {
-            "unique_exact_contents": unique_exact,
-            "exact_duplicate_files_beyond_first": exact_duplicate_files,
-            "exact_duplicate_ratio": exact_duplicate_files / total_files if total_files else 0,
-            "unique_normalized_contents": unique_normalized,
-            "normalized_duplicate_files_beyond_first": normalized_duplicate_files,
-            "normalized_duplicate_ratio": normalized_duplicate_files / total_files if total_files else 0,
-            "duplicate_path_records": duplicate_path_records[:100],
-            "largest_exact_duplicate_groups": sorted(exact_dup_groups, key=len, reverse=True)[:100],
-            "largest_normalized_duplicate_groups": sorted(normalized_dup_groups, key=len, reverse=True)[:100],
-        },
-        "security": {
-            "second_pass_secret_hits_count": len(secret_hits),
-            "second_pass_secret_hits": secret_hits[:500],
-        },
-        "noise": {
-            "candidate_count": len(noise_candidates),
-            "candidates": noise_candidates[:1000],
-        },
-        "largest_files": [
-            {"bytes": size, "repository": repo, "path": path}
-            for size, repo, path in largest
-        ],
-        "recommendation_inputs": {
-            "rag_source_files": total_files,
-            "direct_sft_files": 0,
-            "note": "This source corpus remains RAG/synthetic-grounding material. Synthetic generation should preferentially use docs/config/source evidence with provenance and current-truth rules.",
-        },
-    }
-
+    report = _build_report(corpus_path, state)
     output_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
-    samples = [item for repo in sorted(per_repo_samples) for item in per_repo_samples[repo]]
-    sample_path.write_text(
-        "\n".join(json.dumps(item, ensure_ascii=False) for item in samples) + "\n",
-        encoding="utf-8",
-    )
-
-    print(json.dumps({
-        "files": total_files,
-        "repos": len(repo_counts),
-        "approx_tokens_4": approx_tokens_4,
-        "exact_duplicate_files": exact_duplicate_files,
-        "normalized_duplicate_files": normalized_duplicate_files,
-        "secret_hits": len(secret_hits),
-        "noise_candidates": len(noise_candidates),
-        "qa_report": str(output_path),
-        "sample_output": str(sample_path),
-    }, indent=2))
+    _write_samples(sample_path, state["per_repo_samples"])
+    _print_summary(report, output_path, sample_path)
     return 0
 
 if __name__ == "__main__":
