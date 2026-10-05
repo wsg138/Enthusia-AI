@@ -105,8 +105,8 @@ def path_score(record: dict) -> int:
         score -= 45
     if "cinematic-review" in lower or "/assets/" in lower:
         return -10_000
-    if "config-audit" in lower:
-        score -= 55
+    if "config-audit" in lower or lower.endswith("/implementation.md"):
+        return -10_000
     if "/.github/" in "/" + lower or lower.startswith(".github/"):
         score -= 25
     if "changelog" in lower:
@@ -126,6 +126,12 @@ def line_score(record: dict, line: str, base_score: int) -> int:
     if not (15 <= len(line) <= 500):
         return -10_000
     if "\ufffd" in line:
+        return -10_000
+    if ext in CONFIG_EXTS and line.lstrip().startswith("#"):
+        return -10_000
+    if "shaded" in lower and "relocated" in lower:
+        return -10_000
+    if re.search(r"\b[A-Z][A-Z0-9_]{4,}_OK\b", line):
         return -10_000
     if not re.search(r"[A-Za-z0-9]", line):
         return -10_000
