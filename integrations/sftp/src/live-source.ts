@@ -436,7 +436,7 @@ export class LiveServerSourceGateway {
     directoryId: string,
     options: LiveReadOptions = {},
   ): Promise<LiveSourceResult<PluginListResult>> {
-    return this.run(serverId, options, async (client, server, observedAt) => {
+    return this.run(serverId, options, async (client, server) => {
       const directory = this.pluginDirectory(server, directoryId);
       const extra = extraRulesFor(this.compiled, server, directory.path);
       const guarded = await DenyGuardSftpClient.forRoot(client, directory.path, extra);
@@ -481,7 +481,7 @@ export class LiveServerSourceGateway {
   ): Promise<LiveSourceResult<PluginInspectionResult>> {
     try {
       validateJarName(fileName);
-    } catch (error) {
+    } catch {
       const server = this.serverById(serverId);
       const observedAt = this.now().toISOString();
       return fail(identityFor(server, serverId), observedAt, 'INVALID_REQUEST', false);
@@ -531,7 +531,7 @@ export class LiveServerSourceGateway {
     directoryId: string,
     options: LiveReadOptions = {},
   ): Promise<LiveSourceResult<ConfigDiscoveryResult>> {
-    return this.run(serverId, options, async (client, server, observedAt) => {
+    return this.run(serverId, options, async (client, server) => {
       const directory = this.configDirectory(server, directoryId);
       const extra = extraRulesFor(this.compiled, server, directory.path);
       const guarded = await DenyGuardSftpClient.forRoot(client, directory.path, extra);
