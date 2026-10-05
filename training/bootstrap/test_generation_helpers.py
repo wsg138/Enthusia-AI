@@ -409,7 +409,7 @@ class NaturalResponseRegressionTests(unittest.TestCase):
             repository="EnthusiaEvents",
         )
         parsed = _parsed(
-            "What does the staff event reload command do?",
+            "Can I use the staff event tool?",
             "That's a staff-only tool, so you don't need those commands. "
             "Tell me what you're trying to do and I can help you find the player option.",
         )
@@ -425,6 +425,25 @@ class NaturalResponseRegressionTests(unittest.TestCase):
             "How do staff reload events?",
             "Use /ee reload to reload the configuration.",
         )
+        self.assertIn("staff_command_leak", mod.validate_output(job, parsed))
+
+    def test_staff_boundary_rejects_subcommand_without_slash(self) -> None:
+        job = _job(
+            ["Staff-only command: /ee reload reloads event configuration."],
+            visibility="staff", response_mode="player_boundary",
+        )
+        parsed = _parsed(
+            "Can I use the staff event tool?",
+            "That reload action is for staff. Tell me your player goal.",
+        )
+        self.assertIn("staff_subcommand_leak", mod.validate_output(job, parsed))
+
+    def test_staff_boundary_rejects_syntax_in_question(self) -> None:
+        job = _job(
+            ["Staff-only command: /ee reload reloads event configuration."],
+            visibility="staff", response_mode="player_boundary",
+        )
+        parsed = _parsed("Can I use /ee reload?", "That is staff-only.")
         self.assertIn("staff_command_leak", mod.validate_output(job, parsed))
 
     def test_good_stall_uses_context_without_inventing_earning_mechanism(self) -> None:
@@ -463,6 +482,13 @@ class NaturalResponseRegressionTests(unittest.TestCase):
         self.assertTrue(
             {"unsupported_number", "answer_not_fully_grounded"}.intersection(problems)
         )
+
+    def test_command_and_number_must_match_complete_literals(self) -> None:
+        job = _job(["/mailbox opens the mailbox after 10 seconds."])
+        parsed = _parsed("How do I open the mailbox?", "Use /mail after 1 second.")
+        problems = mod.validate_output(job, parsed)
+        self.assertIn("unsupported_command", problems)
+        self.assertIn("unsupported_number", problems)
 
     def test_unnecessary_permission_node_fails(self) -> None:
         job = _job([
@@ -531,11 +557,14 @@ class PersistenceAndReviewTests(unittest.TestCase):
         self.assertNotIn("prompt", envelope)
 
     def test_owner_review_requires_exactly_ten_attempts(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            path = pathlib.Path(temp_dir) / "results.jsonl"
+        with tempfile.NamedTemporaryFile(dir=HERE, suffix=".jsonl", delete=False) as handle:
+            path = pathlib.Path(handle.name)
+        try:
             path.write_text(json.dumps({"job_id": "one"}) + "\n", encoding="utf-8")
             with self.assertRaises(ValueError):
                 review_mod._load_results(str(path))
+        finally:
+            path.unlink()
 
     def test_converter_preserves_profile_mode_and_review_gate(self) -> None:
         job = _job(["/mail opens your mailbox."])
@@ -547,6 +576,75 @@ class PersistenceAndReviewTests(unittest.TestCase):
         self.assertEqual(record["familiarity_profile"], "novice")
         self.assertEqual(record["response_mode"], "player_support")
         self.assertEqual(record["admission_status"], "owner_review_required")
+
+    def test_converter_redacts_staff_details_from_training_messages(self) -> None:
+        job = _job(
+            [
+                "  Staff-only command: /ee reload reloads event configuration.  ",
+                "Permission: enthusiaevents.admin",
+            ],
+            visibility="staff", response_mode="player_boundary",
+        )
+        parsed = _parsed(
+            "Can I use the staff event tool?",
+            "That is a staff-only tool. Tell me your goal and I can suggest a player option.",
+        )
+        result = {
+            **mod._result_envelope(job),
+            "parsed": mod._attach_validated_fields(job, parsed),
+            "validation_problems": [],
+        }
+        record = convert_mod.convert(result)
+        self.assertIsNotNone(record)
+        training_text = json.dumps(record["messages"] + record["facts"])
+        self.assertNotIn("/ee", training_text)
+        self.assertNotIn("reload", training_text)
+        self.assertNotIn("enthusiaevents.admin", training_text)
+        self.assertEqual(record["provenance"]["source"], job["source_id"])
+        self.assertEqual(record["provenance"]["source_version"], job["source_version"])
+        self.assertEqual(record["provenance"]["path"], job["path"])
+        self.assertEqual(record["provenance"]["target_line"], job["target_line"])
+        self.assertEqual(record["provenance"]["evidence"], job["evidence"])
+        self.assertEqual(record["provenance"]["evidence_ranges"], job["evidence_ranges"])
+
+
+class EvidenceContractTests(unittest.TestCase):
+    def test_job_visibility_uses_original_heading_context(self) -> None:
+        record = {
+            "role": "minecraft_plugin", "repository": "Example",
+            "path": "README.md", "commit_sha": "abc",
+        }
+        lines = ["## Staff tools", "The event tool is for operators."]
+        job = jobs_mod._job_from_candidate(100, record, 1, lines, "novice")
+        self.assertEqual(job["visibility"], "staff")
+        self.assertEqual(job["response_mode"], "player_boundary")
+
+    def test_production_authority_cannot_be_strengthened_by_record(self) -> None:
+        record = {
+            "role": "minecraft_plugin", "repository": "Example-Staging",
+            "path": "docs/guide.md", "commit_sha": "abc",
+            "production_authority": "live_production",
+        }
+        job = jobs_mod._job_from_candidate(
+            100, record, 0, ["/event shows the event."], "novice",
+        )
+        self.assertEqual(job["production_authority"], "non_production_reference")
+
+    def test_evidence_window_counts_rendered_labels(self) -> None:
+        record = {"role": "minecraft_plugin", "path": "PLAYER_GUIDE.md"}
+        lines = ["/mail " + "x" * 190 for _ in range(20)]
+        _, _, text = jobs_mod.build_evidence_window(record, lines, 10)
+        self.assertLessEqual(len(text), 2400)
+
+    def test_candidate_keeps_exact_source_line_whitespace(self) -> None:
+        record = {
+            "role": "minecraft_plugin", "repository": "Example",
+            "path": "PLAYER_GUIDE.md", "commit_sha": "abc",
+            "content": "  /mail opens your mailbox.  \n",
+        }
+        candidate = jobs_mod._record_candidates(record)[0]
+        job = jobs_mod._job_from_candidate(*candidate, "novice")
+        self.assertEqual(job["evidence"][0]["text"], "  /mail opens your mailbox.  ")
 
 
 if __name__ == "__main__":

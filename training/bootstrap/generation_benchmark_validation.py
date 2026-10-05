@@ -33,8 +33,8 @@ EXPLICIT_PRODUCTION_RE = re.compile(
     r"active production)\b"
 )
 NONPRODUCTION_RE = re.compile(
-    r"(?i)\b(?:staging|test(?:ing)?|non[- ]production|not presently installed|"
-    r"not currently loaded|when deployed|next deployment)\b"
+    r"(?i)\b(?:staging|test(?:ing)?|non[- ]production|retained|historical|"
+    r"not presently installed|not currently loaded|when deployed|next deployment)\b"
 )
 QUALIFIED_DEPLOYMENT_RE = re.compile(
     r"(?i)\b(?:when|if|once) deployed\b|"
@@ -44,6 +44,9 @@ QUALIFIED_DEPLOYMENT_RE = re.compile(
 BACKEND_JARGON_RE = re.compile(
     r"(?i)\b(?:backend|database|sqlite|webhook|internal api|implementation detail|"
     r"service manager|credential|operator permission)\b"
+)
+STAFF_SUBCOMMAND_RE = re.compile(
+    r"(?i)(?<![\w/])/[a-z][a-z0-9_-]*\s+([a-z][a-z0-9_-]*)\b"
 )
 MECHANISM_CLAIM_RE = re.compile(
     r"(?i)\b(?:earn|get|gain|receive|awarded?|obtain)\b.{0,60}"
@@ -332,8 +335,24 @@ def _validate_evidence_window(job: dict, problems: list[str]) -> None:
     if not entries:
         problems.append("missing_evidence")
         return
-    if len(entries) > 12 or len(_evidence_text(job)) > 2400:
+    rendered = "\n".join(
+        f"L{entry.get('line_number')}: {entry.get('text', '')}" for entry in entries
+    )
+    if len(entries) > 12 or len(rendered) > 2400:
         problems.append("evidence_window_too_large")
+    if job.get("evidence_text") and job["evidence_text"] != rendered:
+        problems.append("evidence_text_mismatch")
+    numbers = [entry.get("line_number") for entry in entries]
+    if any(not isinstance(number, int) or number < 1 for number in numbers):
+        problems.append("invalid_evidence_lines")
+    elif numbers != sorted(set(numbers)):
+        problems.append("invalid_evidence_lines")
+    if job.get("line_number") not in numbers:
+        problems.append("target_line_number_missing")
+    if not isinstance(job.get("source_version"), str) or not job["source_version"]:
+        problems.append("missing_source_sha")
+    if not isinstance(job.get("path"), str) or not job["path"]:
+        problems.append("missing_source_path")
     target = job.get("target_line")
     if isinstance(target, str) and target not in [str(entry.get("text", "")) for entry in entries]:
         problems.append("target_not_in_evidence")
@@ -390,17 +409,19 @@ def _validate_secrets(parsed: dict, problems: list[str]) -> None:
 
 
 def _critical_literals_supported(assistant: str, support: str, problems: list[str]) -> None:
-    support_lower = support.lower()
+    support_commands = {command.lower() for command in COMMAND_RE.findall(support)}
+    support_numbers = set(NUMBER_RE.findall(support))
+    support_permissions = {node.lower() for node in PERMISSION_NODE_RE.findall(support)}
     for command in set(COMMAND_RE.findall(assistant)):
-        if command.lower() not in support_lower:
+        if command.lower() not in support_commands:
             problems.append("unsupported_command")
             break
     for number in set(NUMBER_RE.findall(assistant)):
-        if number not in support:
+        if number not in support_numbers:
             problems.append("unsupported_number")
             break
     for permission in set(PERMISSION_NODE_RE.findall(assistant)):
-        if permission.lower() not in support_lower:
+        if permission.lower() not in support_permissions:
             problems.append("unsupported_permission")
             break
 
@@ -449,12 +470,20 @@ def _validate_boundary(job: dict, parsed: dict, problems: list[str]) -> None:
     if job.get("response_mode") != "player_boundary":
         return
     assistant = str(parsed.get("assistant", ""))
-    if COMMAND_RE.search(assistant):
+    user = str(parsed.get("user", ""))
+    both = f"{user}\n{assistant}"
+    if COMMAND_RE.search(both):
         problems.append("staff_command_leak")
-    if PERMISSION_NODE_RE.search(assistant):
+    if PERMISSION_NODE_RE.search(both):
         problems.append("staff_permission_leak")
-    if BACKEND_JARGON_RE.search(assistant):
+    if BACKEND_JARGON_RE.search(both):
         problems.append("staff_backend_jargon_leak")
+    subcommands = {
+        match.group(1).lower()
+        for match in STAFF_SUBCOMMAND_RE.finditer(_evidence_text(job))
+    }
+    if any(re.search(rf"(?i)\b{re.escape(term)}\b", both) for term in subcommands):
+        problems.append("staff_subcommand_leak")
 
 
 def _validate_player_jargon(job: dict, parsed: dict, problems: list[str]) -> None:

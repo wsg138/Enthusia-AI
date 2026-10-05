@@ -24,6 +24,20 @@ def _facts(parsed: dict) -> list[dict]:
     return facts
 
 
+def _boundary_facts(parsed: dict) -> list[dict]:
+    facts = _facts(parsed)
+    if not facts:
+        return []
+    first = facts[0]
+    return [{
+        "claim": "Staff-only tools are outside normal player guidance.",
+        "source": first["source"],
+        "source_version": first["source_version"],
+        "line_number": first.get("line_number"),
+        "evidence": "Staff-only source; details withheld from training text.",
+    }]
+
+
 def _tags(parsed: dict) -> list[str]:
     profile = parsed.get("familiarity_profile")
     response_mode = parsed.get("response_mode")
@@ -39,7 +53,7 @@ def _tags(parsed: dict) -> list[str]:
     return list(dict.fromkeys(value for value in values if isinstance(value, str)))
 
 
-def _source_result(result: dict) -> dict:
+def _source_provenance(result: dict) -> dict:
     return {
         "source": result.get("source_id"),
         "source_version": result.get("source_version"),
@@ -54,11 +68,15 @@ def _source_result(result: dict) -> dict:
     }
 
 
-def _tool_message(result: dict) -> dict:
+def _tool_message(result: dict, boundary: bool) -> dict:
+    source = _source_provenance(result)
+    if boundary:
+        source["target_line"] = None
+        source["evidence"] = []
     return {
         "role": "tool",
         "content": json.dumps(
-            {"tool": KNOWLEDGE_TOOL, "result": _source_result(result)},
+            {"tool": KNOWLEDGE_TOOL, "result": source},
             ensure_ascii=False,
             sort_keys=True,
         ),
@@ -71,7 +89,8 @@ def convert(result: dict) -> dict | None:
     parsed = result.get("parsed")
     if not isinstance(parsed, dict) or parsed.get("skip") is True:
         return None
-    facts = _facts(parsed)
+    boundary = parsed.get("response_mode") == "player_boundary"
+    facts = _boundary_facts(parsed) if boundary else _facts(parsed)
     if not facts:
         return None
     job_id = result["job_id"]
@@ -86,7 +105,7 @@ def convert(result: dict) -> dict | None:
                 "role": "assistant",
                 "content": "I'll verify that against the current indexed source.",
             },
-            _tool_message(result),
+            _tool_message(result, boundary),
             {"role": "assistant", "content": parsed["assistant"]},
         ],
         "tools": [KNOWLEDGE_TOOL],
@@ -102,6 +121,7 @@ def convert(result: dict) -> dict | None:
         "source_id": result.get("source_id"),
         "source_version": result.get("source_version"),
         "evidence_ranges": result.get("evidence_ranges", []),
+        "provenance": _source_provenance(result),
         "familiarity_profile": parsed.get("familiarity_profile"),
         "response_mode": parsed.get("response_mode"),
         "production_authority": result.get("production_authority"),
