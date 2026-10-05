@@ -33,7 +33,9 @@ def _resolved_executable(name: str) -> Path | None:
 
 def run_command(executable: Path, arguments: list[str]) -> dict[str, object]:
     try:
-        completed = subprocess.run(  # nosec B603 -- resolved executable + argv, never shell interpolation.
+        # Semgrep cannot prove the executable was resolved locally. Arguments
+        # are internal argv values and shell interpolation is disabled.
+        completed = subprocess.run(  # nosec B603  # nosemgrep
             [str(executable), *arguments],
             capture_output=True,
             text=True,

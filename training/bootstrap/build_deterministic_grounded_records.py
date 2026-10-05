@@ -43,7 +43,6 @@ def derive_question(target_line: str, repository: str) -> tuple[str, str, list[s
     """
 
     line = target_line.strip()
-    lower = line.lower()
 
     # Markdown command table: command/syntax in first cell, description and
     # optional permission/example in later cells.
@@ -51,10 +50,12 @@ def derive_question(target_line: str, repository: str) -> tuple[str, str, list[s
         cells = _split_markdown_table_row(line)
         if cells and cells[0].startswith("/"):
             syntax = cells[0]
+            command_root = _command_root(syntax)
+            command_tag = command_root.lstrip("/") if command_root else "command"
             return (
                 f"What does {syntax} do?",
                 "commands",
-                ["command", _command_root(syntax).lstrip("/") if _command_root(syntax) else "command"],
+                ["command", command_tag],
             )
 
         # Two-column glossary/feature tables are safe when the first cell is a

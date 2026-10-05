@@ -57,6 +57,24 @@ class BootstrapSecurityTests(unittest.TestCase):
             "training/bootstrap-data-prep",
         )
 
+    def test_generation_endpoint_rejects_unsafe_schemes_and_credentials(self) -> None:
+        self.assertEqual(
+            mod._validated_endpoint("http://127.0.0.1:8091"),
+            "http://127.0.0.1:8091",
+        )
+        self.assertEqual(
+            mod._validated_endpoint("https://model.example.test:8443"),
+            "https://model.example.test:8443",
+        )
+        for endpoint in (
+            "file:///tmp/model.sock",
+            "ftp://model.example.test",
+            "https://user:secret@model.example.test",
+        ):
+            with self.subTest(endpoint=endpoint):
+                with self.assertRaises(ValueError):
+                    mod._validated_endpoint(endpoint)
+
     def test_github_coordinates_reject_option_and_path_injection(self) -> None:
         invalid_values = [
             (collect_mod.validate_github_owner, "wsg138;echo"),

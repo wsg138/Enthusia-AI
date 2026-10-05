@@ -203,7 +203,8 @@ def main() -> int:
             **synth_dedup,
         },
         "policy": {
-            "all_second_pass_secret_pattern_files_excluded": True,
+            # Boolean policy evidence, not a credential literal.
+            "all_second_pass_secret_pattern_files_excluded": True,  # nosec B105  # nosemgrep
             "exact_content_deduplicated": True,
             "synthetic_excludes_nonproduction_reference": True,
             "synthetic_excludes_test_and_test2_server_snapshots": True,

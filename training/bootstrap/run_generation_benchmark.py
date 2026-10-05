@@ -8,6 +8,7 @@ import json
 import re
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -35,6 +36,21 @@ def strip_code_fence(text: str) -> str:
         if text.rstrip().endswith(fence):
             text = text.rstrip()[:-3]
     return text.strip()
+
+def _validated_endpoint(endpoint: str) -> str:
+    parsed = urllib.parse.urlsplit(endpoint)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("--endpoint must use http:// or https:// with a host")
+    if parsed.username is not None or parsed.password is not None:
+        raise ValueError("--endpoint must not contain embedded credentials")
+    if parsed.query or parsed.fragment:
+        raise ValueError("--endpoint must not contain a query string or fragment")
+    try:
+        parsed.port
+    except ValueError as exc:
+        raise ValueError("--endpoint contains an invalid port") from exc
+    return endpoint.rstrip("/")
+
 
 def _split_markdown_table_row(text: str) -> list[str]:
     inner = text.strip().strip("|")
@@ -363,27 +379,40 @@ def request_json(
             "schema": _response_schema(job),
         },
     }
+    endpoint = _validated_endpoint(endpoint)
     req = urllib.request.Request(
-        endpoint.rstrip("/") + "/v1/chat/completions",
+        endpoint + "/v1/chat/completions",
         data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST",
     )
     started = time.perf_counter()
-    with urllib.request.urlopen(req, timeout=timeout) as response:
+    # The endpoint is restricted above to explicit HTTP(S); file/custom
+    # urllib schemes are rejected before this request is created.
+    with urllib.request.urlopen(req, timeout=timeout) as response:  # nosec B310  # nosemgrep
         data = json.loads(response.read().decode("utf-8"))
     return data["choices"][0]["message"]["content"], time.perf_counter() - started
+
+def _existing_job_id(line: str) -> str | None:
+    try:
+        parsed = json.loads(line)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    job_id = parsed.get("job_id")
+    return job_id if isinstance(job_id, str) and job_id else None
+
 
 def load_existing(path: Path) -> set[str]:
     if not path.exists():
         return set()
-    done = set()
+    done: set[str] = set()
     with path.open("r", encoding="utf-8") as fh:
         for line in fh:
-            try:
-                done.add(json.loads(line)["job_id"])
-            except Exception:
-                continue
+            job_id = _existing_job_id(line)
+            if job_id is not None:
+                done.add(job_id)
     return done
 
 def main() -> int:

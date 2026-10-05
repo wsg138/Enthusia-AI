@@ -99,7 +99,9 @@ def _run_checked(
     timeout: int = 600,
 ) -> str:
     command = [str(executable), *arguments]
-    completed = subprocess.run(  # nosec B603 -- resolved executable + argv, never shell interpolation.
+    # Semgrep cannot prove the executable/arguments were validated above. This
+    # exact call is argv-only, shell=False, and receives validated repo/ref data.
+    completed = subprocess.run(  # nosec B603  # nosemgrep
         command,
         cwd=cwd,
         capture_output=True,
