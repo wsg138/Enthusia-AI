@@ -379,6 +379,7 @@ def main() -> int:
         "latency_seconds_total": 0.0,
     }
     problems = {}
+    consecutive_request_errors = 0
 
     with output.open("a", encoding="utf-8") as out:
         for index, job in enumerate(selected, 1):
@@ -414,6 +415,7 @@ def main() -> int:
                         parsed["expected_actions"] = []
                     result["parsed"] = parsed
                     result["validation_problems"] = validation
+                    consecutive_request_errors = 0
                     if validation:
                         stats["invalid"] += 1
                         for problem in validation:
@@ -429,6 +431,7 @@ def main() -> int:
             except (urllib.error.URLError, TimeoutError, OSError, KeyError, json.JSONDecodeError) as exc:
                 result["request_error"] = f"{type(exc).__name__}: {exc}"
                 stats["request_errors"] += 1
+                consecutive_request_errors += 1
             out.write(json.dumps(result, ensure_ascii=False) + "\n")
             out.flush()
             print(
@@ -436,6 +439,12 @@ def main() -> int:
                 f"valid={stats['valid']} skip={stats['skipped']} invalid={stats['invalid']} "
                 f"errors={stats['request_errors']}"
             )
+            if consecutive_request_errors >= 3:
+                print(
+                    "Aborting benchmark after 3 consecutive request errors; "
+                    "local model server is unhealthy."
+                )
+                break
 
     completed = stats["valid"] + stats["skipped"] + stats["invalid"]
     summary = {
