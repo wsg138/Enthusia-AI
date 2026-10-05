@@ -211,6 +211,28 @@ def _question_is_grounded(job: dict, parsed: dict) -> bool:
         return True
     support_terms = _lexemes(semantic_support)
 
+    # Long concrete nouns are usually scope-bearing details. Do not allow the
+    # generated question to introduce one that is absent from the evidence.
+    # Keep a small allowlist of abstract framing terms that are safe semantic
+    # wrappers around explicit source evidence.
+    safe_abstract_terms = {
+        "permission", "permissions", "required", "needed",
+        "configuration", "configure", "configured",
+        "specific", "available", "current",
+    }
+    for term in question_terms:
+        if len(term) < 8 or term in safe_abstract_terms:
+            continue
+        if term in support_terms:
+            continue
+        if any(
+            support.startswith(term)
+            for support in support_terms
+            if len(support) >= len(term)
+        ):
+            continue
+        return False
+
     # _lexemes emits simple morphology stems. Match those directly and allow
     # one-way compound prefixes only for long terms. Never let short
     # substrings such as "ran" satisfy "rank".
