@@ -96,6 +96,8 @@ Evidence: deployed JAR metadata plus the fresh 2026-10-05 SMP startup/runtime lo
 - UnlimitedNameTags -> PacketEvents — runtime explicitly reports the hook active.
 - DiscordSRV -> LuckPerms / PlaceholderAPI / Multiverse-Core — runtime initialization explicitly enables these hooks.
 - WarzoneDuels -> CombatLogX — runtime explicitly reports combat-tag integration active.
+- EnthusiaCurrency -> Vault Economy — runtime reports EnthusiaCurrency registered as the Vault economy provider.
+- LumaGuilds -> EnthusiaCurrency/Vault — initial startup occurs before the provider exists, then LumaGuilds later successfully hooks the TokenEconomy provider.
 
 ## Runtime-degraded or disabled integrations/features
 

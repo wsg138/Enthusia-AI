@@ -19,7 +19,7 @@ Privacy rule: this document intentionally omits player names, UUIDs, IP addresse
 | WarzoneDuels Plan integration | UNAVAILABLE | runtime explicitly failed to load Plan DataExtension |
 | EnthusiaPlaytime Discord numeral role sync | INTERMITTENT | 3 retry warnings observed |
 | EnthusiaDonorNPCs name resolution | DEGRADED / NOISY | one donor identity repeatedly failed name lookup (60 warnings) |
-| LumaGuilds legacy Vault economy hook | NEEDS REVIEW | startup reports no Vault Economy provider; canonical guild-gold service may still operate independently |
+| LumaGuilds ↔ EnthusiaCurrency/Vault economy | ACTIVE AFTER STARTUP RETRY | LumaGuilds starts before the economy provider exists, then later hooks TokenEconomy after EnthusiaCurrency registers |
 | InteractiveChatDiscordSrvAddon resource pack | DEGRADED / FALLBACK | resource-pack download failed; addon loaded Default + local pack.zip |
 | InteractiveChat / DiscordSRV bridge | ACTIVE | runtime confirms hooks and inbound/outbound listeners |
 | EnthusiaStaffAuthorityBridge | ACTIVE WITH CONFLICTED LEGACY LINK | collector operates every minute; one legacy identity conflict is often preserved rather than overwritten |
@@ -120,20 +120,20 @@ Classification:
 - no evidence from this warning alone of broader DonorNPC failure;
 - candidate for targeted cleanup after higher-priority issues.
 
-## LumaGuilds Vault economy warning
+## LumaGuilds / EnthusiaCurrency economy startup ordering
 
-Observed:
+Observed sequence:
 
-- startup reports `No economy provider found! Guild Bank will not function without an economy plugin`.
-- Vault plugin itself is installed.
-- Current LumaGuilds source contains a legacy/compatibility Vault Economy path, while current canonical guild-gold operations use GuildGoldService.
-- Live config has `bank_mode: BOTH`, physical Raw Gold support, and virtual-bank fallback enabled.
+- 00:00:59 — LumaGuilds initially reports no Vault Economy provider.
+- 00:01:08 — EnthusiaCurrency reports that it registered itself as the Vault economy provider.
+- 05:46:22 — LumaGuilds reports `Successfully hooked into economy provider: TokenEconomy`.
 
 Classification:
 
-- NEEDS REVIEW before claiming the whole guild bank is broken.
-- The warning proves no Vault Economy provider was registered at that point; it does not by itself prove canonical guild gold storage is unavailable.
-- Player-facing answers should avoid claiming a specific broken bank path until a functional read-only/runtime check or stronger evidence resolves this.
+- ACTIVE after delayed provider registration/retry.
+- The early error is a startup-order transient, not evidence that the guild bank is currently down.
+- Player-facing support may treat the current economy-backed guild-bank path as available unless newer runtime evidence contradicts it.
+- Engineering follow-up may still reduce the alarming startup log or wire the provider deterministically on service registration.
 
 ## Safe retrieval behavior
 
