@@ -127,17 +127,32 @@ def _base_path_score(path: str) -> int:
     return 10 if ext in SOURCE_EXTS else 0
 
 
+def _is_current_server_path(record: dict, lower: str) -> bool:
+    return (
+        record["repository"] == "Enthusia-Server"
+        and lower.startswith(CURRENT_SERVER_PREFIXES)
+    )
+
+
+def _is_test_path(lower: str) -> bool:
+    return any(
+        marker in lower
+        for marker in ("/test/", "/tests/")
+    ) or lower.startswith("tests/")
+
+
+def _is_github_path(lower: str) -> bool:
+    return "/.github/" in "/" + lower or lower.startswith(".github/")
+
+
 def _path_score_adjustment(record: dict, lower: str) -> int:
-    adjustment = 25 if any(token in lower for token in HIGH_VALUE_PATH_TOKENS) else 0
-    if record["repository"] == "Enthusia-Server" and lower.startswith(CURRENT_SERVER_PREFIXES):
-        adjustment += 30
-    if "/test/" in lower or "/tests/" in lower or lower.startswith("tests/"):
-        adjustment -= 45
-    if "/.github/" in "/" + lower or lower.startswith(".github/"):
-        adjustment -= 25
-    if "changelog" in lower:
-        adjustment -= 15
-    return adjustment
+    return (
+        25 * int(any(token in lower for token in HIGH_VALUE_PATH_TOKENS))
+        + 30 * int(_is_current_server_path(record, lower))
+        - 45 * int(_is_test_path(lower))
+        - 25 * int(_is_github_path(lower))
+        - 15 * int("changelog" in lower)
+    )
 
 
 def path_score(record: dict) -> int:
@@ -161,21 +176,50 @@ def clean_candidate_line(raw_line: str) -> str:
     return raw_line.rstrip("\r").strip()
 
 
-def _line_is_rejected(line: str, lower: str, ext: str) -> bool:
-    if not 15 <= len(line) <= 500:
-        return True
+def _bad_line_length(line: str) -> bool:
+    return not 15 <= len(line) <= 500
+
+
+def _header_stub(line: str) -> bool:
     stripped = line.strip()
-    if stripped.endswith(":") and not stripped.startswith(("http://", "https://")):
-        return True
-    if "\ufffd" in line or ("shaded" in lower and "relocated" in lower):
-        return True
-    if ext in CONFIG_EXTS and line.lstrip().startswith("#"):
-        return True
-    if re.search(r"\b[A-Z][A-Z0-9_]{4,}_OK\b", line):
-        return True
-    if not re.search(r"[A-Za-z0-9]", line):
-        return True
+    return (
+        stripped.endswith(":")
+        and not stripped.startswith(("http://", "https://"))
+    )
+
+
+def _bad_text_marker(line: str, lower: str) -> bool:
+    has_shading_marker = "shaded" in lower and "relocated" in lower
+    return "\ufffd" in line or has_shading_marker
+
+
+def _config_comment(line: str, ext: str) -> bool:
+    return ext in CONFIG_EXTS and line.lstrip().startswith("#")
+
+
+def _status_marker(line: str) -> bool:
+    return bool(re.search(r"\b[A-Z][A-Z0-9_]{4,}_OK\b", line))
+
+
+def _missing_alphanumeric(line: str) -> bool:
+    return not bool(re.search(r"[A-Za-z0-9]", line))
+
+
+def _punctuation_only(line: str) -> bool:
     return bool(re.fullmatch(r"[{}\[\](),:;<>/\\|\x60~*#=+_. -]+", line))
+
+
+def _line_is_rejected(line: str, lower: str, ext: str) -> bool:
+    checks = (
+        _bad_line_length(line),
+        _header_stub(line),
+        _bad_text_marker(line, lower),
+        _config_comment(line, ext),
+        _status_marker(line),
+        _missing_alphanumeric(line),
+        _punctuation_only(line),
+    )
+    return any(checks)
 
 
 def _source_line_adjustment(line: str, lower: str, ext: str) -> int:
