@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import pathlib
 import sys
 import tempfile
@@ -362,8 +363,8 @@ class PersistenceAndReviewTests(unittest.TestCase):
         self.assertNotIn("prompt", envelope)
 
     def test_owner_review_requires_exactly_ten_attempts(self) -> None:
-        with tempfile.NamedTemporaryFile(dir=HERE, suffix=".jsonl", delete=False) as handle:
-            temp_name = handle.name
+        descriptor, temp_name = tempfile.mkstemp(dir=HERE, suffix=".jsonl")
+        os.close(descriptor)
         path = pathlib.Path(temp_name)
         try:
             path.write_text(json.dumps({"job_id": "one"}) + "\n", encoding="utf-8")

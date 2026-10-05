@@ -8,7 +8,7 @@ from training.bootstrap.test_generation_helpers import _job, _parsed, mod
 class NaturalResponseRegressionTests(unittest.TestCase):
     def test_mail_is_natural_and_permission_node_free(self) -> None:
         job = _job([
-            "/mail opens your mailbox. Arrows change pages; tabs change categories: "
+            "/mail opens your mailbox. Arrows change pages; tabs change categories: " +
             "packages, letters, announcements. Permission: enthusiaexpress.inbox"
         ], repository="Enthusia-Express")
         parsed = _parsed(
@@ -20,7 +20,7 @@ class NaturalResponseRegressionTests(unittest.TestCase):
 
     def test_event_answer_is_concise_and_grounded(self) -> None:
         job = _job([
-            "When deployed, /event shows the current event and phase, or reports that "
+            "When deployed, /event shows the current event and phase, or reports that " +
             "no event is running."
         ], repository="EnthusiaEvents")
         parsed = _parsed(
@@ -32,7 +32,7 @@ class NaturalResponseRegressionTests(unittest.TestCase):
 
     def test_event_requires_deployment_qualification(self) -> None:
         job = _job([
-            "When deployed, /event shows the current event and phase, or reports that "
+            "When deployed, /event shows the current event and phase, or reports that " +
             "no event is running."
         ], repository="EnthusiaEvents")
         parsed = _parsed(
