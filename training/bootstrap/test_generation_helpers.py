@@ -184,6 +184,45 @@ class SourceSelectionTests(unittest.TestCase):
             "staff",
         )
 
+
+
+    def test_developer_handoff_paths_are_excluded(self) -> None:
+        record = {
+            "role": "minecraft_plugin",
+            "repository": "EnthusiaLoreItems",
+            "path": "handoffs/0016-codacy-evidence-blocker.md",
+        }
+        self.assertLess(jobs_mod.path_score(record), 0)
+
+    def test_ai_agent_workspace_paths_are_excluded(self) -> None:
+        record = {
+            "role": "minecraft_plugin",
+            "repository": "PieCloak",
+            "path": "ai-agents/WORKSPACE-STATE.md",
+        }
+        self.assertLess(jobs_mod.path_score(record), 0)
+
+    def test_warzone_and_shopmarket_commands_are_staff_visibility(self) -> None:
+        record = {"role": "minecraft_plugin", "path": "README.md"}
+        self.assertEqual(
+            jobs_mod.source_visibility(record, "/warzone schedule enable"),
+            "staff",
+        )
+        self.assertEqual(
+            jobs_mod.source_visibility(record, "/shopmarket set <radius>"),
+            "staff",
+        )
+
+    def test_admin_docs_path_is_staff_visibility(self) -> None:
+        record = {
+            "role": "minecraft_plugin",
+            "path": "wiki/docs/admins/permissions.md",
+        }
+        self.assertEqual(
+            jobs_mod.source_visibility(record, "enthusiamarket.shop.help"),
+            "staff",
+        )
+
     def test_rule_question_requires_rule_evidence(self) -> None:
         job = {
             "target_line": "| **Gave Items/Money** | Fairly gave items or money |",
