@@ -16,10 +16,18 @@ export function liveServerIdentity(
   server: SftpServerConfig | undefined,
   requestedId: string,
 ): LiveServerIdentity {
+  if (server === undefined) {
+    return {
+      id: requestedId,
+      displayName: requestedId,
+      environment: 'unknown',
+    };
+  }
+  const live = server.liveSource;
   return {
-    id: server?.id ?? requestedId,
-    displayName: server?.liveSource?.displayName ?? server?.id ?? requestedId,
-    environment: server?.liveSource?.environment ?? 'unknown',
+    id: server.id,
+    displayName: live?.displayName ?? server.id,
+    environment: live?.environment ?? 'unknown',
   };
 }
 
@@ -55,6 +63,14 @@ export function liveProvenance(
   };
 }
 
+function assignStringField<T extends object>(
+  target: T,
+  key: keyof T,
+  value: string | undefined,
+): void {
+  if (value !== undefined) target[key] = value as T[keyof T];
+}
+
 export function buildArtifactIdentity(
   fileName: string,
   sha256: string,
@@ -66,9 +82,9 @@ export function buildArtifactIdentity(
     sha256,
     sizeBytes,
   };
-  if (build.buildVersion !== undefined) result.buildVersion = build.buildVersion;
-  if (build.buildId !== undefined) result.buildId = build.buildId;
-  if (build.buildTimestamp !== undefined) result.buildTimestamp = build.buildTimestamp;
+  assignStringField(result, 'buildVersion', build.buildVersion);
+  assignStringField(result, 'buildId', build.buildId);
+  assignStringField(result, 'buildTimestamp', build.buildTimestamp);
   return result;
 }
 
@@ -77,8 +93,8 @@ export function runtimePluginIdentity(
   build: JarBuildMetadata,
 ): PluginInspectionResult['runtimeIdentity'] {
   const result: NonNullable<PluginInspectionResult['runtimeIdentity']> = {};
-  if (plugin.version !== undefined) result.pluginVersion = plugin.version;
-  if (build.buildVersion !== undefined) result.buildVersion = build.buildVersion;
-  if (build.buildId !== undefined) result.buildId = build.buildId;
+  assignStringField(result, 'pluginVersion', plugin.version);
+  assignStringField(result, 'buildVersion', build.buildVersion);
+  assignStringField(result, 'buildId', build.buildId);
   return Object.keys(result).length === 0 ? null : result;
 }

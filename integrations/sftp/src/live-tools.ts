@@ -40,16 +40,31 @@ function liveReadOptions(ctx: ToolCallContext): LiveReadOptions {
   return ctx.signal === undefined ? {} : { signal: ctx.signal };
 }
 
+function hasOnlyKeys(
+  raw: Record<string, unknown>,
+  keys: readonly string[],
+): boolean {
+  return Object.keys(raw).every((key) => keys.includes(key));
+}
+
+function requiredString(
+  raw: Record<string, unknown>,
+  key: string,
+): string | undefined {
+  const value = raw[key];
+  if (typeof value !== 'string') return undefined;
+  return value.trim().length === 0 ? undefined : value;
+}
+
 function stringParams(
   raw: Record<string, unknown>,
   keys: readonly string[],
 ): Record<string, string> | null {
-  if (Object.keys(raw).some((key) => !keys.includes(key))) return null;
-
+  if (!hasOnlyKeys(raw, keys)) return null;
   const parsed: Record<string, string> = {};
   for (const key of keys) {
-    const value = raw[key];
-    if (typeof value !== 'string' || value.trim().length === 0) return null;
+    const value = requiredString(raw, key);
+    if (value === undefined) return null;
     parsed[key] = value;
   }
   return parsed;
@@ -70,9 +85,12 @@ function parameterSchema(
   };
 }
 
+function staffActor(ctx: ToolCallContext): boolean {
+  return ctx.actor.type === 'staff' || ctx.actor.type === 'system';
+}
+
 function staffAuthorized(ctx: ToolCallContext): boolean {
-  const staffActor = ctx.actor.type === 'staff' || ctx.actor.type === 'system';
-  if (!staffActor) return false;
+  if (!staffActor(ctx)) return false;
   return canDisclose(STAFF_TOOL_VISIBILITY, ctx.visibilityCeiling, { isStaff: true });
 }
 

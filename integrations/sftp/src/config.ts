@@ -214,19 +214,35 @@ function validateLiveServer(
   for (const path of livePaths(server)) validateLivePath(server, path, rules);
 }
 
+function compileRootDenyRules(
+  compiled: Map<string, readonly DenyRule[]>,
+  serverId: string,
+  root: SftpRootConfig,
+): void {
+  const patterns = root.extraDenyPatterns;
+  if (patterns === undefined) return;
+  if (patterns.length === 0) return;
+  compiled.set(
+    serverId + ':' + root.path,
+    compileExtraDenyPatterns(patterns),
+  );
+}
+
+function compileServerDenyRules(
+  compiled: Map<string, readonly DenyRule[]>,
+  server: SftpServerConfig,
+): void {
+  for (const root of server.roots) {
+    compileRootDenyRules(compiled, server.id, root);
+  }
+}
+
 function compileDenyRules(
   config: SftpIndexerConfig,
 ): Map<string, readonly DenyRule[]> {
   const compiled = new Map<string, readonly DenyRule[]>();
   for (const server of config.servers) {
-    for (const root of server.roots) {
-      const patterns = root.extraDenyPatterns;
-      if (patterns === undefined || patterns.length === 0) continue;
-      compiled.set(
-        server.id + ':' + root.path,
-        compileExtraDenyPatterns(patterns),
-      );
-    }
+    compileServerDenyRules(compiled, server);
   }
   return compiled;
 }

@@ -265,6 +265,22 @@ async function resolveSftpCredentials(
   }
 }
 
+function applyHostVerifier(
+  config: ConnectConfig,
+  expected: string | undefined,
+): void {
+  if (expected === undefined) return;
+  config.hostVerifier = (key: Buffer) => verifyPinnedHostKey(key, expected);
+}
+
+function applyCredentialField(
+  config: ConnectConfig,
+  key: 'privateKey' | 'passphrase' | 'password',
+  value: string | undefined,
+): void {
+  if (value !== undefined) config[key] = value;
+}
+
 function buildConnectConfig(
   options: SshConnectOptions,
   credentials: SftpCredentials,
@@ -275,13 +291,10 @@ function buildConnectConfig(
     username: credentials.username,
     readyTimeout: options.readyTimeoutMs,
   };
-  if (options.hostKeySha256 !== undefined) {
-    const expected = options.hostKeySha256;
-    config.hostVerifier = (key: Buffer) => verifyPinnedHostKey(key, expected);
-  }
-  if (credentials.privateKey !== undefined) config.privateKey = credentials.privateKey;
-  if (credentials.passphrase !== undefined) config.passphrase = credentials.passphrase;
-  if (credentials.password !== undefined) config.password = credentials.password;
+  applyHostVerifier(config, options.hostKeySha256);
+  applyCredentialField(config, 'privateKey', credentials.privateKey);
+  applyCredentialField(config, 'passphrase', credentials.passphrase);
+  applyCredentialField(config, 'password', credentials.password);
   return config;
 }
 
