@@ -81,7 +81,12 @@ function validateTicketEvidenceConfig(
   const missing: string[] = [];
   if (fields.sftpConfigPath === undefined) missing.push('ENTHUSIA_AGENT_SFTP_CONFIG_PATH');
   if (fields.ticketBotBaseUrl === undefined) missing.push('ENTHUSIA_AGENT_TICKET_BOT_BASE_URL');
-  if (fields.ticketBotApiKey === undefined) missing.push('ENTHUSIA_AGENT_TICKET_BOT_API_KEY');
+  if (
+    fields.ticketBotApiKey === undefined ||
+    fields.ticketBotApiKey.length < 32
+  ) {
+    missing.push('ENTHUSIA_AGENT_TICKET_BOT_API_KEY (>=32 chars)');
+  }
   if (fields.ticketWebhookSecret === undefined || fields.ticketWebhookSecret.length < 32) {
     missing.push('ENTHUSIA_AGENT_TICKET_WEBHOOK_SECRET (>=32 chars)');
   }
@@ -94,8 +99,11 @@ function validateTicketEvidenceConfig(
   if (fields.staffModerationBaseUrl === undefined) {
     missing.push('ENTHUSIA_AGENT_STAFF_MODERATION_BASE_URL');
   }
-  if (fields.staffModerationApiKey === undefined) {
-    missing.push('ENTHUSIA_AGENT_STAFF_MODERATION_API_KEY');
+  if (
+    fields.staffModerationApiKey === undefined ||
+    fields.staffModerationApiKey.length < 32
+  ) {
+    missing.push('ENTHUSIA_AGENT_STAFF_MODERATION_API_KEY (>=32 chars)');
   }
   if (missing.length > 0) {
     throw new Error(
