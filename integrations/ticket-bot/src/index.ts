@@ -32,6 +32,8 @@ export type {
   TicketPriority,
   TicketStatus,
   TicketBotCapabilities,
+  TicketEvidenceCapabilities,
+  TicketImageEvidence,
   ActionRequestInput,
   ActionRequestKind,
   ActionRequestParameters,
@@ -74,6 +76,7 @@ export { ticketToAgentContext } from './context.js';
 export type {
   AgentTicketContext,
   TicketContextAdapterOptions,
+  TranscriptAttachment,
   TranscriptLine,
 } from './context.js';
 
