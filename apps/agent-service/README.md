@@ -41,12 +41,21 @@ Current production-capable optional registration:
 
 - W09 live SFTP/current-state tools through
   `ENTHUSIA_AGENT_SFTP_CONFIG_PATH`;
+- W05/W11 topic-familiarity read through
+  `ENTHUSIA_AGENT_MEMORY_DB_PATH`;
 - W14 Ticket Bot tools through
   `ENTHUSIA_AGENT_TICKET_BOT_BASE_URL` +
   `ENTHUSIA_AGENT_TICKET_BOT_API_KEY`.
 
+Topic familiarity is registered only when an explicit persistent W05 SQLite
+path is configured. It uses `MemoryService.getCurrent()` exclusively, so
+SUPERSEDED, INVALID, STALE, and CONFLICTED revisions cannot shape explanation
+depth. The tool is subject-bound and returns only the compact
+`NEW | FAMILIAR | EXPERT | UNKNOWN` signal; underlying memory text is never
+returned to the model.
+
 Ticket Bot registration is fail-closed: the URL and API key must be configured
-together. When configured, only `ticket.get_context`,
+together. When configured, `ticket.capabilities`, `ticket.get_context`,
 `ticket.request_close`, and `ticket.request_escalation` are registered.
 Lifecycle operations remain action requests that the Ticket Bot independently
 authorizes and executes; the agent receives no direct ticket mutation primitive.
@@ -64,9 +73,10 @@ retrieval, memory, or training data.
 
 Unsupported or missing credential sources fail closed.
 
-Database and player-identity tools are not falsely registered just because
-their library contracts exist. Their production backends/capabilities must be
-configured and reviewed before they are added here.
+The broader database, full player-identity, and knowledge-retrieval toolsets
+are not falsely registered just because their library contracts exist. Their
+production backends/capabilities must be configured and reviewed before they
+are added here.
 
 ## Service authentication
 
