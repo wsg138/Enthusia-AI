@@ -25,6 +25,9 @@ export const agentServiceConfigSchema = z.object({
   maxBodyBytes: z.coerce.number().int().positive().default(65_536),
   sftpConfigPath: z.string().min(1).optional(),
   memoryPath: optionalText,
+  policyServerId: optionalText,
+  policySourceId: optionalText,
+  policyEnvironment: optionalText,
   ticketBotBaseUrl: optionalText,
   ticketBotApiKey: optionalText,
   ticketBotTimeoutMs: z.coerce.number().int().positive().max(30_000).default(10_000),
@@ -37,6 +40,21 @@ export interface AgentServiceConfig extends AgentServiceConfigFields {
   serviceName: string;
   serviceVersion: string;
   logLevel: AppConfig['logLevel'];
+}
+
+function validatePolicySource(fields: AgentServiceConfigFields): void {
+  const hasServer = fields.policyServerId !== undefined;
+  const hasSource = fields.policySourceId !== undefined;
+  if (hasServer !== hasSource) {
+    throw new Error(
+      'ENTHUSIA_AGENT_POLICY_SERVER_ID and ENTHUSIA_AGENT_POLICY_SOURCE_ID must be configured together.',
+    );
+  }
+  if (!hasServer && fields.policyEnvironment !== undefined) {
+    throw new Error(
+      'ENTHUSIA_AGENT_POLICY_ENVIRONMENT requires a configured policy source.',
+    );
+  }
 }
 
 function validateTicketBotPair(fields: AgentServiceConfigFields): void {
@@ -59,10 +77,14 @@ export function loadAgentServiceConfig(
     maxBodyBytes: env['ENTHUSIA_AGENT_MAX_BODY_BYTES'],
     sftpConfigPath: env['ENTHUSIA_AGENT_SFTP_CONFIG_PATH'],
     memoryPath: env['ENTHUSIA_AGENT_MEMORY_PATH'],
+    policyServerId: env['ENTHUSIA_AGENT_POLICY_SERVER_ID'],
+    policySourceId: env['ENTHUSIA_AGENT_POLICY_SOURCE_ID'],
+    policyEnvironment: env['ENTHUSIA_AGENT_POLICY_ENVIRONMENT'],
     ticketBotBaseUrl: env['ENTHUSIA_AGENT_TICKET_BOT_BASE_URL'],
     ticketBotApiKey: env['ENTHUSIA_AGENT_TICKET_BOT_API_KEY'],
     ticketBotTimeoutMs: env['ENTHUSIA_AGENT_TICKET_BOT_TIMEOUT_MS'],
   });
+  validatePolicySource(fields);
   validateTicketBotPair(fields);
 
   if (base.nodeEnv === 'production' && fields.apiKeys.length === 0) {
@@ -94,6 +116,12 @@ export function redactedAgentServiceConfig(
     maxBodyBytes: config.maxBodyBytes,
     sftpConfigured: config.sftpConfigPath !== undefined,
     memoryConfigured: config.memoryPath !== undefined,
+    policyConfigured:
+      config.policyServerId !== undefined && config.policySourceId !== undefined,
+    policyEnvironment:
+      config.policyServerId !== undefined
+        ? (config.policyEnvironment ?? 'production')
+        : undefined,
     ticketBotConfigured:
       config.ticketBotBaseUrl !== undefined && config.ticketBotApiKey !== undefined,
     ticketBotTimeoutMs: config.ticketBotTimeoutMs,
