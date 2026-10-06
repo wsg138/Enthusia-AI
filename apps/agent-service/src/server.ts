@@ -17,6 +17,8 @@ import type { AgentOrchestrator, ToolRegistry } from '@enthusia/agent-core';
 import type { InferenceClient } from '@enthusia/inference-adapter';
 import type { EnthusiaLogger } from '@enthusia/logging';
 import type { AgentServiceConfig } from './config.js';
+import type { StaleTicketDecisionService } from './stale-ticket.js';
+import { handleStaleTicketDecisionHttp } from './stale-ticket-http.js';
 
 export interface AgentServiceDeps {
   config: AgentServiceConfig;
@@ -24,6 +26,7 @@ export interface AgentServiceDeps {
   orchestrator: AgentOrchestrator;
   registry: ToolRegistry;
   inference: Pick<InferenceClient, 'getModels' | 'getMetrics'>;
+  staleTicketDecision?: Pick<StaleTicketDecisionService, 'decide'>;
   now?: () => number;
 }
 
@@ -324,6 +327,23 @@ async function handleProtectedRoute(
   }
   if (req.method === 'POST' && url.pathname === '/v1/agent/chat') {
     await handleChat(req, res, deps, state);
+    return;
+  }
+  if (
+    req.method === 'POST' &&
+    url.pathname === '/v1/ticket/stale-decision'
+  ) {
+    state.activeRequests += 1;
+    try {
+      await handleStaleTicketDecisionHttp(req, res, {
+        maxBodyBytes: deps.config.maxBodyBytes,
+        ...(deps.staleTicketDecision !== undefined
+          ? { service: deps.staleTicketDecision }
+          : {}),
+      });
+    } finally {
+      state.activeRequests -= 1;
+    }
     return;
   }
   sendJson(res, 404, {

@@ -102,7 +102,22 @@ afterEach(async () => {
   running = undefined;
 });
 
-async function start(): Promise<string> {
+async function start(
+  staleTicketDecision?: {
+    decide(
+      input: unknown,
+      traceId?: string,
+    ): Promise<{
+      decision:
+        | 'PING_PLAYER'
+        | 'PING_STAFF'
+        | 'KEEP_PAUSED'
+        | 'ESCALATE_STAFF'
+        | 'NO_ACTION';
+      reason: string;
+    }>;
+  },
+): Promise<string> {
   const registry = new ToolRegistry();
   const orchestrator = new AgentOrchestrator({
     reasoner: new NoFactReasoner(),
@@ -114,6 +129,7 @@ async function start(): Promise<string> {
     orchestrator,
     registry,
     inference: inference(),
+    ...(staleTicketDecision !== undefined ? { staleTicketDecision } : {}),
   });
   return 'http://127.0.0.1:' + running.port;
 }
@@ -179,4 +195,75 @@ describe('agent service', () => {
     expect(body.text).toContain('could not verify');
     expect(body.sources).toEqual([]);
   });
+  it('fails safely when stale ticket decision support is unavailable', async () => {
+    const baseUrl = await start();
+    const response = await fetch(baseUrl + '/v1/ticket/stale-decision', {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer agent-key',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        ticket: {
+          id: '12',
+          status: 'open',
+          category: 'support',
+          priority: 'normal',
+          ownerId: '100000000000000001',
+          assigneeIds: [],
+          lastMeaningfulActivityAt: '2026-09-27T00:00:00.000Z',
+          intentionalPause: false,
+          previousReminderCount: 0,
+          lastReminderAt: null,
+        },
+        messages: [],
+      }),
+    });
+    expect(response.status).toBe(503);
+  });
+
+  it('serves a validated stale ticket recommendation', async () => {
+    const baseUrl = await start({
+      async decide() {
+        return {
+          decision: 'PING_STAFF',
+          reason: 'The next ordinary action belongs to staff.',
+        };
+      },
+    });
+    const response = await fetch(baseUrl + '/v1/ticket/stale-decision', {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer agent-key',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        ticket: {
+          id: '12',
+          status: 'open',
+          category: 'support',
+          priority: 'normal',
+          ownerId: '100000000000000001',
+          assigneeIds: ['100000000000000002'],
+          lastMeaningfulActivityAt: '2026-09-27T00:00:00.000Z',
+          intentionalPause: false,
+          previousReminderCount: 0,
+          lastReminderAt: null,
+        },
+        messages: [
+          {
+            authorKind: 'player',
+            body: 'I uploaded the screenshot you asked for.',
+            createdAt: '2026-09-27T00:00:00.000Z',
+          },
+        ],
+      }),
+    });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      decision: 'PING_STAFF',
+      reason: 'The next ordinary action belongs to staff.',
+    });
+  });
+
 });

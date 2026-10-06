@@ -14,6 +14,7 @@ import {
   loadConfiguredSftpTools,
 } from './runtime.js';
 import { startAgentService } from './server.js';
+import { StaleTicketDecisionService } from './stale-ticket.js';
 
 async function main(): Promise<void> {
   const config = loadAgentServiceConfig();
@@ -35,6 +36,7 @@ async function main(): Promise<void> {
     logger,
   });
   const reasoner = new InferenceReasoner(inference);
+  const staleTicketDecision = new StaleTicketDecisionService(inference);
   const tools = await loadConfiguredSftpTools(config.sftpConfigPath);
   const runtime = createAgentRuntime(reasoner, tools);
 
@@ -44,6 +46,7 @@ async function main(): Promise<void> {
     orchestrator: runtime.orchestrator,
     registry: runtime.registry,
     inference,
+    staleTicketDecision,
   });
 
   logger.info(
