@@ -50,6 +50,19 @@ export interface TicketParticipant {
   displayName?: string;
 }
 
+/** Safe provenance metadata for a Ticket Bot attachment. */
+export interface TicketAttachment {
+  /** Stable Discord attachment id; never interpreted as a filesystem path. */
+  id: string;
+  /** Display filename only. */
+  name: string;
+  /** Declared MIME type when known. */
+  contentType?: string;
+  /** Declared attachment size in bytes. */
+  size: number;
+  source: 'discord';
+}
+
 /** A single message in a ticket transcript (Ticket Bot is the transcript authority). */
 export interface TicketMessage {
   id: string;
@@ -59,6 +72,11 @@ export interface TicketMessage {
   body: string;
   /** ISO-8601 timestamp. */
   createdAt: string;
+  /**
+   * Safe attachment metadata only. Older W14 deployments may omit this field.
+   * Fetchable URLs/bytes are intentionally not part of transcript context.
+   */
+  attachments?: TicketAttachment[];
 }
 
 /** Ticket state snapshot as reported by the Ticket Bot (read-only for AI). */
