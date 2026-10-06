@@ -38,6 +38,10 @@ export interface TicketEvidencePipelineInput {
   policyCatalog: VerifiedPolicyCatalog;
   policyAssessor: Pick<LocalPolicyConcernAssessor, 'assess'>;
   moderationState: AuthoritativeModerationState;
+  moderationStateResolver?: (input: {
+    target: string;
+    concerns: PolicyConcernAssessmentResult['concerns'];
+  }) => Promise<AuthoritativeModerationState>;
   ticketClient: Pick<TicketBotClient, 'requestAction'>;
   maxImages?: number;
   assessImage?: TicketImageAssessmentRunner;
@@ -85,14 +89,35 @@ export async function runTicketEvidencePipeline(
     };
   }
 
+  const moderationState = await resolveModerationState(
+    input,
+    target.value,
+    policyAssessment,
+  );
+  if (moderationState === null) {
+    return {
+      status: 'moderation_state_unavailable',
+      collection,
+      policyAssessment,
+      review: null,
+      delivery: null,
+    };
+  }
+
   const review = reviewTicketEvidence({
     ticket: input.ticket,
     imageEvidence: collection.assessments,
     concerns: policyAssessment.concerns,
     policyNeedsMoreContext: policyAssessment.needsMoreContext,
-    moderationState: input.moderationState,
+    moderationState,
   });
-  return finishReview(input, collection, policyAssessment, review);
+  return finishReview(
+    input,
+    collection,
+    policyAssessment,
+    review,
+    moderationState,
+  );
 }
 
 function preflightReview(
@@ -181,11 +206,30 @@ async function assessPolicy(
   }
 }
 
+async function resolveModerationState(
+  input: TicketEvidencePipelineInput,
+  target: string,
+  policyAssessment: PolicyConcernAssessmentResult,
+): Promise<AuthoritativeModerationState | null> {
+  if (input.moderationStateResolver === undefined) {
+    return input.moderationState;
+  }
+  try {
+    return await input.moderationStateResolver({
+      target,
+      concerns: policyAssessment.concerns,
+    });
+  } catch {
+    return null;
+  }
+}
+
 async function finishReview(
   input: TicketEvidencePipelineInput,
   collection: TicketImageCollectionResult,
   policyAssessment: PolicyConcernAssessmentResult,
   review: TicketEvidenceReviewResult,
+  moderationState: AuthoritativeModerationState,
 ): Promise<TicketEvidencePipelineResult> {
   if (!review.shouldEscalate) {
     return {
@@ -197,7 +241,7 @@ async function finishReview(
     };
   }
 
-  if (input.moderationState.availability !== 'verified') {
+  if (moderationState.availability !== 'verified') {
     return {
       status: 'moderation_state_unavailable',
       collection,
