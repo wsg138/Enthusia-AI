@@ -14,38 +14,38 @@ const PROVENANCE: CurrentPolicyProvenance = {
   sourceStatus: 'CURRENT',
 };
 
-const POLICY = `
-version: "2026-10-06.1"
-defaults:
-  reportable: true
-reasons:
-  - id: spam.low-level
-    family: spam
-    display-name: Low-level chat spam
-    severity: 10
-    examples: ["Repeated characters"]
-    ladder:
-      - label: Warning
-        sanctions:
-          - { type: WARNING, duration: instant }
-  - id: exploit.major-abuse
-    family: exploit
-    display-name: Major exploit abuse
-    severity: 85
-    ladder:
-      - label: Permanent ban
-        sanctions:
-          - { type: NETWORK_BAN, duration: permanent }
-  - id: internal.not-reportable
-    family: internal
-    display-name: Internal-only reason
-    severity: 100
-    reportable: false
-    ladder:
-      - label: Secret action
-        sanctions:
-          - { type: NETWORK_BAN, duration: permanent }
-`;
+const POLICY = [
+  'version: "2026-10-06.1"',
+  'defaults:',
+  '  reportable: true',
+  'reasons:',
+  '  - id: spam.low-level',
+  '    family: spam',
+  '    display-name: Low-level chat spam',
+  '    severity: 10',
+  '    examples: ["Repeated characters"]',
+  '    ladder:',
+  '      - label: Warning',
+  '        sanctions:',
+  '          - { type: WARNING, duration: instant }',
+  '  - id: exploit.major-abuse',
+  '    family: exploit',
+  '    display-name: Major exploit abuse',
+  '    severity: 85',
+  '    ladder:',
+  '      - label: Permanent ban',
+  '        sanctions:',
+  '          - { type: NETWORK_BAN, duration: permanent }',
+  '  - id: internal.not-reportable',
+  '    family: internal',
+  '    display-name: Internal-only reason',
+  '    severity: 100',
+  '    reportable: false',
+  '    ladder:',
+  '      - label: Secret action',
+  '        sanctions:',
+  '          - { type: NETWORK_BAN, duration: permanent }',
+].join('\n')
 
 describe('parseCurrentReasonPolicyCatalog', () => {
   it('projects current reportable reasons without punishment ladders', () => {
@@ -138,16 +138,16 @@ describe('parseCurrentReasonPolicyCatalog', () => {
   });
 
   it('requires at least one reportable reason', () => {
-    const none = `
-version: "v1"
-defaults:
-  reportable: false
-reasons:
-  - id: internal.only
-    family: internal
-    display-name: Internal only
-    severity: 50
-`;
+    const none = [
+      'version: "v1"',
+      'defaults:',
+      '  reportable: false',
+      'reasons:',
+      '  - id: internal.only',
+      '    family: internal',
+      '    display-name: Internal only',
+      '    severity: 50',
+    ].join('\n')
     expect(() => parseCurrentReasonPolicyCatalog(none, PROVENANCE)).toThrow(
       /no reportable reasons/,
     );
