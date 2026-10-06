@@ -644,8 +644,8 @@ describe('ticket tools', () => {
   });
 
   it('ticket.get_context returns a §16.2 provenance envelope', async () => {
-    const [tool] = createTicketTools(makeClient());
-    const result = await tool!.execute({ ticketId: 'T-1234' }, ctxFor(Visibility.STAFF));
+    const tool = createTicketTools(makeClient()).find((item) => item.meta.name === 'ticket.get_context')!;
+    const result = await tool.execute({ ticketId: 'T-1234' }, ctxFor(Visibility.STAFF));
     expect(result.toolName).toBe('ticket.get_context');
     expect(result.source).toBe('ticket-bot');
     expect(result.correlationId).toBe('trace-tools-1');
@@ -656,8 +656,8 @@ describe('ticket tools', () => {
   });
 
   it('ticket.get_context allows the ticket owner at PLAYER_SELF visibility', async () => {
-    const [tool] = createTicketTools(makeClient());
-    const result = await tool!.execute(
+    const tool = createTicketTools(makeClient()).find((item) => item.meta.name === 'ticket.get_context')!;
+    const result = await tool.execute(
       { ticketId: 'T-1234' },
       ctxFor(Visibility.PLAYER_SELF, { id: OWNER.id, type: 'player' }),
     );
@@ -666,8 +666,8 @@ describe('ticket tools', () => {
   });
 
   it('ticket.get_context denies another player even with a sufficient ceiling', async () => {
-    const [tool] = createTicketTools(makeClient());
-    const result = await tool!.execute(
+    const tool = createTicketTools(makeClient()).find((item) => item.meta.name === 'ticket.get_context')!;
+    const result = await tool.execute(
       { ticketId: 'T-1234' },
       ctxFor(Visibility.PLAYER_SELF, { id: 'other-player', type: 'player' }),
     );
@@ -677,8 +677,8 @@ describe('ticket tools', () => {
   });
 
   it('ticket.get_context refuses a ceiling below PLAYER_SELF', async () => {
-    const [tool] = createTicketTools(makeClient());
-    const result = await tool!.execute({ ticketId: 'T-1234' }, ctxFor(Visibility.PUBLIC));
+    const tool = createTicketTools(makeClient()).find((item) => item.meta.name === 'ticket.get_context')!;
+    const result = await tool.execute({ ticketId: 'T-1234' }, ctxFor(Visibility.PUBLIC));
     expect(result.result).toBeUndefined();
     expect(result.error?.code).toBe('VISIBILITY_DENIED');
     expect(result.error?.retryable).toBe(false);
@@ -723,8 +723,8 @@ describe('ticket tools', () => {
   });
 
   it('tool failures surface as error envelopes (never throw)', async () => {
-    const [tool] = createTicketTools(makeClient());
-    const result = await tool!.execute({ ticketId: 'NOPE' }, ctxFor(Visibility.STAFF));
+    const tool = createTicketTools(makeClient()).find((item) => item.meta.name === 'ticket.get_context')!;
+    const result = await tool.execute({ ticketId: 'NOPE' }, ctxFor(Visibility.STAFF));
     expect(result.result).toBeUndefined();
     expect(result.error?.code).toBe('NOT_FOUND');
     expect(result.error?.retryable).toBe(false);
