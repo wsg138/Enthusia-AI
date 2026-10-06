@@ -70,10 +70,23 @@ export class TicketEventIngress {
       };
     }
 
-    const result = await this.reviewer.review(
-      event.ticketId,
-      traceIdForEvent(event.eventId),
-    );
+    let result: TicketEvidenceRuntimeResult;
+    try {
+      result = await this.reviewer.review(
+        event.ticketId,
+        traceIdForEvent(event.eventId),
+      );
+    } catch {
+      return {
+        status: 503,
+        body: {
+          accepted: false,
+          eventType: event.type,
+          reviewStatus: 'evidence_runtime_unavailable',
+          retryable: true,
+        },
+      };
+    }
     return {
       status: result.retryable ? 503 : 200,
       body: {
