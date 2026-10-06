@@ -25,6 +25,7 @@ import {
   TICKET_EVIDENCE_REQUEST_ALLOWLIST,
 } from '../src/evidence-client.js';
 import { ticketToAgentContext } from '../src/context.js';
+import { ticketReportTarget } from '../src/report-target.js';
 import {
   TicketEventRouter,
   parseTicketEvent,
@@ -352,6 +353,48 @@ describe('TicketBotClient capabilities', () => {
         ),
     });
     await expect(client.getCapabilities()).rejects.toThrow(/incompatible capability contract/);
+  });
+});
+
+describe('ticket report target metadata', () => {
+  it('accepts only the bounded report target projection', () => {
+    expect(ticketReportTarget({
+      ...TICKET,
+      category: 'report',
+      metadata: {
+        reportTarget: {
+          kind: 'minecraft_username',
+          value: 'Bad_Player',
+        },
+      },
+    })).toEqual({
+      kind: 'minecraft_username',
+      value: 'Bad_Player',
+    });
+  });
+
+  it('fails closed for missing, malformed, or non-report metadata', () => {
+    expect(ticketReportTarget(TICKET)).toBeNull();
+    expect(ticketReportTarget({
+      ...TICKET,
+      category: 'report',
+      metadata: {
+        reportTarget: {
+          kind: 'minecraft_username',
+          value: '../bad',
+        },
+      },
+    })).toBeNull();
+    expect(ticketReportTarget({
+      ...TICKET,
+      category: 'support',
+      metadata: {
+        reportTarget: {
+          kind: 'minecraft_username',
+          value: 'ValidName',
+        },
+      },
+    })).toBeNull();
   });
 });
 
