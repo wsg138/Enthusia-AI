@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import {
   AgentOrchestrator,
   ToolRegistry,
+  type OrchestratorDeps,
   type Reasoner,
   type Tool,
 } from '@enthusia/agent-core';
@@ -30,14 +31,26 @@ export interface TicketBotRuntimeConfig {
   timeoutMs: number;
 }
 
+export type AgentRuntimeOptions = Pick<
+  OrchestratorDeps,
+  'onVerifiedTopicHelp'
+>;
+
 export function createAgentRuntime(
   reasoner: Reasoner,
   tools: Tool[] = [],
+  options: AgentRuntimeOptions = {},
 ): AgentRuntime {
   const registry = new ToolRegistry();
   for (const tool of tools) registry.register(tool);
   return {
-    orchestrator: new AgentOrchestrator({ reasoner, registry }),
+    orchestrator: new AgentOrchestrator({
+      reasoner,
+      registry,
+      ...(options.onVerifiedTopicHelp !== undefined
+        ? { onVerifiedTopicHelp: options.onVerifiedTopicHelp }
+        : {}),
+    }),
     registry,
     registeredTools: registry.list().map((tool) => tool.name),
   };
