@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { z } from 'zod';
 
 /**
@@ -45,8 +44,6 @@ import type {
   TicketParticipant,
   TicketStatus,
   TicketBotCapabilities,
-  TicketEvidenceCapabilities,
-  TicketImageEvidence,
 } from './types.js';
 
 export type {
@@ -65,8 +62,6 @@ export type {
   TicketParticipant,
   TicketStatus,
   TicketBotCapabilities,
-  TicketEvidenceCapabilities,
-  TicketImageEvidence,
 };
 
 /** Identity Enthusia AI presents to the Ticket Bot in action requests. */
@@ -74,14 +69,6 @@ export const AI_REQUESTED_BY = 'enthusia-ai/ticket-integration';
 
 /** Service name used in error provenance. */
 export const TICKET_BOT_SERVICE = 'ticket-bot';
-
-const ticketEvidenceCapabilitiesSchema = z.strictObject({
-  service: z.literal('enthusia-support-bot'),
-  api: z.literal('ticket-evidence'),
-  contractVersion: z.literal('evidence-v1'),
-  reads: z.array(z.literal('attachment.image')),
-  maxImageBytes: z.number().int().positive().max(8 * 1024 * 1024),
-});
 
 const ticketBotCapabilitiesSchema = z.strictObject({
   service: z.literal('enthusia-support-bot'),
@@ -136,15 +123,10 @@ interface AllowedTarget {
  */
 export const TICKET_BOT_REQUEST_ALLOWLIST: readonly AllowedTarget[] = [
   { method: 'GET', path: /^\/v1\/capabilities$/ },
-  { method: 'GET', path: /^\/v1\/evidence\/capabilities$/ },
   { method: 'GET', path: /^\/v1\/tickets$/ },
   { method: 'GET', path: /^\/v1\/tickets\/[^/]+$/ },
   { method: 'GET', path: /^\/v1\/tickets\/[^/]+\/messages$/ },
   { method: 'GET', path: /^\/v1\/tickets\/[^/]+\/participants$/ },
-  {
-    method: 'GET',
-    path: /^\/v1\/tickets\/[^/]+\/messages\/[^/]+\/attachments\/[^/]+\/image$/,
-  },
   { method: 'POST', path: /^\/v1\/tickets\/[^/]+\/actions\/request$/ },
   { method: 'GET', path: /^\/v1\/actions\/requests\/[^/]+$/ },
 ] as const;
@@ -214,53 +196,6 @@ export class TicketBotClient {
       );
     }
     return parsed.data;
-  }
-
-  /**
-   * Ask the deployed Ticket Bot whether bounded image-evidence reads are
-   * available. This is separate from the W14 lifecycle capability contract.
-   */
-  async getEvidenceCapabilities(): Promise<TicketEvidenceCapabilities> {
-    const raw = await this.get<unknown>('/v1/evidence/capabilities');
-    const parsed = ticketEvidenceCapabilitiesSchema.safeParse(raw);
-    if (!parsed.success) {
-      throw new ExternalServiceError(
-        TICKET_BOT_SERVICE,
-        'Deployed Ticket Bot returned an incompatible evidence capability contract.',
-      );
-    }
-    return parsed.data;
-  }
-
-  /**
-   * Fetch one ticket-scoped image by opaque provenance ids.
-   *
-   * No URL is accepted from the caller. The Ticket Bot resolves and validates
-   * the live Discord attachment and returns bytes with provenance headers.
-   */
-  async getTicketImageEvidence(
-    ticketId: string,
-    messageId: string,
-    attachmentId: string,
-  ): Promise<TicketImageEvidence> {
-    const capabilities = await this.getEvidenceCapabilities();
-    if (!capabilities.reads.includes('attachment.image')) {
-      throw new ExternalServiceError(
-        TICKET_BOT_SERVICE,
-        'Deployed Ticket Bot does not advertise image evidence reads.',
-      );
-    }
-
-    const path =
-      `/v1/tickets/${encodeURIComponent(ticketId)}` +
-      `/messages/${encodeURIComponent(messageId)}` +
-      `/attachments/${encodeURIComponent(attachmentId)}/image`;
-    const response = await this.sendRaw('GET', path);
-    return readImageEvidenceResponse(
-      response,
-      { ticketId, messageId, attachmentId },
-      capabilities.maxImageBytes,
-    );
   }
 
   /** Fetch one ticket by id (read-only). */
@@ -453,34 +388,6 @@ export class TicketBotClient {
     return this.send<T>('POST', pathWithQuery, body);
   }
 
-  private async sendRaw(
-    method: 'GET',
-    pathWithQuery: string,
-  ): Promise<Response> {
-    const { path } = splitPath(pathWithQuery);
-    assertAllowedRequest(method, path);
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-    const headers: Record<string, string> = {
-      Accept: 'application/octet-stream, image/*',
-      Authorization: `Bearer ${this.apiKey}`,
-      'User-Agent': this.userAgent,
-    };
-
-    try {
-      return await this.fetchImpl(`${this.baseUrl}${pathWithQuery}`, {
-        method,
-        headers,
-        signal: controller.signal,
-      });
-    } catch (err) {
-      throw toTicketBotError(err);
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
   private async send<T>(
     method: 'GET' | 'POST',
     pathWithQuery: string,
@@ -543,120 +450,6 @@ export class TicketBotClient {
         );
     }
   }
-}
-
-async function readImageEvidenceResponse(
-  response: Response,
-  expected: { ticketId: string; messageId: string; attachmentId: string },
-  maximumBytes: number,
-): Promise<TicketImageEvidence> {
-  await requireSuccessfulEvidenceResponse(response);
-  const contentType = evidenceContentType(response);
-  const provenance = evidenceProvenance(response, expected);
-  validateDeclaredEvidenceLength(response, maximumBytes);
-
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  validateEvidenceBytes(bytes, maximumBytes);
-  validateEvidenceHash(bytes, provenance.sha256);
-
-  return {
-    ticketId: expected.ticketId,
-    messageId: expected.messageId,
-    attachmentId: expected.attachmentId,
-    contentType,
-    size: bytes.byteLength,
-    sha256: provenance.sha256,
-    bytes,
-  };
-}
-
-async function requireSuccessfulEvidenceResponse(
-  response: Response,
-): Promise<void> {
-  if (response.ok) return;
-  const detail = await safeErrorBody(response);
-  throw new ExternalServiceError(
-    TICKET_BOT_SERVICE,
-    `Ticket image evidence read failed with status ${response.status}: ${detail}`,
-  );
-}
-
-function evidenceContentType(response: Response): string {
-  const contentType = (response.headers.get('content-type') ?? '')
-    .split(';')[0]!
-    .trim()
-    .toLowerCase();
-  if (contentType.startsWith('image/')) return contentType;
-  throw new ExternalServiceError(
-    TICKET_BOT_SERVICE,
-    'Ticket evidence response was not an image.',
-  );
-}
-
-function evidenceProvenance(
-  response: Response,
-  expected: { ticketId: string; messageId: string; attachmentId: string },
-): { sha256: string } {
-  const ticketId = response.headers.get('x-enthusia-ticket-id') ?? '';
-  const messageId = response.headers.get('x-enthusia-message-id') ?? '';
-  const attachmentId = response.headers.get('x-enthusia-attachment-id') ?? '';
-  const sha256 = (response.headers.get('x-enthusia-content-sha256') ?? '')
-    .toLowerCase();
-
-  requireTicketMatch(ticketId, expected.ticketId);
-  if (messageId !== expected.messageId || attachmentId !== expected.attachmentId) {
-    throw new ExternalServiceError(
-      TICKET_BOT_SERVICE,
-      'Ticket evidence provenance did not match the requested attachment.',
-    );
-  }
-  if (!/^[a-f0-9]{64}$/.test(sha256)) {
-    throw new ExternalServiceError(
-      TICKET_BOT_SERVICE,
-      'Ticket evidence response did not include a valid content hash.',
-    );
-  }
-  return { sha256 };
-}
-
-function requireTicketMatch(actual: string, expected: string): void {
-  if (actual === expected || actual === expected.replace(/^T-/i, '')) return;
-  throw new ExternalServiceError(
-    TICKET_BOT_SERVICE,
-    'Ticket evidence provenance did not match the requested ticket.',
-  );
-}
-
-function validateDeclaredEvidenceLength(
-  response: Response,
-  maximumBytes: number,
-): void {
-  const declaredLength = Number(response.headers.get('content-length') ?? '0');
-  if (!Number.isFinite(declaredLength) || declaredLength <= maximumBytes) return;
-  throw new ExternalServiceError(
-    TICKET_BOT_SERVICE,
-    'Ticket evidence response exceeded the advertised size limit.',
-  );
-}
-
-function validateEvidenceBytes(
-  bytes: Uint8Array,
-  maximumBytes: number,
-): void {
-  if (bytes.byteLength >= 1 && bytes.byteLength <= maximumBytes) return;
-  throw new ExternalServiceError(
-    TICKET_BOT_SERVICE,
-    'Ticket evidence response exceeded the advertised size limit.',
-  );
-}
-
-function validateEvidenceHash(bytes: Uint8Array, expectedHash: string): void {
-  const actualHash = createHash('sha256').update(bytes).digest('hex');
-  if (actualHash === expectedHash) return;
-  throw new ExternalServiceError(
-    TICKET_BOT_SERVICE,
-    'Ticket evidence content hash did not match its provenance header.',
-  );
 }
 
 function splitPath(pathWithQuery: string): { path: string } {
