@@ -69,7 +69,7 @@ export function parseCurrentReasonPolicyCatalog(
 
   let raw: unknown;
   try {
-    raw = load(text, { json: true });
+    raw = load(text);
   } catch {
     throw new PolicyCatalogValidationError(
       'Moderation policy catalog is not valid YAML.',
