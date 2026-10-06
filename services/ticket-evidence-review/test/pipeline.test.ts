@@ -281,6 +281,41 @@ describe('runTicketEvidencePipeline', () => {
     expect(state.requestAction).not.toHaveBeenCalled();
   });
 
+  it('resolves authoritative moderation state after verified policy concerns exist', async () => {
+    const state = input({
+      moderationState: moderation('unavailable'),
+    });
+    const resolver = vi.fn(async () => moderation('verified'));
+    state.value.moderationStateResolver = resolver;
+
+    const result = await runTicketEvidencePipeline(state.value);
+
+    expect(resolver).toHaveBeenCalledTimes(1);
+    expect(resolver).toHaveBeenCalledWith({
+      target: 'Bad_Player',
+      concerns: [concern()],
+    });
+    expect(result.status).toBe('staff_escalation_submitted');
+    expect(result.review?.moderationState.availability).toBe('verified');
+    expect(state.requestAction).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed when post-policy authoritative moderation resolution fails', async () => {
+    const state = input({
+      moderationState: moderation('unavailable'),
+    });
+    state.value.moderationStateResolver = vi.fn(async () => {
+      throw new Error('private Staff API transport detail');
+    });
+
+    const result = await runTicketEvidencePipeline(state.value);
+
+    expect(result.status).toBe('moderation_state_unavailable');
+    expect(result.review).toBeNull();
+    expect(result.delivery).toBeNull();
+    expect(state.requestAction).not.toHaveBeenCalled();
+  });
+
   it('holds a valid staff review when authoritative moderation state is unavailable', async () => {
     const state = input({
       moderationState: moderation('unavailable'),
