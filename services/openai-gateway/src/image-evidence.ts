@@ -9,6 +9,7 @@ import {
   type VisionImageContentType,
 } from './openai-client.js';
 import { estimateTokens } from './packet-format.js';
+import { stableJson } from './stable-json.js';
 
 export const MAX_VISION_IMAGE_BYTES = 8 * 1024 * 1024;
 export const MAX_IMAGE_OBSERVATIONS = 20;
@@ -123,18 +124,12 @@ export async function runImageEvidenceAssessment(
     maxOutputTokens,
   );
 
-  const client = configuredClient(config, deps.client);
-  const completion = await client.imageChatCompletion({
+  const completion = await runVisionCompletion({
+    client: configuredClient(config, deps.client),
+    input,
     model,
-    systemPrompt: prompts.systemPrompt,
-    userPrompt: prompts.userPrompt,
-    image: {
-      bytes: input.image.bytes,
-      contentType: input.image.contentType,
-      detail: 'high',
-    },
+    prompts,
     maxOutputTokens,
-    temperature: 0,
   });
   const assessment = parseImageEvidenceAssessment(completion.content);
   const usage = tracker.recordUsage({
@@ -153,6 +148,27 @@ export async function runImageEvidenceAssessment(
     usage: completion.usage,
     estimatedCostUsd: usage.estimatedCostUsd,
   };
+}
+
+async function runVisionCompletion(input: {
+  client: OpenAIClient;
+  input: RunImageEvidenceInput;
+  model: string;
+  prompts: { systemPrompt: string; userPrompt: string };
+  maxOutputTokens: number;
+}) {
+  return input.client.imageChatCompletion({
+    model: input.model,
+    systemPrompt: input.prompts.systemPrompt,
+    userPrompt: input.prompts.userPrompt,
+    image: {
+      bytes: input.input.image.bytes,
+      contentType: input.input.image.contentType,
+      detail: 'high',
+    },
+    maxOutputTokens: input.maxOutputTokens,
+    temperature: 0,
+  });
 }
 
 function configuredClient(
@@ -235,7 +251,7 @@ function imageEvidencePrompts(input: RunImageEvidenceInput): {
       'Do not invent context outside the image.',
       'When the image is cropped, blurry, ambiguous, or insufficient, say so in limitations and set needsMoreContext=true.',
     ].join('\n'),
-    userPrompt: JSON.stringify({
+    userPrompt: stableJson({
       task: 'observe_ticket_image_evidence',
       evidence: {
         ref: input.evidenceRef,
