@@ -24,6 +24,7 @@
 // Domain types
 export type {
   Ticket,
+  TicketAttachment,
   TicketCategory,
   TicketContextBundle,
   TicketContextFetchOptions,
