@@ -21,7 +21,11 @@ import {
 } from '@enthusia/inference-adapter';
 import { createLogger } from '@enthusia/logging';
 import type { AgentServiceConfig } from '../src/config.js';
-import { startAgentService, type RunningAgentService } from '../src/server.js';
+import {
+  startAgentService,
+  type AgentServiceDeps,
+  type RunningAgentService,
+} from '../src/server.js';
 
 class NoFactReasoner implements Reasoner {
   async classifyIntent(): Promise<IntentClassification> {
@@ -123,15 +127,7 @@ async function start(
       reason: string;
     }>;
   },
-  ticketEventIngress?: {
-    handle(
-      rawBody: Buffer,
-      signature: string | undefined,
-    ): Promise<{
-      status: number;
-      body: Record<string, unknown>;
-    }>;
-  },
+  ticketEventIngress?: AgentServiceDeps['ticketEventIngress'],
 ): Promise<string> {
   const registry = new ToolRegistry();
   const orchestrator = new AgentOrchestrator({
