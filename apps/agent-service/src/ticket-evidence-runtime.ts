@@ -9,7 +9,6 @@ import {
 } from '@enthusia/integration-ticket-bot';
 import {
   StaffModerationStateClient,
-  type StaffModerationStateSnapshot,
 } from '@enthusia/integration-staff-moderation';
 import type { LiveServerSourceGateway } from '@enthusia/integration-sftp';
 import {
@@ -19,8 +18,10 @@ import {
   staffSnapshotToModerationState,
   unavailableModerationState,
   type LivePolicyCatalogSource,
+  type EvidencePolicyConcern,
   type TicketEvidencePipelineResult,
   type TicketEvidencePipelineStatus,
+  type TicketImageAssessmentRunner,
 } from '@enthusia/ticket-evidence-review';
 
 export type TicketEvidenceRuntimeStatus =
@@ -37,12 +38,13 @@ export interface TicketEvidenceRuntimeResult {
 }
 
 export interface TicketEvidenceReviewRuntimeDeps {
-  ticketClient: TicketBotClient;
-  evidenceClient: TicketEvidenceClient;
-  staffClient: StaffModerationStateClient;
+  ticketClient: Pick<TicketBotClient, 'getTicketContext' | 'requestAction'>;
+  evidenceClient: Pick<TicketEvidenceClient, 'getImageEvidence'>;
+  staffClient: Pick<StaffModerationStateClient, 'getState'>;
   policyGateway: Pick<LiveServerSourceGateway, 'readApprovedFile'>;
   policySource: LivePolicyCatalogSource;
   inference: Pick<InferenceClient, 'complete'>;
+  assessImage?: TicketImageAssessmentRunner;
 }
 
 export class TicketEvidenceReviewRuntime {
@@ -72,11 +74,7 @@ export class TicketEvidenceReviewRuntime {
       return runtimeResult('already_actioned', false);
     }
 
-    const snapshot = await this.moderationSnapshot(target.value);
-    const initialModeration =
-      snapshot === null
-        ? unavailableModerationState(target.value)
-        : staffSnapshotToModerationState(snapshot);
+    const initialModeration = unavailableModerationState(target.value);
 
     let policyCatalog;
     try {
@@ -95,13 +93,12 @@ export class TicketEvidenceReviewRuntime {
       policyCatalog,
       policyAssessor: this.policyAssessor,
       moderationState: initialModeration,
-      ...(snapshot !== null
-        ? {
-            resolveModerationState: (concerns) =>
-              staffSnapshotToModerationState(snapshot, concerns),
-          }
-        : {}),
+      resolveModerationState: (concerns) =>
+        this.resolveModerationState(target.value, concerns),
       ticketClient: this.deps.ticketClient,
+      ...(this.deps.assessImage !== undefined
+        ? { assessImage: this.deps.assessImage }
+        : {}),
     });
 
     if (evidenceInfrastructureFailed(pipeline)) {
@@ -126,14 +123,12 @@ export class TicketEvidenceReviewRuntime {
     }
   }
 
-  private async moderationSnapshot(
+  private async resolveModerationState(
     target: string,
-  ): Promise<StaffModerationStateSnapshot | null> {
-    try {
-      return await this.deps.staffClient.getState(target);
-    } catch {
-      return null;
-    }
+    concerns: EvidencePolicyConcern[],
+  ) {
+    const snapshot = await this.deps.staffClient.getState(target);
+    return staffSnapshotToModerationState(snapshot, concerns);
   }
 }
 
