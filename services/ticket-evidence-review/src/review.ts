@@ -1,4 +1,5 @@
 import {
+  activeTicketEscalation,
   ticketReportTarget,
   type TicketAttachment,
   type TicketContextBundle,
@@ -80,8 +81,11 @@ function preliminaryDisposition(
   if (context.input.imageEvidence.length === 0) {
     return missingVisualEvidenceResult(context);
   }
+  if (activeTicketEscalation(context.input.ticket.ticket) !== null) {
+    return ticketEscalationDuplicateResult(context);
+  }
   if (isDuplicate(context.input.moderationState)) {
-    return duplicateResult(context);
+    return moderationDuplicateResult(context);
   }
   return null;
 }
@@ -114,7 +118,21 @@ function missingVisualEvidenceResult(
   });
 }
 
-function duplicateResult(
+function ticketEscalationDuplicateResult(
+  context: ReviewContext,
+): TicketEvidenceReviewResult {
+  return result(context.input, context.target, {
+    disposition: 'already_actioned',
+    confidence: 1,
+    observedFacts: context.observedFacts,
+    limitations: context.limitations,
+    missingEvidence: [],
+    summary:
+      'Ticket Bot already has a pending or accepted staff escalation for this ticket; do not create a duplicate staff escalation.',
+  });
+}
+
+function moderationDuplicateResult(
   context: ReviewContext,
 ): TicketEvidenceReviewResult {
   const state = context.input.moderationState;
