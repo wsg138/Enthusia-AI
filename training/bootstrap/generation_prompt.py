@@ -30,10 +30,13 @@ def _profile_instruction(profile: str) -> str:
             "Answer directly without reteaching basics."
         )
     return (
-        "Assume the player may be unfamiliar with this server-specific topic. If the "
-        "answer depends on knowing what the system is, first explain it in one short "
-        "plain-language sentence, then answer directly. Do not assume they already know "
-        "server-specific terms such as reputation, mail categories, ranks, or staff tools."
+        "Assume the player may be unfamiliar with this server-specific topic. Their "
+        "question should sound like something a new player would actually ask, so avoid "
+        "unexplained server taxonomy when a simpler wording is possible. For example, "
+        "prefer 'What does Good Stall mean?' over 'What does the Good Stall reputation "
+        "category mean?'. If EVIDENCE identifies a surrounding system, first explain that "
+        "system in one short plain-language sentence before the detail. Do not invent how "
+        "the system awards, earns, grants, or changes anything unless EVIDENCE says so."
     )
 
 
@@ -53,16 +56,17 @@ def _mode_instruction(response_mode: str) -> str:
             "player-facing option can be suggested. Do not invent a technical purpose."
         )
     return (
-        "Write a normal player-facing answer. Sound like a helpful real server assistant, "
-        "not documentation: lead with the useful answer, use simple everyday wording, "
-        "short active sentences, and natural contractions where they fit. Prefer direct "
-        "phrasing over robotic wording. Example: prefer 'Run the command to open the menu' "
-        "over 'You can open the menu by using the command.' If something is unavailable, "
-        "prefer 'It isn't active right now, so it won't work yet' over formal wording like "
-        "'Please check back later once the feature is deployed.' Keep the tone warm and "
-        "aware of the player's situation without forcing excitement. Do not expose "
-        "permission nodes or backend jargon unless the player's question directly "
-        "requires that information."
+        "Write like a helpful server assistant talking to a real player, not like a wiki "
+        "or generic AI. Lead with the answer and use short, clear, everyday sentences. "
+        "Prefer direct phrasing: 'Type /mail to open your mailbox. Use the tabs to switch "
+        "between Packages, Letters, and Announcements.' is better than 'You can open your "
+        "mailbox by using /mail.' Include immediately useful interaction details from the "
+        "target evidence instead of dropping them just to be shorter. Avoid words such as "
+        "'production', 'configured', or 'deployment' unless current availability is "
+        "actually relevant to the answer. If something is unavailable, say it simply, "
+        "for example 'It isn't active right now, so that command won't work yet.' Keep the "
+        "tone warm and natural without fake excitement. Do not expose permission nodes or "
+        "backend jargon unless the player's question directly requires that information."
     )
 
 
@@ -104,10 +108,13 @@ Rules:
    M attempts per second."
 9. Keep server-specific nouns grounded. Do not replace an evidence term such as "event"
    with a broader unsupported noun such as "game" just to sound natural.
-10. Choose the category by the player's actual need. Explanations of server-specific
+10. For novice examples, do not make the user question depend on already knowing the
+   server's internal terminology. If EVIDENCE says a named thing belongs to a broader
+   player-facing system, explain that relationship briefly before the specific meaning.
+11. Choose the category by the player's actual need. Explanations of server-specific
    concepts such as reputation categories should normally use onboarding, not rank, unless
    the evidence is actually about a player rank or role.
-11. Do not output secrets, credentials, hidden reasoning, chain-of-thought, evidence IDs,
+12. Do not output secrets, credentials, hidden reasoning, chain-of-thought, evidence IDs,
    source IDs, SHAs, visibility, or internal validator metadata.
 
 TARGET_EVIDENCE_LINE:
