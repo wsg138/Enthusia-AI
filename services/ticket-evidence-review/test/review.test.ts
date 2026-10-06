@@ -113,6 +113,7 @@ function concern(
     severity: 'high',
     confidence: 0.91,
     evidenceRefs: [EVIDENCE_REF],
+    policyRefs: ['docs:rules/chat.md#0'],
     summary: 'Visible text may violate the harassment rule.',
     ...overrides,
   };
