@@ -77,51 +77,20 @@ export class VerifiedHelpFamiliarityRecorder {
 
     const topic = canonicalTopic(event.topic);
     const ref = familiarityRef(event.actor, topic);
-    const current = this.memory.getCurrent(ref);
-    if (current !== null && current.key.visibility !== Visibility.PLAYER_SELF) {
-      return;
-    }
+    const state = readRecorderState(this.memory.getCurrent(ref));
+    if (state.kind !== 'usable') return;
 
-    const previous =
-      current === null ? null : parseMemoryValue(current.revision.value);
-    if (previous === null && current !== null) return;
-    if (previous?.level === 'EXPERT') return;
+    const next = nextVerifiedHelpValue(state.previous);
+    if (sameEffectiveValue(state.previous, next)) return;
 
-    const next = nextVerifiedHelpValue(previous);
-    if (sameEffectiveValue(previous, next)) return;
-
-    const evidence = [{
-      sourceArtifactId: `conversation:${event.conversationId}`,
-      sourceVersion: event.traceId,
-      evidenceRole: EvidenceRole.SUPPORTING,
-      observedAt: event.observedAt,
-      verifiedAt: event.observedAt,
-      authorityLevel: 'verified-agent-response',
-    }];
-
-    if (current === null) {
-      await this.memory.createRevision({
-        ...ref,
-        visibility: Visibility.PLAYER_SELF,
-        value: next,
-        summary: familiaritySummary(topic, next),
-        authority: MEMORY_AUTHORITY,
-        validFrom: event.observedAt,
-        evidence,
-      });
-      return;
-    }
-
-    await this.memory.supersede({
-      ...ref,
-      value: next,
-      summary: familiaritySummary(topic, next),
-      authority: MEMORY_AUTHORITY,
-      reason: 'additional verified help for this topic',
-      validFrom: event.observedAt,
-      evidence,
-      expectedCurrentRevisionId: current.revision.id,
-    });
+    await persistVerifiedHelp(
+      this.memory,
+      ref,
+      topic,
+      event,
+      state.current,
+      next,
+    );
   }
 }
 
@@ -180,36 +149,111 @@ function isUsableFamiliarityMemory(
 
 function parseMemoryValue(value: unknown): FamiliarityMemoryValue | null {
   if (!isRecord(value)) return null;
-  const level = value['level'];
-  const confidence = value['confidence'];
-  const verifiedHelpCount = value['verifiedHelpCount'];
 
+  const level = parseLevel(value['level']);
+  const confidence = parseConfidence(value['confidence']);
+  const verifiedHelpCount = parseHelpCount(value['verifiedHelpCount']);
   if (
-    level !== 'NEW' &&
-    level !== 'FAMILIAR' &&
-    level !== 'EXPERT' &&
-    level !== 'UNKNOWN'
-  ) {
-    return null;
-  }
-  if (
-    typeof confidence !== 'number' ||
-    !Number.isFinite(confidence) ||
-    confidence < 0 ||
-    confidence > 1
-  ) {
-    return null;
-  }
-  if (
-    typeof verifiedHelpCount !== 'number' ||
-    !Number.isInteger(verifiedHelpCount) ||
-    verifiedHelpCount < 0 ||
-    verifiedHelpCount > MAX_AUTO_HELP_COUNT
+    level === null ||
+    confidence === null ||
+    verifiedHelpCount === null
   ) {
     return null;
   }
 
   return { level, confidence, verifiedHelpCount };
+}
+
+function parseLevel(value: unknown): TopicFamiliarityLevel | null {
+  const levels: readonly TopicFamiliarityLevel[] = [
+    'NEW',
+    'FAMILIAR',
+    'EXPERT',
+    'UNKNOWN',
+  ];
+  return typeof value === 'string' &&
+    levels.includes(value as TopicFamiliarityLevel)
+    ? (value as TopicFamiliarityLevel)
+    : null;
+}
+
+function parseConfidence(value: unknown): number | null {
+  if (typeof value !== 'number') return null;
+  if (!Number.isFinite(value)) return null;
+  return value >= 0 && value <= 1 ? value : null;
+}
+
+function parseHelpCount(value: unknown): number | null {
+  if (typeof value !== 'number') return null;
+  if (!Number.isInteger(value)) return null;
+  return value >= 0 && value <= MAX_AUTO_HELP_COUNT ? value : null;
+}
+
+type RecorderState =
+  | { kind: 'ignore' }
+  | {
+      kind: 'usable';
+      current: CurrentMemory | null;
+      previous: FamiliarityMemoryValue | null;
+    };
+
+function readRecorderState(current: CurrentMemory | null): RecorderState {
+  if (current === null) {
+    return { kind: 'usable', current: null, previous: null };
+  }
+  if (current.key.visibility !== Visibility.PLAYER_SELF) {
+    return { kind: 'ignore' };
+  }
+
+  const previous = parseMemoryValue(current.revision.value);
+  if (previous === null || previous.level === 'EXPERT') {
+    return { kind: 'ignore' };
+  }
+  return { kind: 'usable', current, previous };
+}
+
+async function persistVerifiedHelp(
+  memory: MemoryService,
+  ref: MemoryRef,
+  topic: string,
+  event: VerifiedTopicHelpEvent,
+  current: CurrentMemory | null,
+  next: FamiliarityMemoryValue,
+): Promise<void> {
+  const evidence = verifiedHelpEvidence(event);
+  const common = {
+    ...ref,
+    value: next,
+    summary: familiaritySummary(topic, next),
+    authority: MEMORY_AUTHORITY,
+    validFrom: event.observedAt,
+    evidence,
+  };
+
+  if (current === null) {
+    await memory.createRevision({
+      ...common,
+      visibility: Visibility.PLAYER_SELF,
+    });
+    return;
+  }
+
+  await memory.supersede({
+    ...common,
+    reason: 'additional verified help for this topic',
+    expectedCurrentRevisionId: current.revision.id,
+  });
+}
+
+function verifiedHelpEvidence(event: VerifiedTopicHelpEvent) {
+  return [{
+    sourceArtifactId: `conversation:${event.conversationId}`,
+    sourceVersion: event.traceId,
+    evidenceRole: EvidenceRole.SUPPORTING,
+    observedAt: event.observedAt,
+    verifiedAt: event.observedAt,
+    authorityLevel: 'verified-agent-response',
+  }];
 }
 
 function nextVerifiedHelpValue(
