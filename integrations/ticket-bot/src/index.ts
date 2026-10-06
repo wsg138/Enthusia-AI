@@ -27,6 +27,7 @@ export type {
   TicketCategory,
   TicketContextBundle,
   TicketContextFetchOptions,
+  TicketAttachment,
   TicketMessage,
   TicketParticipant,
   TicketPriority,
@@ -74,6 +75,7 @@ export { ticketToAgentContext } from './context.js';
 export type {
   AgentTicketContext,
   TicketContextAdapterOptions,
+  TranscriptAttachment,
   TranscriptLine,
 } from './context.js';
 
