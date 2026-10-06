@@ -12,11 +12,12 @@ import { InferenceReasoner } from './reasoner.js';
 import { loadConfiguredFamiliarityRuntime } from './familiarity.js';
 import {
   createAgentRuntime,
-  loadConfiguredSftpTools,
-  loadConfiguredTicketTools,
+  loadConfiguredSftpRuntime,
+  loadConfiguredTicketRuntime,
 } from './runtime.js';
 import { startAgentService } from './server.js';
 import { StaleTicketDecisionService } from './stale-ticket.js';
+import { composeTicketEvidenceRuntime } from './ticket-evidence-composition.js';
 
 async function main(): Promise<void> {
   const config = loadAgentServiceConfig();
@@ -40,8 +41,8 @@ async function main(): Promise<void> {
   const reasoner = new InferenceReasoner(inference);
   const staleTicketDecision = new StaleTicketDecisionService(inference);
   const familiarity = loadConfiguredFamiliarityRuntime(config.memoryPath);
-  const sftpTools = await loadConfiguredSftpTools(config.sftpConfigPath);
-  const ticketTools = loadConfiguredTicketTools({
+  const sftp = await loadConfiguredSftpRuntime(config.sftpConfigPath);
+  const ticket = loadConfiguredTicketRuntime({
     ...(config.ticketBotBaseUrl !== undefined
       ? { baseUrl: config.ticketBotBaseUrl }
       : {}),
@@ -50,9 +51,15 @@ async function main(): Promise<void> {
       : {}),
     timeoutMs: config.ticketBotTimeoutMs,
   });
+  const ticketEvidence = composeTicketEvidenceRuntime(
+    config,
+    inference,
+    ticket,
+    sftp,
+  );
   const runtime = createAgentRuntime(
     reasoner,
-    [...sftpTools, ...ticketTools, ...familiarity.tools],
+    [...sftp.tools, ...ticket.tools, ...familiarity.tools],
     {
       ...(familiarity.onVerifiedTopicHelp !== undefined
         ? { onVerifiedTopicHelp: familiarity.onVerifiedTopicHelp }
@@ -67,6 +74,9 @@ async function main(): Promise<void> {
     registry: runtime.registry,
     inference,
     staleTicketDecision,
+    ...(ticketEvidence.ingress !== undefined
+      ? { ticketEventIngress: ticketEvidence.ingress }
+      : {}),
   });
 
   logger.info(
