@@ -8,8 +8,17 @@ import {
 } from '@enthusia/agent-core';
 import {
   TicketBotClient,
+  TicketEvidenceClient,
   createTicketTools,
 } from '@enthusia/integration-ticket-bot';
+import {
+  StaffModerationStateClient,
+} from '@enthusia/integration-staff-moderation';
+import type { InferenceClient } from '@enthusia/inference-adapter';
+import {
+  LivePolicyCatalogReader,
+  TicketEvidenceReviewService,
+} from './ticket-evidence-review.js';
 import {
   LiveServerSourceGateway,
   compileConfig,
@@ -35,6 +44,58 @@ export type AgentRuntimeOptions = Pick<
   OrchestratorDeps,
   'onVerifiedTopicHelp'
 >;
+
+export interface TicketEvidenceReviewRuntimeConfig {
+  ticketBotBaseUrl?: string;
+  ticketBotApiKey?: string;
+  ticketBotTimeoutMs: number;
+  staffModerationBaseUrl?: string;
+  staffModerationApiKey?: string;
+  staffModerationTimeoutMs: number;
+  policyServerId?: string;
+  policySourceId?: string;
+}
+
+export function loadConfiguredTicketEvidenceReview(
+  config: TicketEvidenceReviewRuntimeConfig,
+  gateway: LiveServerSourceGateway | undefined,
+  inference: Pick<InferenceClient, 'complete'>,
+): TicketEvidenceReviewService | undefined {
+  if (config.staffModerationBaseUrl === undefined) return undefined;
+  if (
+    config.staffModerationApiKey === undefined ||
+    config.ticketBotBaseUrl === undefined ||
+    config.ticketBotApiKey === undefined ||
+    config.policyServerId === undefined ||
+    config.policySourceId === undefined ||
+    gateway === undefined
+  ) {
+    throw new Error(
+      'Ticket evidence review runtime configuration is incomplete.',
+    );
+  }
+
+  const ticketConfig = {
+    baseUrl: config.ticketBotBaseUrl,
+    apiKey: config.ticketBotApiKey,
+    timeoutMs: config.ticketBotTimeoutMs,
+  };
+  return new TicketEvidenceReviewService({
+    ticketClient: new TicketBotClient(ticketConfig),
+    evidenceClient: new TicketEvidenceClient(ticketConfig),
+    policyReader: new LivePolicyCatalogReader({
+      gateway,
+      serverId: config.policyServerId,
+      sourceId: config.policySourceId,
+    }),
+    moderationClient: new StaffModerationStateClient({
+      baseUrl: config.staffModerationBaseUrl,
+      apiKey: config.staffModerationApiKey,
+      timeoutMs: config.staffModerationTimeoutMs,
+    }),
+    inference,
+  });
+}
 
 export function createAgentRuntime(
   reasoner: Reasoner,
