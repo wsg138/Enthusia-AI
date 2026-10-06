@@ -60,6 +60,27 @@ describe('InferenceReasoner', () => {
     });
   });
 
+  it('accepts bounded adaptive-explanation classification fields', async () => {
+    const client = new FakeCompletionClient([
+      JSON.stringify({
+        requestClass: 'simple',
+        summary: 'Explain Good Stall',
+        claims: ['reputation is a feedback system', 'Good Stall meaning'],
+        backgroundClaims: ['reputation is a feedback system'],
+        needsFamiliarityContext: true,
+        familiarityTopic: 'reputation',
+        needsPrivateContext: false,
+        securitySensitive: false,
+      }),
+    ]);
+    const reasoner = new InferenceReasoner(client);
+    await expect(reasoner.classifyIntent(request())).resolves.toMatchObject({
+      backgroundClaims: ['reputation is a feedback system'],
+      needsFamiliarityContext: true,
+      familiarityTopic: 'reputation',
+    });
+  });
+
   it('rejects malformed or extra-control output instead of guessing', async () => {
     const malformed = new InferenceReasoner(
       new FakeCompletionClient(['not json']),
