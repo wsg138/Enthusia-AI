@@ -9,6 +9,7 @@ import {
   redactedAgentServiceConfig,
 } from './config.js';
 import { InferenceReasoner } from './reasoner.js';
+import { loadConfiguredFamiliarityRuntime } from './familiarity.js';
 import {
   createAgentRuntime,
   loadConfiguredSftpTools,
@@ -38,6 +39,7 @@ async function main(): Promise<void> {
   });
   const reasoner = new InferenceReasoner(inference);
   const staleTicketDecision = new StaleTicketDecisionService(inference);
+  const familiarity = loadConfiguredFamiliarityRuntime(config.memoryPath);
   const sftpTools = await loadConfiguredSftpTools(config.sftpConfigPath);
   const ticketTools = loadConfiguredTicketTools({
     ...(config.ticketBotBaseUrl !== undefined
@@ -48,7 +50,15 @@ async function main(): Promise<void> {
       : {}),
     timeoutMs: config.ticketBotTimeoutMs,
   });
-  const runtime = createAgentRuntime(reasoner, [...sftpTools, ...ticketTools]);
+  const runtime = createAgentRuntime(
+    reasoner,
+    [...sftpTools, ...ticketTools, ...familiarity.tools],
+    {
+      ...(familiarity.onVerifiedTopicHelp !== undefined
+        ? { onVerifiedTopicHelp: familiarity.onVerifiedTopicHelp }
+        : {}),
+    },
+  );
 
   const service = await startAgentService({
     config,
@@ -72,6 +82,7 @@ async function main(): Promise<void> {
     logger.info({ signal }, 'shutting down agent service');
     void service.close().then(
       () => {
+        familiarity.close();
         logger.info('agent service stopped');
         process.exit(0);
       },
