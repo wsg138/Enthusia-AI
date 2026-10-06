@@ -95,12 +95,7 @@ export class TicketEvidenceClient {
     attachmentId: string,
   ): Promise<TicketImageEvidence> {
     const capabilities = await this.getCapabilities();
-    if (!capabilities.reads.includes('attachment.image')) {
-      throw new ExternalServiceError(
-        TICKET_BOT_SERVICE,
-        'Deployed Ticket Bot does not advertise image evidence reads.',
-      );
-    }
+    requireImageReadCapability(capabilities);
 
     const path =
       `/v1/tickets/${encodeURIComponent(ticketId)}` +
@@ -144,16 +139,7 @@ export class TicketEvidenceClient {
         signal: controller.signal,
       });
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new ExternalServiceError(
-          TICKET_BOT_SERVICE,
-          'Ticket evidence request timed out.',
-        );
-      }
-      throw new ExternalServiceError(
-        TICKET_BOT_SERVICE,
-        'Ticket evidence request failed.',
-      );
+      throw evidenceTransportError(error);
     } finally {
       clearTimeout(timer);
     }
@@ -185,10 +171,8 @@ async function readImageEvidenceResponse(
 }
 
 function evidenceContentType(response: Response): string {
-  const value = (response.headers.get('content-type') ?? '')
-    .split(';')[0]!
-    .trim()
-    .toLowerCase();
+  const [rawType = ''] = (response.headers.get('content-type') ?? '').split(';');
+  const value = rawType.trim().toLowerCase();
   if (value.startsWith('image/')) return value;
   throw new ExternalServiceError(
     TICKET_BOT_SERVICE,
@@ -269,26 +253,49 @@ function validateEvidenceHash(
   );
 }
 
+type EvidenceErrorFactory = (path: string, detail: string) => Error;
+
+const EVIDENCE_ERROR_FACTORIES: Readonly<
+  Partial<Record<number, EvidenceErrorFactory>>
+> = {
+  401: (path, detail) =>
+    new AuthorizationError(`Ticket Bot denied GET ${path}: ${detail}`),
+  403: (path, detail) =>
+    new AuthorizationError(`Ticket Bot denied GET ${path}: ${detail}`),
+  404: (_path, detail) =>
+    new NotFoundError(`Ticket evidence was not found: ${detail}`),
+  429: () => new RateLimitError('Ticket Bot evidence rate limit exceeded.'),
+};
+
 async function evidenceResponseError(
   response: Response,
   path: string,
 ): Promise<Error> {
   const detail = await safeErrorBody(response);
-  if (response.status === 401 || response.status === 403) {
-    return new AuthorizationError(
-      `Ticket Bot denied GET ${path}: ${detail}`,
+  const factory = EVIDENCE_ERROR_FACTORIES[response.status];
+  return factory?.(path, detail) ??
+    new ExternalServiceError(
+      TICKET_BOT_SERVICE,
+      `GET ${path} failed with status ${response.status}: ${detail}`,
     );
-  }
-  if (response.status === 404) {
-    return new NotFoundError(`Ticket evidence was not found: ${detail}`);
-  }
-  if (response.status === 429) {
-    return new RateLimitError('Ticket Bot evidence rate limit exceeded.');
-  }
-  return new ExternalServiceError(
+}
+
+function requireImageReadCapability(
+  capabilities: TicketEvidenceCapabilities,
+): void {
+  if (capabilities.reads.includes('attachment.image')) return;
+  throw new ExternalServiceError(
     TICKET_BOT_SERVICE,
-    `GET ${path} failed with status ${response.status}: ${detail}`,
+    'Deployed Ticket Bot does not advertise image evidence reads.',
   );
+}
+
+function evidenceTransportError(error: unknown): ExternalServiceError {
+  const detail =
+    error instanceof Error && error.name === 'AbortError'
+      ? 'Ticket evidence request timed out.'
+      : 'Ticket evidence request failed.';
+  return new ExternalServiceError(TICKET_BOT_SERVICE, detail);
 }
 
 async function safeErrorBody(response: Response): Promise<string> {
