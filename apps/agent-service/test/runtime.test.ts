@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { loadConfiguredTicketTools } from '../src/runtime.js';
+import {
+  loadConfiguredSftpRuntime,
+  loadConfiguredTicketTools,
+} from '../src/runtime.js';
 
 describe('production Ticket Bot tool registration', () => {
   it('registers nothing when Ticket Bot is disabled', () => {
@@ -27,5 +30,14 @@ describe('production Ticket Bot tool registration', () => {
       'ticket.request_close',
       'ticket.request_escalation',
     ]);
+  });
+});
+
+
+describe('production SFTP runtime composition', () => {
+  it('exposes no gateway when live SFTP is disabled', async () => {
+    const runtime = await loadConfiguredSftpRuntime(undefined, {});
+    expect(runtime.tools).toEqual([]);
+    expect(runtime.gateway).toBeUndefined();
   });
 });
