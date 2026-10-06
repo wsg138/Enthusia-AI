@@ -12,6 +12,7 @@
  * does NOT import W12's code (W12 is a sibling workstream, not a base).
  *
  * Available tools:
+ *   - `ticket.capabilities`     — read the deployed W14 contract
  *   - `ticket.get_context`      — read ticket context (adapter output)
  *   - `ticket.request_close`    — REQUEST the Ticket Bot close a ticket
  *   - `ticket.request_escalation` — REQUEST escalation
@@ -33,7 +34,7 @@ import type { Actor, ToolResult } from '@enthusia/contracts';
 import { TicketBotClient } from './client.js';
 import { ticketToAgentContext } from './context.js';
 import type { AgentTicketContext } from './context.js';
-import type { ActionRequestResult } from './types.js';
+import type { ActionRequestResult, TicketBotCapabilities } from './types.js';
 
 /** Parameter declaration — mirrors W12's ToolParameterProperty. */
 export interface TicketToolParameterProperty {
@@ -95,6 +96,22 @@ function successEnvelope<T>(
     visibility: TOOL_VISIBILITY,
     correlationId: ctx.traceId,
     ...(freshness !== undefined ? { freshness } : {}),
+    result,
+  };
+}
+
+function capabilityEnvelope(
+  toolName: string,
+  ctx: TicketToolCallContext,
+  result: TicketBotCapabilities,
+): ToolResult<TicketBotCapabilities> {
+  return {
+    toolName,
+    timestamp: new Date().toISOString(),
+    source: SOURCE,
+    visibility: Visibility.STAFF,
+    correlationId: ctx.traceId,
+    freshness: `runtime:${result.contractVersion}`,
     result,
   };
 }
@@ -176,6 +193,34 @@ function requireParam(
     );
   }
   return value;
+}
+
+/** `ticket.capabilities` — verify the contract actually deployed by Ticket Bot. */
+export class TicketCapabilitiesTool implements TicketTool<Record<string, never>> {
+  readonly meta: TicketToolMetadata = {
+    name: 'ticket.capabilities',
+    description:
+      'Read the authenticated capability contract from the currently deployed Ticket Bot. ' +
+      'Use this to verify runtime support instead of assuming GitHub main is deployed.',
+    parameters: { type: 'object', properties: {} },
+    privacySensitive: false,
+    maxVisibility: Visibility.STAFF,
+  };
+
+  constructor(private readonly client: TicketBotClient) {}
+
+  async execute(
+    _params: Record<string, never>,
+    ctx: TicketToolCallContext,
+  ): Promise<ToolResult<unknown>> {
+    try {
+      checkStaffActionAuthorization(ctx);
+      const capabilities = await this.client.getCapabilities();
+      return capabilityEnvelope(this.meta.name, ctx, capabilities);
+    } catch (err) {
+      return errorEnvelope(this.meta.name, ctx, err);
+    }
+  }
 }
 
 /** `ticket.get_context` — read ticket context for agent reasoning. */
@@ -345,6 +390,7 @@ export class RequestTicketEscalationTool
  */
 export function createTicketTools(client: TicketBotClient): TicketTool[] {
   return [
+    new TicketCapabilitiesTool(client),
     new GetTicketContextTool(client),
     new RequestTicketCloseTool(client),
     new RequestTicketEscalationTool(client),

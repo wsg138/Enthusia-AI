@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 /**
  * @enthusia/integration-ticket-bot — typed Ticket Bot API client (W14).
  *
@@ -41,6 +43,7 @@ import type {
   TicketMessage,
   TicketParticipant,
   TicketStatus,
+  TicketBotCapabilities,
 } from './types.js';
 
 export type {
@@ -58,6 +61,7 @@ export type {
   TicketMessage,
   TicketParticipant,
   TicketStatus,
+  TicketBotCapabilities,
 };
 
 /** Identity Enthusia AI presents to the Ticket Bot in action requests. */
@@ -65,6 +69,25 @@ export const AI_REQUESTED_BY = 'enthusia-ai/ticket-integration';
 
 /** Service name used in error provenance. */
 export const TICKET_BOT_SERVICE = 'ticket-bot';
+
+const ticketBotCapabilitiesSchema = z.strictObject({
+  service: z.literal('enthusia-support-bot'),
+  api: z.literal('ticket-lifecycle'),
+  contractVersion: z.literal('w14-v1'),
+  reads: z.array(
+    z.enum([
+      'tickets.list',
+      'tickets.get',
+      'tickets.messages',
+      'tickets.participants',
+      'actions.get',
+    ]),
+  ),
+  actions: z.array(
+    z.enum(['close', 'reopen', 'escalate', 'add_note', 'transition']),
+  ),
+  eventDelivery: z.literal('optional-hmac-webhook'),
+});
 
 export interface TicketBotClientConfig {
   /** Base URL of the Ticket Bot service API, e.g. https://tickets.internal. */
@@ -99,6 +122,7 @@ interface AllowedTarget {
  * `assertAllowedRequest` before any network I/O.
  */
 export const TICKET_BOT_REQUEST_ALLOWLIST: readonly AllowedTarget[] = [
+  { method: 'GET', path: /^\/v1\/capabilities$/ },
   { method: 'GET', path: /^\/v1\/tickets$/ },
   { method: 'GET', path: /^\/v1\/tickets\/[^/]+$/ },
   { method: 'GET', path: /^\/v1\/tickets\/[^/]+\/messages$/ },
@@ -154,6 +178,24 @@ export class TicketBotClient {
       (globalThis.fetch.bind(globalThis) as typeof fetch);
     this.timeoutMs = config.timeoutMs ?? 10_000;
     this.userAgent = config.userAgent ?? 'enthusia-ai/ticket-integration (+w14)';
+  }
+
+  /**
+   * Ask the deployed Ticket Bot which W14 contract it actually exposes.
+   *
+   * This is deliberately a runtime handshake rather than a source-code
+   * assumption: GitHub main may be newer than the running bot.
+   */
+  async getCapabilities(): Promise<TicketBotCapabilities> {
+    const raw = await this.get<unknown>('/v1/capabilities');
+    const parsed = ticketBotCapabilitiesSchema.safeParse(raw);
+    if (!parsed.success) {
+      throw new ExternalServiceError(
+        TICKET_BOT_SERVICE,
+        'Deployed Ticket Bot returned an incompatible capability contract.',
+      );
+    }
+    return parsed.data;
   }
 
   /** Fetch one ticket by id (read-only). */
@@ -238,6 +280,13 @@ export class TicketBotClient {
   ): Promise<ActionRequestResult> {
     if (!input.reason || input.reason.trim().length === 0) {
       throw new ValidationError('Action requests require a non-empty reason.');
+    }
+    const capabilities = await this.getCapabilities();
+    if (!capabilities.actions.includes(input.action)) {
+      throw new ExternalServiceError(
+        TICKET_BOT_SERVICE,
+        `Deployed Ticket Bot does not advertise the requested ${input.action} action.`,
+      );
     }
     const body = {
       action: input.action,

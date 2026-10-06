@@ -112,6 +112,22 @@ const server = createServer((req, res) => {
       body: raw ? JSON.parse(raw) : undefined,
     });
 
+    if (url.pathname === '/v1/capabilities' && req.method === 'GET') {
+      return json(res, 200, {
+        service: 'enthusia-support-bot',
+        api: 'ticket-lifecycle',
+        contractVersion: 'w14-v1',
+        reads: [
+          'tickets.list',
+          'tickets.get',
+          'tickets.messages',
+          'tickets.participants',
+          'actions.get',
+        ],
+        actions: ['close', 'reopen', 'escalate', 'add_note', 'transition'],
+        eventDelivery: 'optional-hmac-webhook',
+      });
+    }
     if (url.pathname === '/v1/tickets/T-1234' && req.method === 'GET') {
       return json(res, 200, TICKET);
     }
@@ -184,6 +200,36 @@ afterAll(async () => {
 // ----------------------------------------------------------------------
 // Client: reads
 // ----------------------------------------------------------------------
+
+describe('TicketBotClient capabilities', () => {
+  it('reads and validates the deployed W14 capability contract', async () => {
+    const capabilities = await makeClient().getCapabilities();
+    expect(capabilities.contractVersion).toBe('w14-v1');
+    expect(capabilities.actions).toContain('close');
+    expect(capabilities.reads).toContain('tickets.get');
+  });
+
+  it('rejects an incompatible deployed capability contract', async () => {
+    const client = new TicketBotClient({
+      baseUrl,
+      apiKey: API_KEY,
+      timeoutMs: 5_000,
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({
+            service: 'enthusia-support-bot',
+            api: 'ticket-lifecycle',
+            contractVersion: 'future-v2',
+            reads: [],
+            actions: [],
+            eventDelivery: 'optional-hmac-webhook',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+    });
+    await expect(client.getCapabilities()).rejects.toThrow(/incompatible capability contract/);
+  });
+});
 
 describe('TicketBotClient reads', () => {
   it('fetches a ticket with typed fields', async () => {
@@ -349,6 +395,7 @@ describe('no-mutation invariant', () => {
 
   it('assertAllowedRequest accepts every client-issued target', () => {
     const allowed: Array<[string, string]> = [
+      ['GET', '/v1/capabilities'],
       ['GET', '/v1/tickets'],
       ['GET', '/v1/tickets/T-1234'],
       ['GET', '/v1/tickets/T-1234/messages'],
@@ -558,23 +605,47 @@ describe('ticket tools', () => {
     visibilityCeiling: ceiling,
   });
 
-  it('exposes exactly the three expected tools with correct metadata', () => {
+  it('exposes only the bounded W14 tools with correct metadata', () => {
     const tools = createTicketTools(makeClient());
     expect(tools.map((t) => t.meta.name).sort()).toEqual([
+      'ticket.capabilities',
       'ticket.get_context',
       'ticket.request_close',
       'ticket.request_escalation',
     ]);
     for (const tool of tools) {
-      expect(tool.meta.privacySensitive).toBe(true);
       expect(tool.meta.maxVisibility).toBe(Visibility.STAFF);
-      expect(tool.meta.parameters.required).toContain('ticketId');
+      if (tool.meta.name === 'ticket.capabilities') {
+        expect(tool.meta.privacySensitive).toBe(false);
+        expect(tool.meta.parameters.required ?? []).toEqual([]);
+      } else {
+        expect(tool.meta.privacySensitive).toBe(true);
+        expect(tool.meta.parameters.required).toContain('ticketId');
+      }
     }
   });
 
+  it('ticket.capabilities reports the deployed contract for staff only', async () => {
+    const tool = createTicketTools(makeClient()).find((item) => item.meta.name === 'ticket.capabilities')!;
+    const result = await tool.execute({}, ctxFor(Visibility.STAFF));
+    expect(result.error).toBeUndefined();
+    expect(result.visibility).toBe(Visibility.STAFF);
+    expect(result.result).toMatchObject({
+      service: 'enthusia-support-bot',
+      contractVersion: 'w14-v1',
+    });
+
+    const denied = await tool.execute({}, ctxFor(Visibility.PLAYER_SELF, {
+      id: OWNER.id,
+      type: 'player',
+    }));
+    expect(denied.result).toBeUndefined();
+    expect(denied.error?.code).toBe('AUTHORIZATION_ERROR');
+  });
+
   it('ticket.get_context returns a §16.2 provenance envelope', async () => {
-    const [tool] = createTicketTools(makeClient());
-    const result = await tool!.execute({ ticketId: 'T-1234' }, ctxFor(Visibility.STAFF));
+    const tool = createTicketTools(makeClient()).find((item) => item.meta.name === 'ticket.get_context')!;
+    const result = await tool.execute({ ticketId: 'T-1234' }, ctxFor(Visibility.STAFF));
     expect(result.toolName).toBe('ticket.get_context');
     expect(result.source).toBe('ticket-bot');
     expect(result.correlationId).toBe('trace-tools-1');
@@ -585,8 +656,8 @@ describe('ticket tools', () => {
   });
 
   it('ticket.get_context allows the ticket owner at PLAYER_SELF visibility', async () => {
-    const [tool] = createTicketTools(makeClient());
-    const result = await tool!.execute(
+    const tool = createTicketTools(makeClient()).find((item) => item.meta.name === 'ticket.get_context')!;
+    const result = await tool.execute(
       { ticketId: 'T-1234' },
       ctxFor(Visibility.PLAYER_SELF, { id: OWNER.id, type: 'player' }),
     );
@@ -595,8 +666,8 @@ describe('ticket tools', () => {
   });
 
   it('ticket.get_context denies another player even with a sufficient ceiling', async () => {
-    const [tool] = createTicketTools(makeClient());
-    const result = await tool!.execute(
+    const tool = createTicketTools(makeClient()).find((item) => item.meta.name === 'ticket.get_context')!;
+    const result = await tool.execute(
       { ticketId: 'T-1234' },
       ctxFor(Visibility.PLAYER_SELF, { id: 'other-player', type: 'player' }),
     );
@@ -606,8 +677,8 @@ describe('ticket tools', () => {
   });
 
   it('ticket.get_context refuses a ceiling below PLAYER_SELF', async () => {
-    const [tool] = createTicketTools(makeClient());
-    const result = await tool!.execute({ ticketId: 'T-1234' }, ctxFor(Visibility.PUBLIC));
+    const tool = createTicketTools(makeClient()).find((item) => item.meta.name === 'ticket.get_context')!;
+    const result = await tool.execute({ ticketId: 'T-1234' }, ctxFor(Visibility.PUBLIC));
     expect(result.result).toBeUndefined();
     expect(result.error?.code).toBe('VISIBILITY_DENIED');
     expect(result.error?.retryable).toBe(false);
@@ -652,8 +723,8 @@ describe('ticket tools', () => {
   });
 
   it('tool failures surface as error envelopes (never throw)', async () => {
-    const [tool] = createTicketTools(makeClient());
-    const result = await tool!.execute({ ticketId: 'NOPE' }, ctxFor(Visibility.STAFF));
+    const tool = createTicketTools(makeClient()).find((item) => item.meta.name === 'ticket.get_context')!;
+    const result = await tool.execute({ ticketId: 'NOPE' }, ctxFor(Visibility.STAFF));
     expect(result.result).toBeUndefined();
     expect(result.error?.code).toBe('NOT_FOUND');
     expect(result.error?.retryable).toBe(false);
