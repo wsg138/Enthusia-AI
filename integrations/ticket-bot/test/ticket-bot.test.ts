@@ -16,12 +16,14 @@ import { Visibility } from '@enthusia/contracts';
 import {
   AI_REQUESTED_BY,
   TicketBotClient,
-  TicketEvidenceClient,
-  assertAllowedEvidenceRequest,
   assertAllowedRequest,
   TICKET_BOT_REQUEST_ALLOWLIST,
-  TICKET_EVIDENCE_REQUEST_ALLOWLIST,
 } from '../src/client.js';
+import {
+  TicketEvidenceClient,
+  assertAllowedEvidenceRequest,
+  TICKET_EVIDENCE_REQUEST_ALLOWLIST,
+} from '../src/evidence-client.js';
 import { ticketToAgentContext } from '../src/context.js';
 import {
   TicketEventRouter,
@@ -284,7 +286,7 @@ describe('TicketBotClient evidence capabilities', () => {
       baseUrl,
       apiKey: API_KEY,
       timeoutMs: 5_000,
-      fetchImpl: async (input) => {
+      fetchImpl: async (input: Parameters<typeof fetch>[0]) => {
         const url = String(input);
         if (url.endsWith('/v1/evidence/capabilities')) {
           return new Response(JSON.stringify({
