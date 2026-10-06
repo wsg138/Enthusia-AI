@@ -58,3 +58,10 @@ export type {
   PolicyConcernAssessmentInput,
   PolicyConcernAssessmentResult,
 } from './policy-assessor.js';
+
+export { runTicketEvidencePipeline } from './pipeline.js';
+export type {
+  TicketEvidencePipelineInput,
+  TicketEvidencePipelineResult,
+  TicketEvidencePipelineStatus,
+} from './pipeline.js';
