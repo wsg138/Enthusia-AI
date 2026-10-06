@@ -13,6 +13,7 @@
 export * from './models.js';
 export * from './packet.js';
 export * from './packet-format.js';
+export * from './stable-json.js';
 export * from './openai-client.js';
 export * from './image-evidence.js';
 export * from './budget.js';
