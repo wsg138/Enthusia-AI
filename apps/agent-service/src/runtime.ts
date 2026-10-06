@@ -8,6 +8,7 @@ import {
 } from '@enthusia/agent-core';
 import {
   TicketBotClient,
+  TicketEvidenceClient,
   createTicketTools,
 } from '@enthusia/integration-ticket-bot';
 import {
@@ -29,6 +30,17 @@ export interface TicketBotRuntimeConfig {
   baseUrl?: string;
   apiKey?: string;
   timeoutMs: number;
+}
+
+export interface TicketBotRuntime {
+  tools: Tool[];
+  client?: TicketBotClient;
+  evidenceClient?: TicketEvidenceClient;
+}
+
+export interface SftpRuntime {
+  tools: Tool[];
+  gateway?: LiveServerSourceGateway;
 }
 
 export type AgentRuntimeOptions = Pick<
@@ -56,20 +68,34 @@ export function createAgentRuntime(
   };
 }
 
-export function loadConfiguredTicketTools(
+export function loadConfiguredTicketRuntime(
   config: TicketBotRuntimeConfig,
-): Tool[] {
-  if (config.baseUrl === undefined && config.apiKey === undefined) return [];
+): TicketBotRuntime {
+  if (config.baseUrl === undefined && config.apiKey === undefined) {
+    return { tools: [] };
+  }
   if (config.baseUrl === undefined || config.apiKey === undefined) {
     throw new Error('Ticket Bot runtime configuration is incomplete.');
   }
 
-  const client = new TicketBotClient({
+  const common = {
     baseUrl: config.baseUrl,
     apiKey: config.apiKey,
     timeoutMs: config.timeoutMs,
-  });
-  return createTicketTools(client) as Tool[];
+  };
+  const client = new TicketBotClient(common);
+  const evidenceClient = new TicketEvidenceClient(common);
+  return {
+    tools: createTicketTools(client) as Tool[],
+    client,
+    evidenceClient,
+  };
+}
+
+export function loadConfiguredTicketTools(
+  config: TicketBotRuntimeConfig,
+): Tool[] {
+  return loadConfiguredTicketRuntime(config).tools;
 }
 
 function requireEnvCredentialSource(
@@ -143,11 +169,11 @@ function envCredential(
   return credentialMaterial(parseCredentialRecord(raw));
 }
 
-export async function loadConfiguredSftpTools(
+export async function loadConfiguredSftpRuntime(
   configPath: string | undefined,
   env: NodeJS.ProcessEnv = process.env,
-): Promise<Tool[]> {
-  if (configPath === undefined) return [];
+): Promise<SftpRuntime> {
+  if (configPath === undefined) return { tools: [] };
 
   const raw = await readFile(configPath, 'utf8');
   let parsed: unknown;
@@ -165,5 +191,15 @@ export async function loadConfiguredSftpTools(
   const gateway = new LiveServerSourceGateway(compiled, makeClient);
   const toolset = createLiveServerSourceTools(gateway);
 
-  return toolset.tools as Tool[];
+  return {
+    tools: toolset.tools as Tool[],
+    gateway,
+  };
+}
+
+export async function loadConfiguredSftpTools(
+  configPath: string | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<Tool[]> {
+  return (await loadConfiguredSftpRuntime(configPath, env)).tools;
 }
