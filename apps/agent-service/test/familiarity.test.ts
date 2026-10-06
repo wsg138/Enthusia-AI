@@ -223,6 +223,6 @@ describe('familiarity runtime composition', () => {
   it('canonicalizes safe topic names and rejects uncontrolled values', () => {
     expect(canonicalTopic('  Reputation   System ')).toBe('reputation system');
     expect(() => canonicalTopic('')).toThrow('invalid familiarity topic');
-    expect(() => canonicalTopic('bad\ncontrol')).toThrow('invalid familiarity topic');
+    expect(() => canonicalTopic('bad\0control')).toThrow('invalid familiarity topic');
   });
 });
