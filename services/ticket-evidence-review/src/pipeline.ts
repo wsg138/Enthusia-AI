@@ -70,7 +70,11 @@ export async function runTicketEvidencePipeline(
     return noUsableEvidenceResult(input, collection);
   }
 
-  const policyAssessment = await assessPolicy(input, collection);
+  const target = preflight.target;
+  if (target === null) {
+    return completedWithoutWork('needs_target', preflight);
+  }
+  const policyAssessment = await assessPolicy(input, collection, target.value);
   if (policyAssessment === null) {
     return {
       status: 'policy_assessment_unavailable',
@@ -163,13 +167,12 @@ function noUsableEvidenceResult(
 async function assessPolicy(
   input: TicketEvidencePipelineInput,
   collection: TicketImageCollectionResult,
+  target: string,
 ): Promise<PolicyConcernAssessmentResult | null> {
-  const target = preflightReview(input).target;
-  if (target === null) return null;
   try {
     return await input.policyAssessor.assess({
       traceId: input.traceId,
-      target: target.value,
+      target,
       catalog: input.policyCatalog,
       imageEvidence: collection.assessments,
     });
