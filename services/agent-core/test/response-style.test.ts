@@ -9,6 +9,7 @@ import {
   type EvidenceItem,
   type ResponseStyleProfile,
   type Tool,
+  type VerifiedTopicHelpEvent,
 } from '../src/index.js';
 import {
   FINISH,
@@ -362,7 +363,15 @@ describe('AgentOrchestrator adaptive familiarity integration', () => {
     const knowledge = adaptiveKnowledgeMock();
     const { registry } = mockRegistry([familiarity, knowledge]);
     const reasoner = adaptiveReasoner();
-    const orchestrator = new AgentOrchestrator({ reasoner, registry });
+    const verifiedHelp: VerifiedTopicHelpEvent[] = [];
+    const orchestrator = new AgentOrchestrator({
+      reasoner,
+      registry,
+      nowMs: () => Date.parse('2026-10-06T06:00:00.000Z'),
+      onVerifiedTopicHelp: (event) => {
+        verifiedHelp.push(event);
+      },
+    });
 
     const response = await orchestrator.handleChat(
       makeRequest('What is Good Stall?', {
@@ -377,5 +386,40 @@ describe('AgentOrchestrator adaptive familiarity integration', () => {
       topic: 'reputation',
       familiarity: 'FAMILIAR',
     });
+    expect(verifiedHelp).toEqual([
+      {
+        actor: expect.objectContaining({ type: 'player' }),
+        topic: 'reputation',
+        conversationId: 'conv-1',
+        traceId: expect.any(String),
+        observedAt: '2026-10-06T06:00:00.000Z',
+        supportedDirectClaims: 1,
+      },
+    ]);
+  });
+
+  it('does not learn familiarity when the direct answer is unverified', async () => {
+    const familiarity = familiarityMock();
+    const knowledge = new MockTool(knowledgeSearchMeta, () =>
+      okResult('knowledge.search', 'knowledge-indexer', { note: 'no claim evidence' }),
+    );
+    const { registry } = mockRegistry([familiarity, knowledge]);
+    const reasoner = adaptiveReasoner();
+    const verifiedHelp: VerifiedTopicHelpEvent[] = [];
+    const orchestrator = new AgentOrchestrator({
+      reasoner,
+      registry,
+      onVerifiedTopicHelp: (event) => {
+        verifiedHelp.push(event);
+      },
+    });
+
+    await orchestrator.handleChat(
+      makeRequest('What is Good Stall?', {
+        visibilityCeiling: Visibility.PLAYER_SELF,
+      }),
+    );
+
+    expect(verifiedHelp).toEqual([]);
   });
 });
