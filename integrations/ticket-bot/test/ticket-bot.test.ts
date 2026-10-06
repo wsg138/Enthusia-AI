@@ -121,6 +121,34 @@ const server = createServer((req, res) => {
       body: raw ? JSON.parse(raw) : undefined,
     });
 
+    if (url.pathname === '/v1/evidence/capabilities' && req.method === 'GET') {
+      return json(res, 200, {
+        service: 'enthusia-support-bot',
+        api: 'ticket-evidence',
+        contractVersion: 'evidence-v1',
+        reads: ['attachment.image'],
+        maxImageBytes: 8 * 1024 * 1024,
+      });
+    }
+    if (
+      url.pathname ===
+        '/v1/tickets/T-1234/messages/m-1/attachments/120000000000000001/image' &&
+      req.method === 'GET'
+    ) {
+      const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+      res.writeHead(200, {
+        'Content-Type': 'image/png',
+        'Content-Length': String(bytes.length),
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Enthusia-Ticket-Id': '1234',
+        'X-Enthusia-Message-Id': 'm-1',
+        'X-Enthusia-Attachment-Id': '120000000000000001',
+        'X-Enthusia-Content-Sha256':
+          '0f4636c78f65d3639ece5a064b5ae753e3408614a14fb18ab4d7540d2c248543',
+      });
+      return res.end(bytes);
+    }
     if (url.pathname === '/v1/capabilities' && req.method === 'GET') {
       return json(res, 200, {
         service: 'enthusia-support-bot',
@@ -209,6 +237,80 @@ afterAll(async () => {
 // ----------------------------------------------------------------------
 // Client: reads
 // ----------------------------------------------------------------------
+
+describe('TicketBotClient evidence capabilities', () => {
+  it('reads the separate ticket-evidence capability contract', async () => {
+    const capabilities = await makeClient().getEvidenceCapabilities();
+    expect(capabilities).toEqual({
+      service: 'enthusia-support-bot',
+      api: 'ticket-evidence',
+      contractVersion: 'evidence-v1',
+      reads: ['attachment.image'],
+      maxImageBytes: 8 * 1024 * 1024,
+    });
+  });
+
+  it('fetches image bytes only through ticket/message/attachment provenance ids', async () => {
+    const evidence = await makeClient().getTicketImageEvidence(
+      'T-1234',
+      'm-1',
+      '120000000000000001',
+    );
+    expect(evidence).toMatchObject({
+      ticketId: 'T-1234',
+      messageId: 'm-1',
+      attachmentId: '120000000000000001',
+      contentType: 'image/png',
+      size: 4,
+      sha256:
+        '0f4636c78f65d3639ece5a064b5ae753e3408614a14fb18ab4d7540d2c248543',
+    });
+    expect([...evidence.bytes]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+  });
+
+  it('rejects image evidence when the provenance hash does not match the bytes', async () => {
+    const client = new TicketBotClient({
+      baseUrl,
+      apiKey: API_KEY,
+      timeoutMs: 5_000,
+      fetchImpl: async (input, init) => {
+        const url = String(input);
+        if (url.endsWith('/v1/evidence/capabilities')) {
+          return new Response(JSON.stringify({
+            service: 'enthusia-support-bot',
+            api: 'ticket-evidence',
+            contractVersion: 'evidence-v1',
+            reads: ['attachment.image'],
+            maxImageBytes: 1024,
+          }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        return new Response(new Uint8Array([1, 2, 3]), {
+          status: 200,
+          headers: {
+            'Content-Type': 'image/png',
+            'Content-Length': '3',
+            'X-Enthusia-Ticket-Id': '1234',
+            'X-Enthusia-Message-Id': 'm-1',
+            'X-Enthusia-Attachment-Id': '120000000000000001',
+            'X-Enthusia-Content-Sha256':
+              'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          },
+        });
+      },
+    });
+
+    await expect(
+      client.getTicketImageEvidence(
+        'T-1234',
+        'm-1',
+        '120000000000000001',
+      ),
+    ).rejects.toThrow(/content hash did not match/);
+  });
+});
 
 describe('TicketBotClient capabilities', () => {
   it('reads and validates the deployed W14 capability contract', async () => {
@@ -414,10 +516,15 @@ describe('no-mutation invariant', () => {
   it('assertAllowedRequest accepts every client-issued target', () => {
     const allowed: Array<[string, string]> = [
       ['GET', '/v1/capabilities'],
+      ['GET', '/v1/evidence/capabilities'],
       ['GET', '/v1/tickets'],
       ['GET', '/v1/tickets/T-1234'],
       ['GET', '/v1/tickets/T-1234/messages'],
       ['GET', '/v1/tickets/T-1234/participants'],
+      [
+        'GET',
+        '/v1/tickets/T-1234/messages/m-1/attachments/120000000000000001/image',
+      ],
       ['POST', '/v1/tickets/T-1234/actions/request'],
       ['GET', '/v1/actions/requests/ar-1'],
     ];
@@ -434,6 +541,12 @@ describe('no-mutation invariant', () => {
     await client.getTicketMessages('T-1234', { limit: 10 });
     await client.getTicketParticipants('T-1234');
     await client.getTicketContext('T-1234');
+    await client.getEvidenceCapabilities();
+    await client.getTicketImageEvidence(
+      'T-1234',
+      'm-1',
+      '120000000000000001',
+    );
     await client.requestClose('T-1234', 'Resolved.');
     await client.requestReopen('T-1234', 'Recurrence reported.');
     await client.requestEscalation('T-1234', 'Needs senior.', { assigneeId: 'staff-42' });
