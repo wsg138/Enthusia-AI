@@ -50,7 +50,7 @@ export interface TicketImageAssessmentRunner {
 
 export interface CollectTicketImageAssessmentsInput {
   ticket: TicketContextBundle;
-  evidenceClient: TicketEvidenceClient;
+  evidenceClient: Pick<TicketEvidenceClient, 'getImageEvidence'>;
   traceId: string;
   maxImages?: number;
   assessImage?: TicketImageAssessmentRunner;
@@ -219,7 +219,7 @@ async function assessCandidate(
 }
 
 async function fetchEvidence(
-  client: TicketEvidenceClient,
+  client: Pick<TicketEvidenceClient, 'getImageEvidence'>,
   ticket: TicketContextBundle,
   candidate: ImageCandidate,
 ) {
