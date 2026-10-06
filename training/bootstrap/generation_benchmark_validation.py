@@ -8,6 +8,23 @@ try:
 except ModuleNotFoundError:
     import generation_benchmark_formatting as _formatting
 
+try:
+    from training.bootstrap.generation_question_grounding import (
+        SAFE_ABSTRACT_TERMS,
+        SAFE_NATURAL_TERMS,
+        _lexemes,
+        _question_is_grounded,
+        _term_supported,
+    )
+except ModuleNotFoundError:
+    from generation_question_grounding import (
+        SAFE_ABSTRACT_TERMS,
+        SAFE_NATURAL_TERMS,
+        _lexemes,
+        _question_is_grounded,
+        _term_supported,
+    )
+
 PERMISSION_NODE_RE = _formatting.PERMISSION_NODE_RE
 _clean_display_line = _formatting._clean_display_line
 _split_markdown_table_row = _formatting._split_markdown_table_row
@@ -73,40 +90,6 @@ TICK_RATE_EQUIVALENCE_RE = re.compile(
     r"(?:up to\s+)?\d+(?:\.\d+)?\s+"
     r"(?:attempts?|attacks?|times?)\s+per\s+second\b"
 )
-QUESTION_STOPWORDS = {
-    "a", "an", "and", "are", "can", "could", "do", "does", "for", "from",
-    "how", "i", "in", "is", "it", "me", "my", "of", "on", "or", "the",
-    "to", "use", "using", "what", "when", "where", "which", "who", "why",
-    "will", "with", "you", "your", "about", "available", "behavior", "command",
-    "commands", "definition", "defined", "feature", "features", "frequency",
-    "check", "checking", "happening", "see", "show",
-    "guide", "mean", "means", "plugin", "plugins", "rule", "rules", "status",
-    "subcommand", "subcommands", "term", "terms",
-}
-SAFE_NATURAL_TERMS = {
-    "actually", "access", "accomplish", "accomplishing", "basically", "can",
-    "control", "controls", "could", "directly", "goal", "help", "helps",
-    "internal", "just", "manage", "managing", "management", "normal", "option",
-    "player", "players", "please", "right", "safe", "server", "simply", "staff",
-    "tell", "that", "that's", "thats", "there", "thing", "tool", "try",
-    "trying", "use", "want", "yep",
-}
-SAFE_ABSTRACT_TERMS = {
-    "permission", "permissions", "required", "needed", "configuration",
-    "configurations", "configure", "configured", "specific", "available",
-    "current",
-}
-SEMANTIC_SCOPE_CHECKS = (
-    (re.compile(r"\brank\b"), re.compile(r"\brank\b")),
-    (re.compile(r"\b(?:price|cost)\b"), re.compile(r"\b(?:price|cost|usd)\b|\$")),
-    ("leaderboard", "leaderboard"),
-    ("arena", "arena"),
-    ("cooldown", "cooldown"),
-    (re.compile(r"\brules?\b"), re.compile(r"\brules?\b")),
-)
-RATE_EVIDENCE_RE = re.compile(r"(?:per second|per tick|every tick|interval|cps|rate)")
-
-
 def _require_http_endpoint(parsed: urllib.parse.SplitResult) -> None:
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         raise ValueError("--endpoint must use http:// or https:// with a host")
@@ -178,104 +161,6 @@ def _resolve_evidence(job: dict, parsed: dict) -> tuple[list[dict], str]:
         })
     assistant = parsed.get("assistant")
     return facts, assistant.strip() if isinstance(assistant, str) else ""
-
-
-def _lexeme_variants(token: str) -> set[str]:
-    variants = {token}
-    if len(token) > 5 and token.endswith("ies"):
-        variants.add(token[:-3] + "y")
-    if len(token) > 4 and token.endswith("s"):
-        variants.add(token[:-1])
-    if len(token) > 5 and token.endswith("ing"):
-        variants.add(token[:-3])
-    if len(token) > 4 and token.endswith("ed"):
-        variants.add(token[:-2])
-    return variants
-
-
-def _lexemes(text: str) -> set[str]:
-    result: set[str] = set()
-    for raw_token in re.findall(r"[A-Za-z0-9_./:+-]+", text.lower()):
-        token = raw_token.strip("./:+-")
-        if len(token) >= 3 and token not in QUESTION_STOPWORDS:
-            result.update(_lexeme_variants(token))
-    return result
-
-
-def _contains_pattern(value: str, pattern: str | re.Pattern[str]) -> bool:
-    return pattern in value if isinstance(pattern, str) else bool(pattern.search(value))
-
-
-def _semantic_scope_supported(question: str, support: str) -> bool:
-    return all(
-        not _contains_pattern(question, question_pattern)
-        or _contains_pattern(support, support_pattern)
-        for question_pattern, support_pattern in SEMANTIC_SCOPE_CHECKS
-    )
-
-
-def _permission_support(question: str, support: str) -> tuple[bool, bool]:
-    asks_permission = bool(re.search(r"\bpermissions?\b", question))
-    has_evidence = bool(re.search(r"\bpermissions?\b", support) or PERMISSION_NODE_RE.search(support))
-    return asks_permission, has_evidence
-
-
-def _version_supported(question: str, support: str) -> bool:
-    return "version" not in question or "version" in support or bool(re.search(r"\b\d+(?:\.\d+)+", support))
-
-
-def _semantic_support(question: str, support: str, asks_permission: bool, has_permission: bool) -> str:
-    result = support
-    if asks_permission and has_permission:
-        result += " permission required needed"
-    if "speed" in question and RATE_EVIDENCE_RE.search(support):
-        result += " speed"
-    return result
-
-
-def _term_supported(term: str, support_terms: set[str]) -> bool:
-    if term in support_terms:
-        return True
-    if len(term) < 5:
-        return False
-    return any(candidate.startswith(term) for candidate in support_terms if len(candidate) >= len(term))
-
-
-def _long_terms_supported(question_terms: set[str], support_terms: set[str]) -> bool:
-    return all(
-        len(term) < 8 or term in SAFE_ABSTRACT_TERMS or _term_supported(term, support_terms)
-        for term in question_terms
-    )
-
-
-def _grounding_terms_match(question: str, support: str) -> bool:
-    question_terms = _lexemes(question)
-    if not question_terms:
-        return True
-    support_terms = _lexemes(support)
-    if not _long_terms_supported(question_terms, support_terms):
-        return False
-    matched = sum(1 for term in question_terms if _term_supported(term, support_terms))
-    return matched / len(question_terms) >= 0.50
-
-
-def _question_is_grounded(job: dict, parsed: dict) -> bool:
-    question = parsed.get("user")
-    if not isinstance(question, str):
-        return False
-    support = " ".join((_evidence_text(job), str(job.get("repository", "")), str(job.get("path", "")))).lower()
-    lowered = question.lower()
-    asks_permission, has_permission = _permission_support(lowered, support)
-    if not _semantic_scope_supported(lowered, support):
-        return False
-    if asks_permission and not has_permission:
-        return False
-    if not _version_supported(lowered, support):
-        return False
-    return _grounding_terms_match(
-        lowered,
-        _semantic_support(lowered, support, asks_permission, has_permission),
-    )
 
 
 def _render_evidence_entries(entries: list[dict]) -> str:
@@ -503,25 +388,59 @@ def _teaches_staff_subcommand(
     return bool(instruction.search(assistant))
 
 
+def _append_boundary_literal_problems(
+    assistant: str,
+    problems: list[str],
+) -> None:
+    checks = (
+        (COMMAND_RE.search(assistant), "staff_command_leak"),
+        (PERMISSION_NODE_RE.search(assistant), "staff_permission_leak"),
+        (BACKEND_JARGON_RE.search(assistant), "staff_backend_jargon_leak"),
+    )
+    problems.extend(problem for match, problem in checks if match)
+
+
+def _boundary_subcommands(job: dict) -> set[str]:
+    return {
+        match.group(1).lower()
+        for match in STAFF_SUBCOMMAND_RE.finditer(_evidence_text(job))
+    }
+
+
+def _append_boundary_subcommand_problem(
+    job: dict,
+    user: str,
+    assistant: str,
+    problems: list[str],
+) -> None:
+    teaches = any(
+        _teaches_staff_subcommand(assistant, user, term)
+        for term in _boundary_subcommands(job)
+    )
+    if teaches:
+        problems.append("staff_subcommand_leak")
+
+
+def _append_missing_boundary_problem(
+    assistant: str,
+    problems: list[str],
+) -> None:
+    has_boundary = re.search(
+        r"(?i)\b(?:staff|internal|admin|operator)\b",
+        assistant,
+    )
+    if not has_boundary:
+        problems.append("missing_staff_boundary")
+
+
 def _validate_boundary(job: dict, parsed: dict, problems: list[str]) -> None:
     if job.get("response_mode") != "player_boundary":
         return
     assistant = str(parsed.get("assistant", ""))
     user = str(parsed.get("user", ""))
-    if COMMAND_RE.search(assistant):
-        problems.append("staff_command_leak")
-    if PERMISSION_NODE_RE.search(assistant):
-        problems.append("staff_permission_leak")
-    if BACKEND_JARGON_RE.search(assistant):
-        problems.append("staff_backend_jargon_leak")
-    subcommands = {
-        match.group(1).lower()
-        for match in STAFF_SUBCOMMAND_RE.finditer(_evidence_text(job))
-    }
-    if any(_teaches_staff_subcommand(assistant, user, term) for term in subcommands):
-        problems.append("staff_subcommand_leak")
-    if not re.search(r"(?i)\b(?:staff|internal|admin|operator)\b", assistant):
-        problems.append("missing_staff_boundary")
+    _append_boundary_literal_problems(assistant, problems)
+    _append_boundary_subcommand_problem(job, user, assistant, problems)
+    _append_missing_boundary_problem(assistant, problems)
 
 
 def _validate_player_jargon(job: dict, parsed: dict, problems: list[str]) -> None:
