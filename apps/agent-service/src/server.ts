@@ -19,6 +19,8 @@ import type { EnthusiaLogger } from '@enthusia/logging';
 import type { AgentServiceConfig } from './config.js';
 import type { StaleTicketDecisionService } from './stale-ticket.js';
 import { handleStaleTicketDecisionHttp } from './stale-ticket-http.js';
+import type { TicketEvidenceReviewService } from './ticket-evidence-review.js';
+import { handleTicketEvidenceReviewHttp } from './ticket-evidence-review-http.js';
 
 export interface AgentServiceDeps {
   config: AgentServiceConfig;
@@ -27,6 +29,7 @@ export interface AgentServiceDeps {
   registry: ToolRegistry;
   inference: Pick<InferenceClient, 'getModels' | 'getMetrics'>;
   staleTicketDecision?: Pick<StaleTicketDecisionService, 'decide'>;
+  ticketEvidenceReview?: Pick<TicketEvidenceReviewService, 'review'>;
   now?: () => number;
 }
 
@@ -339,6 +342,23 @@ async function handleProtectedRoute(
         maxBodyBytes: deps.config.maxBodyBytes,
         ...(deps.staleTicketDecision !== undefined
           ? { service: deps.staleTicketDecision }
+          : {}),
+      });
+    } finally {
+      state.activeRequests -= 1;
+    }
+    return;
+  }
+  if (
+    req.method === 'POST' &&
+    url.pathname === '/v1/ticket/evidence-review'
+  ) {
+    state.activeRequests += 1;
+    try {
+      await handleTicketEvidenceReviewHttp(req, res, {
+        maxBodyBytes: deps.config.maxBodyBytes,
+        ...(deps.ticketEvidenceReview !== undefined
+          ? { service: deps.ticketEvidenceReview }
           : {}),
       });
     } finally {
