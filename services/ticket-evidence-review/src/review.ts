@@ -26,129 +26,206 @@ export class EvidenceReviewValidationError extends Error {
   }
 }
 
+interface ReviewContext {
+  input: TicketEvidenceReviewInput;
+  target: ReturnType<typeof ticketReportTarget>;
+  observedFacts: string[];
+  limitations: string[];
+  strongest: EvidencePolicyConcern | null;
+  needsMoreContext: boolean;
+  missingEvidence: string[];
+}
+
 export function reviewTicketEvidence(
   input: TicketEvidenceReviewInput,
 ): TicketEvidenceReviewResult {
+  const context = buildReviewContext(input);
+  return preliminaryDisposition(context) ?? concernDisposition(context);
+}
+
+function buildReviewContext(
+  input: TicketEvidenceReviewInput,
+): ReviewContext {
   const target = ticketReportTarget(input.ticket.ticket);
   validateModerationTarget(target?.value ?? null, input.moderationState);
   validateEvidenceProvenance(input.ticket, input.imageEvidence);
   validateConcerns(input.concerns, input.imageEvidence);
 
-  const observedFacts = directObservedFacts(input.imageEvidence);
   const limitations = boundedUnique(
     input.imageEvidence.flatMap((item) => item.assessment.limitations),
     MAX_LIMITATIONS,
   );
-
-  if (target === null) {
-    return result(input, null, {
-      disposition: 'needs_more_evidence',
-      confidence: 1,
-      observedFacts,
-      limitations,
-      missingEvidence: ['A validated reported-player target is required.'],
-      summary: 'The report does not expose a validated reported-player target.',
-    });
-  }
-
-  if (input.imageEvidence.length === 0) {
-    return result(input, target, {
-      disposition: 'needs_more_evidence',
-      confidence: 1,
-      observedFacts,
-      limitations,
-      missingEvidence: ['Attach screenshot or video evidence tied to this ticket.'],
-      summary: `No provenance-linked visual evidence is available for ${target.value}.`,
-    });
-  }
-
-  if (isDuplicate(input.moderationState)) {
-    const label =
-      input.moderationState.duplicateStatus === 'actioned'
-        ? 'already has authoritative action recorded'
-        : 'already has an authoritative staff review open';
-    return result(input, target, {
-      disposition: 'already_actioned',
-      confidence: 1,
-      observedFacts,
-      limitations,
-      missingEvidence: [],
-      summary: `This report ${label}; do not create a duplicate staff escalation.`,
-    });
-  }
-
   const strongest = strongestConcern(input.concerns);
-  const needsMoreContext = input.imageEvidence.some(
-    (item) => item.assessment.needsMoreContext,
-  );
-  const missingEvidence = missingEvidenceFor(
-    input.imageEvidence,
+  return {
+    input,
+    target,
+    observedFacts: directObservedFacts(input.imageEvidence),
     limitations,
     strongest,
-  );
-
-  if (strongest === null) {
-    if (needsMoreContext) {
-      return result(input, target, {
-        disposition: 'needs_more_evidence',
-        confidence: 0.7,
-        observedFacts,
-        limitations,
-        missingEvidence,
-        summary:
-          'The submitted visual evidence is incomplete or ambiguous and does not yet support a policy concern.',
-      });
-    }
-    return result(input, target, {
-      disposition: 'no_escalation',
-      confidence: 0.85,
-      observedFacts,
+    needsMoreContext: input.imageEvidence.some(
+      (item) => item.assessment.needsMoreContext,
+    ),
+    missingEvidence: missingEvidenceFor(
+      input.imageEvidence,
       limitations,
-      missingEvidence: [],
-      summary:
-        'The submitted visual evidence is readable, but no rule-aware concern is currently supported.',
-    });
-  }
+      strongest,
+    ),
+  };
+}
 
-  const grounded = concernHasDirectObservation(
-    strongest,
-    input.imageEvidence,
-  );
-  if (
-    strongest.confidence >= STAFF_REVIEW_CONFIDENCE &&
-    grounded &&
-    !needsMoreContext
-  ) {
-    return result(input, target, {
-      disposition: 'staff_review',
-      confidence: strongest.confidence,
-      observedFacts,
-      limitations,
-      missingEvidence: [],
-      summary: staffSummary(target.value, strongest, observedFacts),
-    });
+function preliminaryDisposition(
+  context: ReviewContext,
+): TicketEvidenceReviewResult | null {
+  if (context.target === null) return missingTargetResult(context);
+  if (context.input.imageEvidence.length === 0) {
+    return missingVisualEvidenceResult(context);
   }
+  if (isDuplicate(context.input.moderationState)) {
+    return duplicateResult(context);
+  }
+  return null;
+}
 
-  if (
-    strongest.confidence >= MORE_EVIDENCE_CONFIDENCE ||
-    needsMoreContext
-  ) {
-    return result(input, target, {
+function missingTargetResult(
+  context: ReviewContext,
+): TicketEvidenceReviewResult {
+  return result(context.input, null, {
+    disposition: 'needs_more_evidence',
+    confidence: 1,
+    observedFacts: context.observedFacts,
+    limitations: context.limitations,
+    missingEvidence: ['A validated reported-player target is required.'],
+    summary: 'The report does not expose a validated reported-player target.',
+  });
+}
+
+function missingVisualEvidenceResult(
+  context: ReviewContext,
+): TicketEvidenceReviewResult {
+  const target = context.target;
+  if (target === null) return missingTargetResult(context);
+  return result(context.input, target, {
+    disposition: 'needs_more_evidence',
+    confidence: 1,
+    observedFacts: context.observedFacts,
+    limitations: context.limitations,
+    missingEvidence: ['Attach screenshot or video evidence tied to this ticket.'],
+    summary: `No provenance-linked visual evidence is available for ${target.value}.`,
+  });
+}
+
+function duplicateResult(
+  context: ReviewContext,
+): TicketEvidenceReviewResult {
+  const state = context.input.moderationState;
+  const label =
+    state.duplicateStatus === 'actioned'
+      ? 'already has authoritative action recorded'
+      : 'already has an authoritative staff review open';
+  return result(context.input, context.target, {
+    disposition: 'already_actioned',
+    confidence: 1,
+    observedFacts: context.observedFacts,
+    limitations: context.limitations,
+    missingEvidence: [],
+    summary: `This report ${label}; do not create a duplicate staff escalation.`,
+  });
+}
+
+function concernDisposition(
+  context: ReviewContext,
+): TicketEvidenceReviewResult {
+  if (context.strongest === null) return noConcernDisposition(context);
+  if (isStrongGroundedConcern(context)) return staffReviewResult(context);
+  if (needsMoreEvidence(context)) return moreEvidenceResult(context);
+  return weakConcernResult(context);
+}
+
+function noConcernDisposition(
+  context: ReviewContext,
+): TicketEvidenceReviewResult {
+  if (context.needsMoreContext) {
+    return result(context.input, context.target, {
       disposition: 'needs_more_evidence',
-      confidence: strongest.confidence,
-      observedFacts,
-      limitations,
-      missingEvidence,
+      confidence: 0.7,
+      observedFacts: context.observedFacts,
+      limitations: context.limitations,
+      missingEvidence: context.missingEvidence,
       summary:
-        'There is a possible moderation concern, but the available evidence is not strong enough for a compact staff escalation yet.',
+        'The submitted visual evidence is incomplete or ambiguous and does not yet support a policy concern.',
     });
   }
-
-  return result(input, target, {
+  return result(context.input, context.target, {
     disposition: 'no_escalation',
-    confidence: 1 - strongest.confidence,
-    observedFacts,
-    limitations,
+    confidence: 0.85,
+    observedFacts: context.observedFacts,
+    limitations: context.limitations,
+    missingEvidence: [],
+    summary:
+      'The submitted visual evidence is readable, but no rule-aware concern is currently supported.',
+  });
+}
+
+function isStrongGroundedConcern(context: ReviewContext): boolean {
+  const strongest = context.strongest;
+  if (strongest === null) return false;
+  return (
+    strongest.confidence >= STAFF_REVIEW_CONFIDENCE &&
+    concernHasDirectObservation(strongest, context.input.imageEvidence) &&
+    !context.needsMoreContext
+  );
+}
+
+function needsMoreEvidence(context: ReviewContext): boolean {
+  return (
+    (context.strongest?.confidence ?? 0) >= MORE_EVIDENCE_CONFIDENCE ||
+    context.needsMoreContext
+  );
+}
+
+function staffReviewResult(
+  context: ReviewContext,
+): TicketEvidenceReviewResult {
+  const strongest = context.strongest;
+  const target = context.target;
+  if (strongest === null || target === null) {
+    throw new EvidenceReviewValidationError(
+      'Staff review requires a validated target and concern.',
+    );
+  }
+  return result(context.input, target, {
+    disposition: 'staff_review',
+    confidence: strongest.confidence,
+    observedFacts: context.observedFacts,
+    limitations: context.limitations,
+    missingEvidence: [],
+    summary: staffSummary(target.value, strongest, context.observedFacts),
+  });
+}
+
+function moreEvidenceResult(
+  context: ReviewContext,
+): TicketEvidenceReviewResult {
+  return result(context.input, context.target, {
+    disposition: 'needs_more_evidence',
+    confidence: context.strongest?.confidence ?? 0.7,
+    observedFacts: context.observedFacts,
+    limitations: context.limitations,
+    missingEvidence: context.missingEvidence,
+    summary:
+      'There is a possible moderation concern, but the available evidence is not strong enough for a compact staff escalation yet.',
+  });
+}
+
+function weakConcernResult(
+  context: ReviewContext,
+): TicketEvidenceReviewResult {
+  const confidence = context.strongest?.confidence ?? 0;
+  return result(context.input, context.target, {
+    disposition: 'no_escalation',
+    confidence: 1 - confidence,
+    observedFacts: context.observedFacts,
+    limitations: context.limitations,
     missingEvidence: [],
     summary:
       'The current rule-aware concern is too weak to justify staff escalation.',
