@@ -133,35 +133,56 @@ function assessmentsForStyle(
   backgroundClaims: string[],
   responseStyle: ResponseStyleProfile | undefined,
 ): ClaimAssessment[] {
-  if (
-    responseStyle === undefined ||
-    backgroundClaims.length === 0 ||
-    responseStyle.familiarity === 'NEW'
-  ) {
-    return assessments;
-  }
+  if (responseStyle === undefined) return assessments;
+  if (backgroundClaims.length === 0) return assessments;
+  if (responseStyle.familiarity === 'NEW') return assessments;
 
   const background = new Set(backgroundClaims);
-  if (
-    responseStyle.familiarity === 'FAMILIAR' ||
-    responseStyle.familiarity === 'EXPERT'
-  ) {
-    const direct = assessments.filter((assessment) => !background.has(assessment.claim));
-    return direct.length > 0 ? direct : assessments;
+  if (responseStyle.familiarity === 'UNKNOWN') {
+    return unknownStyleAssessments(assessments, background);
   }
+  return directStyleAssessments(assessments, background);
+}
 
-  // UNKNOWN: one short context fact is useful, but do not turn uncertainty
-  // into a full beginner tutorial.
-  const firstBackground = assessments.find((assessment) =>
-    background.has(assessment.claim),
+function directStyleAssessments(
+  assessments: ClaimAssessment[],
+  background: ReadonlySet<string>,
+): ClaimAssessment[] {
+  const direct = assessments.filter(
+    (assessment) => !background.has(assessment.claim),
+  );
+  return fallbackIfEmpty(direct, assessments);
+}
+
+function unknownStyleAssessments(
+  assessments: ClaimAssessment[],
+  background: ReadonlySet<string>,
+): ClaimAssessment[] {
+  const firstBackground = assessments.find(
+    (assessment) => background.has(assessment.claim),
   );
   if (firstBackground === undefined) return assessments;
 
-  const selected = assessments.filter(
-    (assessment) =>
-      !background.has(assessment.claim) || assessment === firstBackground,
+  const selected = assessments.filter((assessment) =>
+    shouldShowUnknownAssessment(assessment, firstBackground, background),
   );
-  return selected.length > 0 ? selected : assessments;
+  return fallbackIfEmpty(selected, assessments);
+}
+
+function shouldShowUnknownAssessment(
+  assessment: ClaimAssessment,
+  firstBackground: ClaimAssessment,
+  background: ReadonlySet<string>,
+): boolean {
+  if (!background.has(assessment.claim)) return true;
+  return assessment === firstBackground;
+}
+
+function fallbackIfEmpty(
+  selected: ClaimAssessment[],
+  fallback: ClaimAssessment[],
+): ClaimAssessment[] {
+  return selected.length === 0 ? fallback : selected;
 }
 
 /** One factual line per claim — the policy made visible. */
