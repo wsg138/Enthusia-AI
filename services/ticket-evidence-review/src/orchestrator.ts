@@ -4,7 +4,9 @@ import type {
   TicketEvidenceClient,
 } from '@enthusia/integration-ticket-bot';
 import {
+  CostTracker,
   MAX_VISION_IMAGE_BYTES,
+  loadConfig,
   runImageEvidenceAssessment,
   type RunImageEvidenceInput,
   type RunImageEvidenceResult,
@@ -12,7 +14,8 @@ import {
 } from '@enthusia/openai-gateway';
 import type { TicketImageAssessmentRecord } from './types.js';
 
-export const MAX_TICKET_IMAGE_ASSESSMENTS = 4;
+export const MAX_TICKET_IMAGE_ASSESSMENTS = 3;
+const MAX_COLLECTION_ISSUES = 16;
 
 const SUPPORTED_IMAGE_TYPES = new Set<VisionImageContentType>([
   'image/png',
@@ -66,9 +69,10 @@ export async function collectTicketImageAssessments(
   const selection = selectImageCandidates(input.ticket, maxImages);
   const assessments: TicketImageAssessmentRecord[] = [];
   const issues = [...selection.issues];
-  const runner = input.assessImage ?? runImageEvidenceAssessment;
+  let runner = input.assessImage;
 
   for (const candidate of selection.selected) {
+    runner ??= defaultAssessmentRunner();
     const outcome = await assessCandidate(input, candidate, runner);
     if ('record' in outcome) assessments.push(outcome.record);
     else issues.push(outcome.issue);
@@ -76,10 +80,17 @@ export async function collectTicketImageAssessments(
 
   return {
     assessments,
-    issues,
+    issues: issues.slice(0, MAX_COLLECTION_ISSUES),
     eligibleAttachmentCount: selection.eligibleCount,
     attemptedCount: selection.selected.length,
   };
+}
+
+function defaultAssessmentRunner(): TicketImageAssessmentRunner {
+  const config = loadConfig();
+  const tracker = new CostTracker(config.budget, config.modelPrices);
+  return (request) =>
+    runImageEvidenceAssessment(request, { config, tracker });
 }
 
 function boundedMaxImages(value: number | undefined): number {
