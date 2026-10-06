@@ -15,7 +15,10 @@
 
 // Orchestrator entry point
 export { AgentOrchestrator, resolveTraceId, wantsDeepInvestigation } from './orchestrator.js';
-export type { OrchestratorDeps } from './orchestrator.js';
+export type {
+  OrchestratorDeps,
+  VerifiedTopicHelpEvent,
+} from './orchestrator.js';
 
 // Core types
 export {

@@ -10,9 +10,20 @@ describe('agent-service Ticket Bot configuration', () => {
     expect(config.ticketBotBaseUrl).toBeUndefined();
     expect(config.ticketBotApiKey).toBeUndefined();
     expect(redactedAgentServiceConfig(config)).toMatchObject({
+      memoryConfigured: false,
       ticketBotConfigured: false,
       ticketBotTimeoutMs: 10_000,
     });
+  });
+
+  it('redacts the familiarity memory path', () => {
+    const config = loadAgentServiceConfig({
+      NODE_ENV: 'test',
+      ENTHUSIA_AGENT_MEMORY_PATH: '/srv/private/state/agent-memory.sqlite',
+    });
+    const redacted = redactedAgentServiceConfig(config);
+    expect(redacted).toMatchObject({ memoryConfigured: true });
+    expect(JSON.stringify(redacted)).not.toContain('/srv/private/state');
   });
 
   it('fails closed when only half of the Ticket Bot credential pair is set', () => {

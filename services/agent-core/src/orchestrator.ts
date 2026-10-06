@@ -69,6 +69,15 @@ import type {
 } from './types.js';
 
 /** Dependencies injected into the orchestrator (all seams are DI). */
+export interface VerifiedTopicHelpEvent {
+  actor: ResolvedChatRequest['actor'];
+  topic: string;
+  conversationId: string;
+  traceId: string;
+  observedAt: string;
+  supportedDirectClaims: number;
+}
+
 export interface OrchestratorDeps {
   /** Local-model reasoner (W03-backed in production, mocked in tests). */
   reasoner: Reasoner;
@@ -86,6 +95,13 @@ export interface OrchestratorDeps {
   reasonerTimeoutMs?: number;
   /** Hook receiving the W13 investigation packet on openai escalations. */
   onPacket?: (packet: InvestigationPacket) => void;
+  /**
+   * Best-effort deterministic learning hook for topic-specific response style.
+   * It receives no raw message or memory text.
+   */
+  onVerifiedTopicHelp?: (
+    event: VerifiedTopicHelpEvent,
+  ) => Promise<void> | void;
 }
 
 /** Default bound for non-loop reasoner calls. */
@@ -289,7 +305,7 @@ export class AgentOrchestrator {
       'draftResponse',
     );
 
-    return assembleResponse({
+    const response = assembleResponse({
       request,
       assessments: visibleAssessments,
       evidence: outcome.evidence,
@@ -305,6 +321,22 @@ export class AgentOrchestrator {
         ...terminationNote(outcome.termination),
       ],
     });
+
+    const verifiedHelp = verifiedTopicHelpEvent(
+      request,
+      classification,
+      visibleAssessments,
+      this.nowMs(),
+    );
+    if (verifiedHelp !== null && this.deps.onVerifiedTopicHelp !== undefined) {
+      try {
+        await this.deps.onVerifiedTopicHelp(verifiedHelp);
+      } catch {
+        // Familiarity learning is best-effort and must never fail the answer.
+      }
+    }
+
+    return response;
   }
 
   private collectMemoryProposals(
@@ -344,6 +376,38 @@ export class AgentOrchestrator {
       }
     }
   }
+}
+
+function verifiedTopicHelpEvent(
+  request: ResolvedChatRequest,
+  classification: IntentClassification,
+  assessments: ClaimAssessment[],
+  nowMs: number,
+): VerifiedTopicHelpEvent | null {
+  if (
+    request.actor.type !== 'player' ||
+    classification.needsFamiliarityContext !== true ||
+    classification.familiarityTopic === undefined
+  ) {
+    return null;
+  }
+
+  const background = new Set(classification.backgroundClaims ?? []);
+  const supportedDirectClaims = assessments.filter(
+    (assessment) =>
+      assessment.verdict === 'supported' &&
+      !background.has(assessment.claim),
+  ).length;
+  if (supportedDirectClaims === 0) return null;
+
+  return {
+    actor: request.actor,
+    topic: classification.familiarityTopic,
+    conversationId: request.conversationId,
+    traceId: request.traceId,
+    observedAt: new Date(nowMs).toISOString(),
+    supportedDirectClaims,
+  };
 }
 
 /** Read-only factual context handed to the reasoner for draft framing. */
