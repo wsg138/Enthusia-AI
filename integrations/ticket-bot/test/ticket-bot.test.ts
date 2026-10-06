@@ -273,7 +273,7 @@ describe('TicketBotClient evidence capabilities', () => {
       baseUrl,
       apiKey: API_KEY,
       timeoutMs: 5_000,
-      fetchImpl: async (input, init) => {
+      fetchImpl: async (input) => {
         const url = String(input);
         if (url.endsWith('/v1/evidence/capabilities')) {
           return new Response(JSON.stringify({
