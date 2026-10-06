@@ -61,12 +61,25 @@ export function parseCurrentReasonPolicyCatalog(
   provenance: CurrentPolicyProvenance,
 ): VerifiedPolicyCatalog {
   validateProvenance(provenance);
-  if (Buffer.byteLength(text, 'utf8') > MAX_POLICY_CATALOG_BYTES) {
-    throw new PolicyCatalogValidationError(
-      'Moderation policy catalog exceeds the configured size bound.',
-    );
-  }
+  validatePolicySize(text);
+  const parsed = parsePolicyYaml(text);
+  return {
+    policyVersion: parsed.version,
+    provenance: { ...provenance },
+    rules: projectReportableRules(parsed),
+  };
+}
 
+type ParsedPolicy = z.infer<typeof policySchema>;
+
+function validatePolicySize(text: string): void {
+  if (Buffer.byteLength(text, 'utf8') <= MAX_POLICY_CATALOG_BYTES) return;
+  throw new PolicyCatalogValidationError(
+    'Moderation policy catalog exceeds the configured size bound.',
+  );
+}
+
+function parsePolicyYaml(text: string): ParsedPolicy {
   let raw: unknown;
   try {
     raw = load(text);
@@ -77,43 +90,51 @@ export function parseCurrentReasonPolicyCatalog(
   }
 
   const parsed = policySchema.safeParse(raw);
-  if (!parsed.success) {
-    throw new PolicyCatalogValidationError(
-      'Moderation policy catalog does not match the expected reason-policy shape.',
-    );
-  }
+  if (parsed.success) return parsed.data;
+  throw new PolicyCatalogValidationError(
+    'Moderation policy catalog does not match the expected reason-policy shape.',
+  );
+}
 
-  const defaultReportable = parsed.data.defaults?.reportable ?? true;
+function projectReportableRules(
+  policy: ParsedPolicy,
+): VerifiedPolicyRule[] {
+  const defaultReportable = policy.defaults?.reportable ?? true;
   const ids = new Set<string>();
   const rules: VerifiedPolicyRule[] = [];
-  for (const reason of parsed.data.reasons) {
-    if (ids.has(reason.id)) {
-      throw new PolicyCatalogValidationError(
-        `Moderation policy catalog contains duplicate reason id: ${reason.id}`,
-      );
-    }
-    ids.add(reason.id);
+
+  for (const reason of policy.reasons) {
+    requireUniqueReasonId(ids, reason.id);
     if ((reason.reportable ?? defaultReportable) !== true) continue;
-    rules.push({
-      id: reason.id,
-      family: reason.family,
-      label: reason['display-name'],
-      severity: reason.severity,
-      severityBand: policySeverityBand(reason.severity),
-      examples: [...(reason.examples ?? [])],
-    });
+    rules.push(projectRule(reason));
   }
 
-  if (rules.length === 0) {
-    throw new PolicyCatalogValidationError(
-      'Moderation policy catalog contains no reportable reasons.',
-    );
-  }
+  if (rules.length > 0) return rules;
+  throw new PolicyCatalogValidationError(
+    'Moderation policy catalog contains no reportable reasons.',
+  );
+}
 
+function requireUniqueReasonId(ids: Set<string>, id: string): void {
+  if (!ids.has(id)) {
+    ids.add(id);
+    return;
+  }
+  throw new PolicyCatalogValidationError(
+    `Moderation policy catalog contains duplicate reason id: ${id}`,
+  );
+}
+
+function projectRule(
+  reason: z.infer<typeof reasonSchema>,
+): VerifiedPolicyRule {
   return {
-    policyVersion: parsed.data.version,
-    provenance: { ...provenance },
-    rules,
+    id: reason.id,
+    family: reason.family,
+    label: reason['display-name'],
+    severity: reason.severity,
+    severityBand: policySeverityBand(reason.severity),
+    examples: [...(reason.examples ?? [])],
   };
 }
 
