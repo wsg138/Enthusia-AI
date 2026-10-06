@@ -46,3 +46,15 @@ export type {
   VerifiedPolicyCatalog,
   VerifiedPolicyRule,
 } from './policy-catalog.js';
+
+export {
+  LocalPolicyConcernAssessor,
+  MAX_POLICY_CONCERNS,
+  MAX_POLICY_EVIDENCE_ITEMS,
+  MAX_POLICY_RULES_FOR_ASSESSMENT,
+  PolicyConcernAssessmentError,
+} from './policy-assessor.js';
+export type {
+  PolicyConcernAssessmentInput,
+  PolicyConcernAssessmentResult,
+} from './policy-assessor.js';
