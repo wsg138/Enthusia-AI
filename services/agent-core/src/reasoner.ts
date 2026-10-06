@@ -26,6 +26,7 @@ import type {
   InvestigationSnapshot,
   MemoryUpdateProposal,
   ResponseDraft,
+  ResponseStyleProfile,
   ToolCallProposal,
   ClaimVerdict,
 } from './types.js';
@@ -66,6 +67,8 @@ export interface DraftArgs {
   factualLines: string[];
   evidence: EvidenceItem[];
   escalated: boolean;
+  /** Privacy-safe style hint only; never the underlying memory/context text. */
+  responseStyle?: ResponseStyleProfile;
 }
 
 /**

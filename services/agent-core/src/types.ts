@@ -114,6 +114,19 @@ export interface IntentClassification {
   summary: string;
   /** Mutable Enthusia facts the answer will need to assert (§11.1). */
   claims: string[];
+  /**
+   * Optional subset of claims that provide introductory/background context.
+   * These facts are still verified normally; response assembly may omit them
+   * for a player who is already familiar with the topic.
+   */
+  backgroundClaims?: string[];
+  /**
+   * True only when topic-specific player familiarity would materially improve
+   * explanation depth. This is separate from factual private-context needs.
+   */
+  needsFamiliarityContext?: boolean;
+  /** Canonical short topic used for the familiarity lookup. */
+  familiarityTopic?: string;
   /** True when answering legitimately requires identity/private context. */
   needsPrivateContext: boolean;
   /** True when the request is security-sensitive (escalation input, §22.1). */
@@ -281,6 +294,19 @@ export interface InvestigationSnapshot {
     iterationsRemaining: number;
     reasonerCallsRemaining: number;
   };
+}
+
+export type ResponseFamiliarityLevel =
+  | 'NEW'
+  | 'FAMILIAR'
+  | 'EXPERT'
+  | 'UNKNOWN';
+
+export interface ResponseStyleProfile {
+  topic: string;
+  familiarity: ResponseFamiliarityLevel;
+  confidence: number;
+  basis: Array<'CURRENT_CONTEXT' | 'CURRENT_MEMORY' | 'CONVERSATION'>;
 }
 
 /** Conversational framing from the reasoner (never carries factual claims). */

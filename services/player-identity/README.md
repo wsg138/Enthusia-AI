@@ -84,3 +84,36 @@ services/player-identity/
 ```
 
 Run: `npx vitest run services/player-identity` from the repo root.
+
+
+## Topic familiarity
+
+Issue #33 adds a deliberately narrow response-style surface:
+
+`player.topic_familiarity({ topic })`
+
+The target player is **not** a tool parameter. The tool binds to the authenticated
+player actor in the request context, so the local model cannot turn it into a
+general player-profile lookup.
+
+The result is limited to:
+
+- `NEW | FAMILIAR | EXPERT | UNKNOWN`;
+- confidence from 0 to 1;
+- coarse evidence classes (`CURRENT_CONTEXT`, `CURRENT_MEMORY`,
+  `CONVERSATION`);
+- observation time.
+
+It never returns the underlying memory text, ticket text, account history, or
+other private evidence used by a future provider to derive the signal.
+
+The agent core uses the signal only to choose how many already-verified
+background claims to show:
+
+- `NEW`: include verified introductory/background facts;
+- `FAMILIAR` / `EXPERT`: skip repetitive background and keep the direct answer;
+- `UNKNOWN`: include at most one short verified context fact.
+
+Factual verification remains unchanged. Familiarity cannot make an unverified
+claim true, cannot alter tool authorization, and is not emitted as a response
+citation.

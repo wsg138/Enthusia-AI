@@ -53,3 +53,16 @@ export {
   IdentityResolveTool,
   requesterFromActor,
 } from './tool.js';
+
+// Topic-specific familiarity hint (issue #33)
+export {
+  TOPIC_FAMILIARITY_BASIS,
+  TOPIC_FAMILIARITY_LEVELS,
+  TopicFamiliarityTool,
+} from './familiarity.js';
+export type {
+  TopicFamiliarityBasis,
+  TopicFamiliarityLevel,
+  TopicFamiliarityProvider,
+  TopicFamiliaritySignal,
+} from './familiarity.js';

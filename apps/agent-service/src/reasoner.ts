@@ -21,6 +21,9 @@ const classificationSchema = z.strictObject({
   requestClass: z.enum(['simple', 'investigative', 'engineering']),
   summary: z.string().min(1).max(500),
   claims: z.array(z.string().min(1).max(500)).max(24),
+  backgroundClaims: z.array(z.string().min(1).max(500)).max(12).optional(),
+  needsFamiliarityContext: z.boolean().optional(),
+  familiarityTopic: z.string().min(1).max(160).optional(),
   needsPrivateContext: z.boolean(),
   securitySensitive: z.boolean(),
 });
@@ -217,13 +220,13 @@ export class InferenceReasoner implements Reasoner {
   constructor(private readonly client: CompletionClient) {}
 
   async classifyIntent(request: ChatRequest): Promise<IntentClassification> {
-    return this.completeJson(
+    const raw = await this.completeJson(
       {
         messages: [
           {
             role: 'system',
             content: systemInstruction(
-              'Classify the request. claims must contain only factual propositions that the final answer would need to verify. Purely conversational requests may have an empty claims array. Set needsPrivateContext=true only when answering genuinely requires identity-scoped, ticket-private, staff-only, or internal live-server evidence; do not set it merely because private tools exist.',
+              'Classify the request. claims must contain only factual propositions that the final answer would need to verify. Purely conversational requests may have an empty claims array. backgroundClaims, when present, must be a subset of claims containing only short introductory facts that can be omitted for a player already familiar with the topic. Set needsFamiliarityContext=true only for player-facing help about a server-specific concept where explanation depth would materially improve the answer, and provide a short familiarityTopic. Set needsPrivateContext=true only when factual answering genuinely requires identity-scoped, ticket-private, staff-only, or internal live-server evidence; familiarity style lookup alone does not require needsPrivateContext=true.',
             ),
           },
           {
@@ -240,6 +243,9 @@ export class InferenceReasoner implements Reasoner {
                 requestClass: 'simple|investigative|engineering',
                 summary: 'short string',
                 claims: ['claim to verify'],
+                backgroundClaims: ['optional introductory claim from claims'],
+                needsFamiliarityContext: false,
+                familiarityTopic: 'optional server concept',
                 needsPrivateContext: false,
                 securitySensitive: false,
               },
@@ -252,6 +258,23 @@ export class InferenceReasoner implements Reasoner {
       classificationSchema,
       request.traceId,
     );
+
+    return {
+      requestClass: raw.requestClass,
+      summary: raw.summary,
+      claims: [...raw.claims],
+      ...(raw.backgroundClaims !== undefined
+        ? { backgroundClaims: [...raw.backgroundClaims] }
+        : {}),
+      ...(raw.needsFamiliarityContext !== undefined
+        ? { needsFamiliarityContext: raw.needsFamiliarityContext }
+        : {}),
+      ...(raw.familiarityTopic !== undefined
+        ? { familiarityTopic: raw.familiarityTopic }
+        : {}),
+      needsPrivateContext: raw.needsPrivateContext,
+      securitySensitive: raw.securitySensitive,
+    };
   }
 
   async planEvidence(
