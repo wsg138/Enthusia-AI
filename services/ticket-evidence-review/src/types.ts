@@ -35,6 +35,11 @@ export interface EvidencePolicyConcern {
    * provenance-linked evidence ref are never sufficient for staff review.
    */
   evidenceRefs: string[];
+  /**
+   * CURRENT rule/policy source refs supporting this concern. Empty means the
+   * concern is not policy-grounded and must not drive staff escalation.
+   */
+  policyRefs: string[];
   summary: string;
 }
 
