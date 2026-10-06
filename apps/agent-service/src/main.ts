@@ -8,6 +8,7 @@ import {
   loadAgentServiceConfig,
   redactedAgentServiceConfig,
 } from './config.js';
+import { loadConfiguredFamiliarityTools } from './familiarity-memory.js';
 import { InferenceReasoner } from './reasoner.js';
 import {
   createAgentRuntime,
@@ -38,6 +39,7 @@ async function main(): Promise<void> {
   });
   const reasoner = new InferenceReasoner(inference);
   const staleTicketDecision = new StaleTicketDecisionService(inference);
+  const familiarityResource = loadConfiguredFamiliarityTools(config.memoryDbPath);
   const sftpTools = await loadConfiguredSftpTools(config.sftpConfigPath);
   const ticketTools = loadConfiguredTicketTools({
     ...(config.ticketBotBaseUrl !== undefined
@@ -48,7 +50,11 @@ async function main(): Promise<void> {
       : {}),
     timeoutMs: config.ticketBotTimeoutMs,
   });
-  const runtime = createAgentRuntime(reasoner, [...sftpTools, ...ticketTools]);
+  const runtime = createAgentRuntime(reasoner, [
+    ...familiarityResource.tools,
+    ...sftpTools,
+    ...ticketTools,
+  ]);
 
   const service = await startAgentService({
     config,
@@ -68,9 +74,12 @@ async function main(): Promise<void> {
     'agent service started',
   );
 
+  let shutdownStarted = false;
   const shutdown = (signal: string): void => {
+    if (shutdownStarted) return;
+    shutdownStarted = true;
     logger.info({ signal }, 'shutting down agent service');
-    void service.close().then(
+    void closeServiceAndResources(service.close, familiarityResource.close).then(
       () => {
         logger.info('agent service stopped');
         process.exit(0);
@@ -89,6 +98,24 @@ async function main(): Promise<void> {
   });
 
   logger.info({ port: service.port }, 'agent service listening');
+}
+
+async function closeServiceAndResources(
+  closeService: () => Promise<void>,
+  closeFamiliarity: () => void,
+): Promise<void> {
+  let failure: unknown;
+  try {
+    await closeService();
+  } catch (error) {
+    failure = error;
+  }
+  try {
+    closeFamiliarity();
+  } catch (error) {
+    failure ??= error;
+  }
+  if (failure !== undefined) throw failure;
 }
 
 void main().catch((error: unknown) => {
