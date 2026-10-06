@@ -56,4 +56,48 @@ describe('agent-service Ticket Bot configuration', () => {
     });
     expect(JSON.stringify(redacted)).not.toContain('never-log-this');
   });
+
+  it('fails closed for partial ticket evidence review configuration', () => {
+    expect(() =>
+      loadAgentServiceConfig({
+        NODE_ENV: 'test',
+        ENTHUSIA_AGENT_STAFF_MODERATION_BASE_URL: 'http://127.0.0.1:8767',
+      }),
+    ).toThrow(/requires Staff moderation URL\/key and policy server\/source/);
+
+    expect(() =>
+      loadAgentServiceConfig({
+        NODE_ENV: 'test',
+        ENTHUSIA_AGENT_STAFF_MODERATION_BASE_URL: 'http://127.0.0.1:8767',
+        ENTHUSIA_AGENT_STAFF_MODERATION_API_KEY: 'staff-secret',
+        ENTHUSIA_AGENT_POLICY_SERVER_ID: 'smp',
+        ENTHUSIA_AGENT_POLICY_SOURCE_ID: 'enthusia-staff-reason-policies',
+      }),
+    ).toThrow(/requires the Ticket Bot runtime configuration/);
+  });
+
+  it('accepts complete evidence review wiring while redacting secrets and source ids', () => {
+    const config = loadAgentServiceConfig({
+      NODE_ENV: 'test',
+      ENTHUSIA_AGENT_SFTP_CONFIG_PATH: '/srv/private/live-sources.json',
+      ENTHUSIA_AGENT_TICKET_BOT_BASE_URL: 'http://127.0.0.1:8791',
+      ENTHUSIA_AGENT_TICKET_BOT_API_KEY: 'ticket-secret',
+      ENTHUSIA_AGENT_STAFF_MODERATION_BASE_URL: 'http://127.0.0.1:8767',
+      ENTHUSIA_AGENT_STAFF_MODERATION_API_KEY: 'staff-secret',
+      ENTHUSIA_AGENT_STAFF_MODERATION_TIMEOUT_MS: '3500',
+      ENTHUSIA_AGENT_POLICY_SERVER_ID: 'smp',
+      ENTHUSIA_AGENT_POLICY_SOURCE_ID: 'enthusia-staff-reason-policies',
+    });
+    const redacted = redactedAgentServiceConfig(config);
+    expect(redacted).toMatchObject({
+      staffModerationConfigured: true,
+      staffModerationTimeoutMs: 3500,
+      policySourceConfigured: true,
+    });
+    const serialized = JSON.stringify(redacted);
+    expect(serialized).not.toContain('ticket-secret');
+    expect(serialized).not.toContain('staff-secret');
+    expect(serialized).not.toContain('enthusia-staff-reason-policies');
+    expect(serialized).not.toContain('/srv/private');
+  });
 });
