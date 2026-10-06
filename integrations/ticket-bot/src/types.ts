@@ -50,6 +50,16 @@ export interface TicketParticipant {
   displayName?: string;
 }
 
+export interface TicketAttachment {
+  /** Original attachment id from the Ticket Bot's authoritative source. */
+  id: string;
+  /** Display filename only; never interpreted as a local filesystem path. */
+  name: string;
+  contentType?: string;
+  size: number;
+  source: 'discord';
+}
+
 /** A single message in a ticket transcript (Ticket Bot is the transcript authority). */
 export interface TicketMessage {
   id: string;
@@ -59,6 +69,11 @@ export interface TicketMessage {
   body: string;
   /** ISO-8601 timestamp. */
   createdAt: string;
+  /**
+   * Optional during the deployment migration. New Ticket Bot builds return
+   * safe metadata only; URLs and bytes never enter normal ticket context.
+   */
+  attachments?: TicketAttachment[];
 }
 
 /** Ticket state snapshot as reported by the Ticket Bot (read-only for AI). */
