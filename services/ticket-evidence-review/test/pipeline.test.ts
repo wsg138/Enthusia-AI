@@ -281,6 +281,43 @@ describe('runTicketEvidencePipeline', () => {
     expect(state.requestAction).not.toHaveBeenCalled();
   });
 
+  it('re-resolves moderation state after verified policy concerns and suppresses a matching action', async () => {
+    const state = input();
+    const resolveModerationState = vi.fn(async (concerns: EvidencePolicyConcern[]) => {
+      expect(concerns.map((item) => item.code)).toEqual(['spam.low-level']);
+      return {
+        availability: 'verified' as const,
+        target: 'Bad_Player',
+        duplicateStatus: 'actioned' as const,
+        activeSanctions: [],
+        fetchedAt: '2026-10-06T12:08:00.000Z',
+      };
+    });
+    state.value.resolveModerationState = resolveModerationState;
+
+    const result = await runTicketEvidencePipeline(state.value);
+
+    expect(resolveModerationState).toHaveBeenCalledTimes(1);
+    expect(result.status).toBe('already_actioned');
+    expect(result.review?.moderationState.duplicateStatus).toBe('actioned');
+    expect(state.requestAction).not.toHaveBeenCalled();
+  });
+
+  it('holds escalation when post-policy moderation correlation becomes unavailable', async () => {
+    const state = input();
+    state.value.resolveModerationState = vi.fn(async () => {
+      throw new Error('private EnthusiaStaff transport detail');
+    });
+
+    const result = await runTicketEvidencePipeline(state.value);
+
+    expect(result.status).toBe('moderation_state_unavailable');
+    expect(result.review?.disposition).toBe('staff_review');
+    expect(result.review?.moderationState.availability).toBe('unavailable');
+    expect(result.delivery).toBeNull();
+    expect(state.requestAction).not.toHaveBeenCalled();
+  });
+
   it('holds a valid staff review when authoritative moderation state is unavailable', async () => {
     const state = input({
       moderationState: moderation('unavailable'),
