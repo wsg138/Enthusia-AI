@@ -16,8 +16,11 @@ import { Visibility } from '@enthusia/contracts';
 import {
   AI_REQUESTED_BY,
   TicketBotClient,
+  TicketEvidenceClient,
+  assertAllowedEvidenceRequest,
   assertAllowedRequest,
   TICKET_BOT_REQUEST_ALLOWLIST,
+  TICKET_EVIDENCE_REQUEST_ALLOWLIST,
 } from '../src/client.js';
 import { ticketToAgentContext } from '../src/context.js';
 import {
@@ -222,6 +225,14 @@ function makeClient(): TicketBotClient {
   return new TicketBotClient({ baseUrl, apiKey: API_KEY, timeoutMs: 5_000 });
 }
 
+function makeEvidenceClient(): TicketEvidenceClient {
+  return new TicketEvidenceClient({
+    baseUrl,
+    apiKey: API_KEY,
+    timeoutMs: 5_000,
+  });
+}
+
 beforeAll(async () => {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
   const addr = server.address() as AddressInfo;
@@ -240,7 +251,7 @@ afterAll(async () => {
 
 describe('TicketBotClient evidence capabilities', () => {
   it('reads the separate ticket-evidence capability contract', async () => {
-    const capabilities = await makeClient().getEvidenceCapabilities();
+    const capabilities = await makeEvidenceClient().getCapabilities();
     expect(capabilities).toEqual({
       service: 'enthusia-support-bot',
       api: 'ticket-evidence',
@@ -251,7 +262,7 @@ describe('TicketBotClient evidence capabilities', () => {
   });
 
   it('fetches image bytes only through ticket/message/attachment provenance ids', async () => {
-    const evidence = await makeClient().getTicketImageEvidence(
+    const evidence = await makeEvidenceClient().getImageEvidence(
       'T-1234',
       'm-1',
       '120000000000000001',
@@ -269,7 +280,7 @@ describe('TicketBotClient evidence capabilities', () => {
   });
 
   it('rejects image evidence when the provenance hash does not match the bytes', async () => {
-    const client = new TicketBotClient({
+    const client = new TicketEvidenceClient({
       baseUrl,
       apiKey: API_KEY,
       timeoutMs: 5_000,
@@ -516,15 +527,10 @@ describe('no-mutation invariant', () => {
   it('assertAllowedRequest accepts every client-issued target', () => {
     const allowed: Array<[string, string]> = [
       ['GET', '/v1/capabilities'],
-      ['GET', '/v1/evidence/capabilities'],
       ['GET', '/v1/tickets'],
       ['GET', '/v1/tickets/T-1234'],
       ['GET', '/v1/tickets/T-1234/messages'],
       ['GET', '/v1/tickets/T-1234/participants'],
-      [
-        'GET',
-        '/v1/tickets/T-1234/messages/m-1/attachments/120000000000000001/image',
-      ],
       ['POST', '/v1/tickets/T-1234/actions/request'],
       ['GET', '/v1/actions/requests/ar-1'],
     ];
@@ -541,12 +547,6 @@ describe('no-mutation invariant', () => {
     await client.getTicketMessages('T-1234', { limit: 10 });
     await client.getTicketParticipants('T-1234');
     await client.getTicketContext('T-1234');
-    await client.getEvidenceCapabilities();
-    await client.getTicketImageEvidence(
-      'T-1234',
-      'm-1',
-      '120000000000000001',
-    );
     await client.requestClose('T-1234', 'Resolved.');
     await client.requestReopen('T-1234', 'Recurrence reported.');
     await client.requestEscalation('T-1234', 'Needs senior.', { assigneeId: 'staff-42' });
@@ -562,6 +562,54 @@ describe('no-mutation invariant', () => {
       if (r.method === 'POST') {
         expect(r.path).toBe('/v1/tickets/T-1234/actions/request');
       }
+    }
+  });
+});
+
+describe('ticket evidence read-only invariant', () => {
+  it('allowlist contains GET-only bounded evidence targets', () => {
+    expect(TICKET_EVIDENCE_REQUEST_ALLOWLIST).toHaveLength(2);
+    for (const target of TICKET_EVIDENCE_REQUEST_ALLOWLIST) {
+      expect(target.method).toBe('GET');
+    }
+    expect(() =>
+      assertAllowedEvidenceRequest('GET', '/v1/evidence/capabilities'),
+    ).not.toThrow();
+    expect(() =>
+      assertAllowedEvidenceRequest(
+        'GET',
+        '/v1/tickets/T-1234/messages/m-1/attachments/120000000000000001/image',
+      ),
+    ).not.toThrow();
+  });
+
+  it('rejects arbitrary URLs, mutation verbs, and unrelated ticket paths', () => {
+    const forbidden: Array<[string, string]> = [
+      ['POST', '/v1/evidence/capabilities'],
+      ['GET', 'https://cdn.discordapp.com/attachments/1/2/evidence.png'],
+      ['GET', '/v1/tickets/T-1234/messages/m-1'],
+      ['DELETE', '/v1/tickets/T-1234/messages/m-1/attachments/1/image'],
+    ];
+    for (const [method, path] of forbidden) {
+      expect(() => assertAllowedEvidenceRequest(method, path)).toThrow(/refuses/);
+    }
+  });
+
+  it('exercising the evidence client issues reads only', async () => {
+    recorded.length = 0;
+    const client = makeEvidenceClient();
+    await client.getCapabilities();
+    await client.getImageEvidence(
+      'T-1234',
+      'm-1',
+      '120000000000000001',
+    );
+    expect(recorded.length).toBeGreaterThan(0);
+    for (const request of recorded) {
+      expect(request.method).toBe('GET');
+      expect(() =>
+        assertAllowedEvidenceRequest(request.method, request.path),
+      ).not.toThrow();
     }
   });
 });
