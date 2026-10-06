@@ -75,6 +75,7 @@ export class TicketEventIngress {
       result = await this.reviewer.review(
         event.ticketId,
         traceIdForEvent(event.eventId),
+        eventMessageId(event.payload),
       );
     } catch {
       return {
@@ -97,6 +98,13 @@ export class TicketEventIngress {
       },
     };
   }
+}
+
+function eventMessageId(
+  payload: Record<string, unknown>,
+): string | undefined {
+  const value = payload['message_id'];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 function traceIdForEvent(eventId: string): string {
