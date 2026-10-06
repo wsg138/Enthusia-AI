@@ -80,6 +80,8 @@ export type { TicketEvent, TicketEventHandler, TicketEventType } from './events.
 
 export { ticketReportTarget } from './report-target.js';
 export type { TicketReportTarget } from './report-target.js';
+export { activeTicketEscalation } from './review-state.js';
+export type { TicketEscalationRecord } from './review-state.js';
 
 // Context adapter
 export { ticketToAgentContext } from './context.js';
