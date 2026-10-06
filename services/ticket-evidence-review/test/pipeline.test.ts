@@ -311,7 +311,8 @@ describe('runTicketEvidencePipeline', () => {
     const result = await runTicketEvidencePipeline(state.value);
 
     expect(result.status).toBe('moderation_state_unavailable');
-    expect(result.review).toBeNull();
+    expect(result.review?.disposition).toBe('staff_review');
+    expect(result.review?.moderationState.availability).toBe('unavailable');
     expect(result.delivery).toBeNull();
     expect(state.requestAction).not.toHaveBeenCalled();
   });
@@ -327,6 +328,35 @@ describe('runTicketEvidencePipeline', () => {
     expect(result.review?.disposition).toBe('staff_review');
     expect(result.review?.shouldEscalate).toBe(true);
     expect(result.delivery).toBeNull();
+    expect(state.requestAction).not.toHaveBeenCalled();
+  });
+
+  it('does not require Staff state for a non-escalating policy result', async () => {
+    const state = input({
+      moderationState: moderation('unavailable'),
+    });
+    state.value.policyAssessor = {
+      assess: vi.fn(async () => ({
+        concerns: [],
+        needsMoreContext: false,
+        model: 'qwen-test',
+        usage: {
+          promptTokens: 300,
+          completionTokens: 40,
+          totalTokens: 340,
+        },
+        policyVersion: '2026-10-06.1',
+        policyFileVersion: 'sha256:' + 'a'.repeat(64),
+      })),
+    };
+    const resolver = vi.fn(async () => moderation('verified'));
+    state.value.moderationStateResolver = resolver;
+
+    const result = await runTicketEvidencePipeline(state.value);
+
+    expect(result.status).toBe('no_escalation');
+    expect(result.review?.disposition).toBe('no_escalation');
+    expect(resolver).not.toHaveBeenCalled();
     expect(state.requestAction).not.toHaveBeenCalled();
   });
 
