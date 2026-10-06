@@ -19,6 +19,7 @@ import type { EnthusiaLogger } from '@enthusia/logging';
 import type { AgentServiceConfig } from './config.js';
 import type { StaleTicketDecisionService } from './stale-ticket.js';
 import { handleStaleTicketDecisionHttp } from './stale-ticket-http.js';
+import type { TicketEventIngress } from './ticket-event-ingress.js';
 
 export interface AgentServiceDeps {
   config: AgentServiceConfig;
@@ -27,6 +28,7 @@ export interface AgentServiceDeps {
   registry: ToolRegistry;
   inference: Pick<InferenceClient, 'getModels' | 'getMetrics'>;
   staleTicketDecision?: Pick<StaleTicketDecisionService, 'decide'>;
+  ticketEventIngress?: Pick<TicketEventIngress, 'handle'>;
   now?: () => number;
 }
 
@@ -314,6 +316,44 @@ async function handleChat(
   }
 }
 
+async function handleTicketEventWebhook(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  deps: AgentServiceDeps,
+  state: ServiceState,
+): Promise<void> {
+  if (deps.ticketEventIngress === undefined) {
+    sendJson(res, 404, {
+      error: { code: 'NOT_FOUND', message: 'route not found' },
+    });
+    return;
+  }
+
+  state.activeRequests += 1;
+  try {
+    let raw: Buffer;
+    try {
+      raw = await readBody(req, deps.config.maxBodyBytes);
+    } catch {
+      sendJson(res, 413, {
+        error: {
+          code: 'REQUEST_TOO_LARGE',
+          message: 'request body exceeds limit',
+        },
+      });
+      return;
+    }
+    const signature = req.headers['x-ticketbot-signature'];
+    const result = await deps.ticketEventIngress.handle(
+      raw,
+      typeof signature === 'string' ? signature : undefined,
+    );
+    sendJson(res, result.status, result.body);
+  } finally {
+    state.activeRequests -= 1;
+  }
+}
+
 async function handleProtectedRoute(
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -364,6 +404,13 @@ async function handleRequest(
   }
   if (req.method === 'GET' && url.pathname === '/health/ready') {
     await handleReady(res, deps, state);
+    return;
+  }
+  if (
+    req.method === 'POST' &&
+    url.pathname === '/v1/ticket/events'
+  ) {
+    await handleTicketEventWebhook(req, res, deps, state);
     return;
   }
   if (!authenticate(req, deps.config)) {
