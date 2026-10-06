@@ -15,6 +15,7 @@ describe('loadConfig', () => {
     expect(config.budget.maxUsdPerDay).toBe(10);
     expect(config.budget.maxEscalationsPerRequest).toBe(3);
     expect(config.modelSelection).toEqual(DEFAULT_MODEL_SELECTION);
+    expect(config.visionModel).toBeUndefined();
   });
 
   it('applies env overrides for budgets, timeout, and base URL', () => {
@@ -25,6 +26,7 @@ describe('loadConfig', () => {
       ENTHUSIA_OPENAI_REQUEST_BUDGET_USD: '5.5',
       ENTHUSIA_OPENAI_DAILY_BUDGET_USD: '50',
       ENTHUSIA_OPENAI_MAX_ESCALATIONS_PER_REQUEST: '7',
+      ENTHUSIA_OPENAI_VISION_MODEL: 'vision-test-model',
     });
     expect(config.apiKey).toBe('test-openai-key-not-real');
     expect(config.baseUrl).toBe('http://127.0.0.1:9999/v1/');
@@ -32,6 +34,7 @@ describe('loadConfig', () => {
     expect(config.budget.maxUsdPerRequest).toBe(5.5);
     expect(config.budget.maxUsdPerDay).toBe(50);
     expect(config.budget.maxEscalationsPerRequest).toBe(7);
+    expect(config.visionModel).toBe('vision-test-model');
   });
 
   it('rejects invalid values with ConfigError', () => {

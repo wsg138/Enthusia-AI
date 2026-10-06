@@ -1,8 +1,9 @@
 /**
  * @enthusia/openai-gateway — strong-model escalation gateway with cost controls (W13).
  *
- * The stronger-model/coding escalation path for Enthusia AI. W12's agent
- * core investigates locally and builds the structured §22.2 investigation
+ * The stronger-model/coding escalation path for Enthusia AI. It also exposes
+ * a separately gated, bounded image-evidence observer for ticket evidence.
+ * W12's agent core investigates locally and builds the structured §22.2 investigation
  * packet; this service decides (policy), formats, sends (OpenAI chat
  * completions), budgets, and normalizes the result to AgentResponse.
  *
@@ -13,6 +14,7 @@ export * from './models.js';
 export * from './packet.js';
 export * from './packet-format.js';
 export * from './openai-client.js';
+export * from './image-evidence.js';
 export * from './budget.js';
 export * from './config.js';
 export * from './escalation-policy.js';

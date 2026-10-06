@@ -10,6 +10,27 @@
  */
 import { estimateTokens, type ChatMessage } from './packet-format.js';
 
+export type VisionImageContentType =
+  | 'image/png'
+  | 'image/jpeg'
+  | 'image/webp'
+  | 'image/gif';
+
+export type VisionImageDetail = 'auto' | 'low' | 'high' | 'original';
+
+export interface ImageChatCompletionOptions {
+  model: string;
+  systemPrompt: string;
+  userPrompt: string;
+  image: {
+    bytes: Uint8Array;
+    contentType: VisionImageContentType;
+    detail?: VisionImageDetail;
+  };
+  maxOutputTokens?: number;
+  temperature?: number;
+}
+
 export interface ChatCompletionOptions {
   model: string;
   messages: ChatMessage[];
@@ -139,6 +160,68 @@ export class OpenAIClient {
   async chatCompletions(
     options: ChatCompletionOptions,
   ): Promise<ChatCompletionResult> {
+    const body = {
+      model: options.model,
+      messages: options.messages.map((message) => ({
+        role: message.role,
+        content: message.content,
+      })),
+      ...(options.maxOutputTokens !== undefined
+        ? { max_tokens: options.maxOutputTokens }
+        : {}),
+      ...(options.temperature !== undefined
+        ? { temperature: options.temperature }
+        : {}),
+    };
+    const fallbackPromptTokens = estimateTokens(
+      options.messages.map((message) => message.content).join('\n'),
+    );
+    return this.sendCompletion(body, options.model, fallbackPromptTokens);
+  }
+
+  async imageChatCompletion(
+    options: ImageChatCompletionOptions,
+  ): Promise<ChatCompletionResult> {
+    const dataUrl =
+      `data:${options.image.contentType};base64,` +
+      Buffer.from(options.image.bytes).toString('base64');
+    const body = {
+      model: options.model,
+      messages: [
+        { role: 'system', content: options.systemPrompt },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: options.userPrompt },
+            {
+              type: 'image_url',
+              image_url: {
+                url: dataUrl,
+                detail: options.image.detail ?? 'high',
+              },
+            },
+          ],
+        },
+      ],
+      ...(options.maxOutputTokens !== undefined
+        ? { max_tokens: options.maxOutputTokens }
+        : {}),
+      ...(options.temperature !== undefined
+        ? { temperature: options.temperature }
+        : {}),
+    };
+    // Usage is normally returned by the API. If it is absent, include a
+    // conservative fixed image allowance rather than pretending the image is free.
+    const fallbackPromptTokens =
+      estimateTokens(`${options.systemPrompt}\n${options.userPrompt}`) + 12_000;
+    return this.sendCompletion(body, options.model, fallbackPromptTokens);
+  }
+
+  private async sendCompletion(
+    body: Record<string, unknown>,
+    fallbackModel: string,
+    fallbackPromptTokens: number,
+  ): Promise<ChatCompletionResult> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
 
@@ -148,22 +231,9 @@ export class OpenAIClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // NOTE: the key travels only in this header; never in logs/errors.
           Authorization: `Bearer ${this.apiKey}`,
         },
-        body: JSON.stringify({
-          model: options.model,
-          messages: options.messages.map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
-          ...(options.maxOutputTokens !== undefined
-            ? { max_tokens: options.maxOutputTokens }
-            : {}),
-          ...(options.temperature !== undefined
-            ? { temperature: options.temperature }
-            : {}),
-        }),
+        body: JSON.stringify(body),
         signal: controller.signal,
       });
     } catch (error) {
@@ -202,17 +272,13 @@ export class OpenAIClient {
       throw new OpenAIParseError('no assistant content in choices[0].message');
     }
 
-    const model = typeof wire.model === 'string' ? wire.model : options.model;
+    const model = typeof wire.model === 'string' ? wire.model : fallbackModel;
     const finishReason =
       typeof choice?.finish_reason === 'string'
         ? choice.finish_reason
         : 'unknown';
-
     const promptTokens =
-      asNumber(wire.usage?.prompt_tokens) ??
-      estimateTokens(
-        options.messages.map((m) => m.content).join('\n'),
-      );
+      asNumber(wire.usage?.prompt_tokens) ?? fallbackPromptTokens;
     const completionTokens =
       asNumber(wire.usage?.completion_tokens) ?? estimateTokens(content);
     const totalTokens =
