@@ -89,6 +89,23 @@ export async function runTicketEvidencePipeline(
     };
   }
 
+  const preliminaryReview = reviewTicketEvidence({
+    ticket: input.ticket,
+    imageEvidence: collection.assessments,
+    concerns: policyAssessment.concerns,
+    policyNeedsMoreContext: policyAssessment.needsMoreContext,
+    moderationState: input.moderationState,
+  });
+  if (!preliminaryReview.shouldEscalate) {
+    return finishReview(
+      input,
+      collection,
+      policyAssessment,
+      preliminaryReview,
+      input.moderationState,
+    );
+  }
+
   const moderationState = await resolveModerationState(
     input,
     target.value,
@@ -99,12 +116,12 @@ export async function runTicketEvidencePipeline(
       status: 'moderation_state_unavailable',
       collection,
       policyAssessment,
-      review: null,
+      review: preliminaryReview,
       delivery: null,
     };
   }
 
-  const review = reviewTicketEvidence({
+  const verifiedReview = reviewTicketEvidence({
     ticket: input.ticket,
     imageEvidence: collection.assessments,
     concerns: policyAssessment.concerns,
@@ -115,7 +132,7 @@ export async function runTicketEvidencePipeline(
     input,
     collection,
     policyAssessment,
-    review,
+    verifiedReview,
     moderationState,
   );
 }
