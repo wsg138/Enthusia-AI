@@ -93,6 +93,16 @@ function defaultAssessmentRunner(): TicketImageAssessmentRunner {
     runImageEvidenceAssessment(request, { config, tracker });
 }
 
+function defaultAssessmentRunner(): TicketImageAssessmentRunner {
+  const config = loadConfig();
+  const tracker = new CostTracker(config.budget, config.modelPrices);
+  return (input) =>
+    runImageEvidenceAssessment(input, {
+      config,
+      tracker,
+    });
+}
+
 function boundedMaxImages(value: number | undefined): number {
   if (value === undefined) return MAX_TICKET_IMAGE_ASSESSMENTS;
   if (!Number.isInteger(value) || value < 1) return 1;
