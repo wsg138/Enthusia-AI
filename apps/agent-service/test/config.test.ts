@@ -61,7 +61,7 @@ describe('agent-service Ticket Bot configuration', () => {
       NODE_ENV: 'test',
       ENTHUSIA_AGENT_SFTP_CONFIG_PATH: '/run/private/live-sftp.json',
       ENTHUSIA_AGENT_TICKET_BOT_BASE_URL: 'http://127.0.0.1:8791',
-      ENTHUSIA_AGENT_TICKET_BOT_API_KEY: 'ticket-bot-secret-value',
+      ENTHUSIA_AGENT_TICKET_BOT_API_KEY: 'ticket-bot-secret-value-that-is-long-enough',
       ENTHUSIA_AGENT_TICKET_EVIDENCE_ENABLED: 'true',
       ENTHUSIA_AGENT_TICKET_WEBHOOK_SECRET:
         'ticket-webhook-secret-value-that-is-long-enough',
