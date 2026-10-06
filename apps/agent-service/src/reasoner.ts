@@ -220,7 +220,7 @@ export class InferenceReasoner implements Reasoner {
   constructor(private readonly client: CompletionClient) {}
 
   async classifyIntent(request: ChatRequest): Promise<IntentClassification> {
-    return this.completeJson(
+    const raw = await this.completeJson(
       {
         messages: [
           {
@@ -258,6 +258,23 @@ export class InferenceReasoner implements Reasoner {
       classificationSchema,
       request.traceId,
     );
+
+    return {
+      requestClass: raw.requestClass,
+      summary: raw.summary,
+      claims: [...raw.claims],
+      ...(raw.backgroundClaims !== undefined
+        ? { backgroundClaims: [...raw.backgroundClaims] }
+        : {}),
+      ...(raw.needsFamiliarityContext !== undefined
+        ? { needsFamiliarityContext: raw.needsFamiliarityContext }
+        : {}),
+      ...(raw.familiarityTopic !== undefined
+        ? { familiarityTopic: raw.familiarityTopic }
+        : {}),
+      needsPrivateContext: raw.needsPrivateContext,
+      securitySensitive: raw.securitySensitive,
+    };
   }
 
   async planEvidence(
