@@ -12,6 +12,7 @@ import { InferenceReasoner } from './reasoner.js';
 import {
   createAgentRuntime,
   loadConfiguredSftpTools,
+  loadConfiguredTicketTools,
 } from './runtime.js';
 import { startAgentService } from './server.js';
 import { StaleTicketDecisionService } from './stale-ticket.js';
@@ -37,8 +38,13 @@ async function main(): Promise<void> {
   });
   const reasoner = new InferenceReasoner(inference);
   const staleTicketDecision = new StaleTicketDecisionService(inference);
-  const tools = await loadConfiguredSftpTools(config.sftpConfigPath);
-  const runtime = createAgentRuntime(reasoner, tools);
+  const sftpTools = await loadConfiguredSftpTools(config.sftpConfigPath);
+  const ticketTools = loadConfiguredTicketTools({
+    baseUrl: config.ticketBotBaseUrl,
+    apiKey: config.ticketBotApiKey,
+    timeoutMs: config.ticketBotTimeoutMs,
+  });
+  const runtime = createAgentRuntime(reasoner, [...sftpTools, ...ticketTools]);
 
   const service = await startAgentService({
     config,
