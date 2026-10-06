@@ -63,9 +63,11 @@ function buildReviewContext(
     observedFacts: directObservedFacts(input.imageEvidence),
     limitations,
     strongest,
-    needsMoreContext: input.imageEvidence.some(
-      (item) => item.assessment.needsMoreContext,
-    ),
+    needsMoreContext:
+      input.policyNeedsMoreContext === true ||
+      input.imageEvidence.some(
+        (item) => item.assessment.needsMoreContext,
+      ),
     missingEvidence: missingEvidenceFor(
       input.imageEvidence,
       limitations,
@@ -78,14 +80,14 @@ function preliminaryDisposition(
   context: ReviewContext,
 ): TicketEvidenceReviewResult | null {
   if (context.target === null) return missingTargetResult(context);
-  if (context.input.imageEvidence.length === 0) {
-    return missingVisualEvidenceResult(context);
-  }
   if (activeTicketEscalation(context.input.ticket.ticket) !== null) {
     return ticketEscalationDuplicateResult(context);
   }
   if (isDuplicate(context.input.moderationState)) {
     return moderationDuplicateResult(context);
+  }
+  if (context.input.imageEvidence.length === 0) {
+    return missingVisualEvidenceResult(context);
   }
   return null;
 }
