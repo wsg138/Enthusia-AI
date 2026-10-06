@@ -40,8 +40,12 @@ async function main(): Promise<void> {
   const staleTicketDecision = new StaleTicketDecisionService(inference);
   const sftpTools = await loadConfiguredSftpTools(config.sftpConfigPath);
   const ticketTools = loadConfiguredTicketTools({
-    baseUrl: config.ticketBotBaseUrl,
-    apiKey: config.ticketBotApiKey,
+    ...(config.ticketBotBaseUrl !== undefined
+      ? { baseUrl: config.ticketBotBaseUrl }
+      : {}),
+    ...(config.ticketBotApiKey !== undefined
+      ? { apiKey: config.ticketBotApiKey }
+      : {}),
     timeoutMs: config.ticketBotTimeoutMs,
   });
   const runtime = createAgentRuntime(reasoner, [...sftpTools, ...ticketTools]);
