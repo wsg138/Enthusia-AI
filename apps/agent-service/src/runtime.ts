@@ -6,6 +6,10 @@ import {
   type Tool,
 } from '@enthusia/agent-core';
 import {
+  TicketBotClient,
+  createTicketTools,
+} from '@enthusia/integration-ticket-bot';
+import {
   LiveServerSourceGateway,
   compileConfig,
   createConfiguredSftpClientFactory,
@@ -20,6 +24,12 @@ export interface AgentRuntime {
   registeredTools: string[];
 }
 
+export interface TicketBotRuntimeConfig {
+  baseUrl?: string;
+  apiKey?: string;
+  timeoutMs: number;
+}
+
 export function createAgentRuntime(
   reasoner: Reasoner,
   tools: Tool[] = [],
@@ -31,6 +41,22 @@ export function createAgentRuntime(
     registry,
     registeredTools: registry.list().map((tool) => tool.name),
   };
+}
+
+export function loadConfiguredTicketTools(
+  config: TicketBotRuntimeConfig,
+): Tool[] {
+  if (config.baseUrl === undefined && config.apiKey === undefined) return [];
+  if (config.baseUrl === undefined || config.apiKey === undefined) {
+    throw new Error('Ticket Bot runtime configuration is incomplete.');
+  }
+
+  const client = new TicketBotClient({
+    baseUrl: config.baseUrl,
+    apiKey: config.apiKey,
+    timeoutMs: config.timeoutMs,
+  });
+  return createTicketTools(client) as Tool[];
 }
 
 function requireEnvCredentialSource(

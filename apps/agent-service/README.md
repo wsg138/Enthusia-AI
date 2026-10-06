@@ -40,7 +40,18 @@ explicitly configures them.
 Current production-capable optional registration:
 
 - W09 live SFTP/current-state tools through
-  `ENTHUSIA_AGENT_SFTP_CONFIG_PATH`.
+  `ENTHUSIA_AGENT_SFTP_CONFIG_PATH`;
+- W14 Ticket Bot tools through
+  `ENTHUSIA_AGENT_TICKET_BOT_BASE_URL` +
+  `ENTHUSIA_AGENT_TICKET_BOT_API_KEY`.
+
+Ticket Bot registration is fail-closed: the URL and API key must be configured
+together. When configured, only `ticket.get_context`,
+`ticket.request_close`, and `ticket.request_escalation` are registered.
+Lifecycle operations remain action requests that the Ticket Bot independently
+authorizes and executes; the agent receives no direct ticket mutation primitive.
+The API key remains runtime-only and is never emitted in redacted startup
+configuration.
 
 The path must point to the strict JSON form accepted by
 `@enthusia/integration-sftp compileConfig`. Credentials are not present in
@@ -53,9 +64,9 @@ retrieval, memory, or training data.
 
 Unsupported or missing credential sources fail closed.
 
-Database, player-identity, and TicketBot tools are not falsely registered just
-because their library contracts exist. Their production backends/capabilities
-must be configured and reviewed before they are added here.
+Database and player-identity tools are not falsely registered just because
+their library contracts exist. Their production backends/capabilities must be
+configured and reviewed before they are added here.
 
 ## Service authentication
 
