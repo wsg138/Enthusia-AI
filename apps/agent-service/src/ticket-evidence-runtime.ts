@@ -7,7 +7,7 @@ import {
   activeTicketEscalation,
   ticketReportTarget,
 } from '@enthusia/integration-ticket-bot';
-import {
+import type {
   StaffModerationStateClient,
 } from '@enthusia/integration-staff-moderation';
 import type { LiveServerSourceGateway } from '@enthusia/integration-sftp';
