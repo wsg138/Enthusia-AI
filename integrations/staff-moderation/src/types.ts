@@ -1,7 +1,7 @@
 export interface StaffModerationTarget {
   requested: string;
   playerId: string;
-  username?: string | null;
+  username?: string | null | undefined;
 }
 
 export interface StaffActiveSanction {
@@ -10,7 +10,7 @@ export interface StaffActiveSanction {
   type: string;
   publicReason: string;
   issuedAt: string;
-  expiresAt?: string | null;
+  expiresAt?: string | null | undefined;
 }
 
 export interface StaffModerationCase {
