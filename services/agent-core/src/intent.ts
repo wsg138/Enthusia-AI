@@ -44,10 +44,33 @@ export function normalizeClassification(
     );
   }
   const claims = Array.isArray(raw.claims)
-    ? raw.claims.filter(
-        (c): c is string => typeof c === 'string' && c.trim().length > 0,
-      )
+    ? [...new Set(
+        raw.claims
+          .filter(
+            (claim): claim is string =>
+              typeof claim === 'string' && claim.trim().length > 0,
+          )
+          .map((claim) => claim.trim()),
+      )]
     : [];
+  const claimSet = new Set(claims);
+  const backgroundClaims = Array.isArray(raw.backgroundClaims)
+    ? [...new Set(
+        raw.backgroundClaims
+          .filter(
+            (claim): claim is string =>
+              typeof claim === 'string' && claim.trim().length > 0,
+          )
+          .map((claim) => claim.trim())
+          .filter((claim) => claimSet.has(claim)),
+      )]
+    : [];
+  const familiarityTopic =
+    typeof raw.familiarityTopic === 'string' &&
+    raw.familiarityTopic.trim().length > 0
+      ? raw.familiarityTopic.trim().replace(/\s+/g, ' ').slice(0, 160)
+      : undefined;
+
   return {
     requestClass: raw.requestClass,
     summary:
@@ -55,6 +78,11 @@ export function normalizeClassification(
         ? raw.summary.trim()
         : '(no summary)',
     claims,
+    ...(backgroundClaims.length > 0 ? { backgroundClaims } : {}),
+    ...(raw.needsFamiliarityContext === true
+      ? { needsFamiliarityContext: true }
+      : {}),
+    ...(familiarityTopic !== undefined ? { familiarityTopic } : {}),
     needsPrivateContext: raw.needsPrivateContext === true,
     securitySensitive: raw.securitySensitive === true,
     ...(typeof raw.reasoning === 'string' && raw.reasoning.length > 0
