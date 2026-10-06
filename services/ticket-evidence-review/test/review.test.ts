@@ -136,6 +136,36 @@ describe('reviewTicketEvidence', () => {
     );
   });
 
+  it('suppresses a repeated escalation already accepted by Ticket Bot', () => {
+    const ticket = bundle({
+      metadata: {
+        reportTarget: {
+          kind: 'minecraft_username',
+          value: 'Bad_Player',
+        },
+        recentActionRequests: [{
+          requestId: 'ar-existing',
+          action: 'escalate',
+          status: 'accepted',
+          createdAt: '2026-10-06T12:04:00.000Z',
+          updatedAt: '2026-10-06T12:04:01.000Z',
+        }],
+      },
+    });
+    const result = reviewTicketEvidence({
+      ticket,
+      imageEvidence: [evidence()],
+      concerns: [concern()],
+      moderationState: moderation(),
+    });
+
+    expect(result.disposition).toBe('already_actioned');
+    expect(result.shouldEscalate).toBe(false);
+    expect(result.summary).toContain(
+      'Ticket Bot already has a pending or accepted staff escalation',
+    );
+  });
+
   it('suppresses duplicate staff escalation only for an authoritative match', () => {
     const result = reviewTicketEvidence({
       ticket: bundle(),
