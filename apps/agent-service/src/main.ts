@@ -12,7 +12,8 @@ import { InferenceReasoner } from './reasoner.js';
 import { loadConfiguredFamiliarityRuntime } from './familiarity.js';
 import {
   createAgentRuntime,
-  loadConfiguredSftpTools,
+  loadConfiguredSftpRuntime,
+  loadConfiguredTicketEvidenceReview,
   loadConfiguredTicketTools,
 } from './runtime.js';
 import { startAgentService } from './server.js';
@@ -40,7 +41,7 @@ async function main(): Promise<void> {
   const reasoner = new InferenceReasoner(inference);
   const staleTicketDecision = new StaleTicketDecisionService(inference);
   const familiarity = loadConfiguredFamiliarityRuntime(config.memoryPath);
-  const sftpTools = await loadConfiguredSftpTools(config.sftpConfigPath);
+  const sftp = await loadConfiguredSftpRuntime(config.sftpConfigPath);
   const ticketTools = loadConfiguredTicketTools({
     ...(config.ticketBotBaseUrl !== undefined
       ? { baseUrl: config.ticketBotBaseUrl }
@@ -50,9 +51,36 @@ async function main(): Promise<void> {
       : {}),
     timeoutMs: config.ticketBotTimeoutMs,
   });
+  const ticketEvidenceReview = loadConfiguredTicketEvidenceReview(
+    {
+      ...(config.ticketBotBaseUrl !== undefined
+        ? { ticketBotBaseUrl: config.ticketBotBaseUrl }
+        : {}),
+      ...(config.ticketBotApiKey !== undefined
+        ? { ticketBotApiKey: config.ticketBotApiKey }
+        : {}),
+      ticketBotTimeoutMs: config.ticketBotTimeoutMs,
+      ...(config.staffModerationBaseUrl !== undefined
+        ? { staffModerationBaseUrl: config.staffModerationBaseUrl }
+        : {}),
+      ...(config.staffModerationApiKey !== undefined
+        ? { staffModerationApiKey: config.staffModerationApiKey }
+        : {}),
+      staffModerationTimeoutMs: config.staffModerationTimeoutMs,
+      ...(config.policyServerId !== undefined
+        ? { policyServerId: config.policyServerId }
+        : {}),
+      ...(config.policySourceId !== undefined
+        ? { policySourceId: config.policySourceId }
+        : {}),
+    },
+    sftp.gateway,
+    inference,
+  );
+
   const runtime = createAgentRuntime(
     reasoner,
-    [...sftpTools, ...ticketTools, ...familiarity.tools],
+    [...sftp.tools, ...ticketTools, ...familiarity.tools],
     {
       ...(familiarity.onVerifiedTopicHelp !== undefined
         ? { onVerifiedTopicHelp: familiarity.onVerifiedTopicHelp }
@@ -67,6 +95,9 @@ async function main(): Promise<void> {
     registry: runtime.registry,
     inference,
     staleTicketDecision,
+    ...(ticketEvidenceReview !== undefined
+      ? { ticketEvidenceReview }
+      : {}),
   });
 
   logger.info(
