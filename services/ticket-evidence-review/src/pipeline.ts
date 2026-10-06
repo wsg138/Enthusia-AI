@@ -192,7 +192,10 @@ async function resolvedModerationState(
   input: TicketEvidencePipelineInput,
   policyAssessment: PolicyConcernAssessmentResult,
 ): Promise<AuthoritativeModerationState> {
-  if (input.resolveModerationState === undefined) {
+  if (
+    input.resolveModerationState === undefined ||
+    policyAssessment.concerns.length === 0
+  ) {
     return input.moderationState;
   }
   try {
