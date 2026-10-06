@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SourceStatus, Visibility } from '@enthusia/contracts';
 import {
+  AgentOrchestrator,
   ToolRegistry,
   assembleResponse,
   resolveResponseStyle,
@@ -9,7 +10,16 @@ import {
   type ResponseStyleProfile,
   type Tool,
 } from '../src/index.js';
-import { makeRequest } from './mocks.js';
+import {
+  FINISH,
+  MockReasoner,
+  MockTool,
+  callTool,
+  knowledgeSearchMeta,
+  makeRequest,
+  mockRegistry,
+  okResult,
+} from './mocks.js';
 
 function evidence(id: string, claim: string, value: string): EvidenceItem {
   return {
@@ -254,5 +264,110 @@ describe('adaptive verified response depth', () => {
     expect(response.text).not.toContain('reputation has named reasons');
     expect(response.text).toContain('Good Stall meaning');
     expect(response.sources).toHaveLength(2);
+  });
+});
+
+
+describe('AgentOrchestrator adaptive familiarity integration', () => {
+  it('uses the subject-bound style preflight even when factual private context is unnecessary', async () => {
+    const familiarity = new MockTool(
+      {
+        name: 'player.topic_familiarity',
+        description: 'topic familiarity',
+        parameters: {
+          type: 'object',
+          properties: { topic: { type: 'string' } },
+          required: ['topic'],
+        },
+        privacySensitive: true,
+        maxVisibility: Visibility.PLAYER_SELF,
+      },
+      (_params, ctx) =>
+        okResult(
+          'player.topic_familiarity',
+          'player-context',
+          {
+            topic: 'reputation',
+            level: 'FAMILIAR',
+            confidence: 0.9,
+            basis: ['CURRENT_MEMORY'],
+            observedAt: '2026-10-06T05:00:00.000Z',
+          },
+          {
+            visibility: Visibility.PLAYER_SELF,
+            correlationId: ctx.traceId,
+          },
+        ),
+    );
+    const knowledge = new MockTool(knowledgeSearchMeta, (params) => {
+      const query = String(params['query'] ?? '');
+      return okResult(
+        'knowledge.search',
+        'knowledge-indexer',
+        {
+          value: query.includes('background')
+            ? 'player feedback'
+            : 'positive stall-related feedback',
+        },
+      );
+    });
+    const { registry } = mockRegistry([familiarity, knowledge]);
+    const reasoner = new MockReasoner({
+      classification: {
+        requestClass: 'investigative',
+        summary: 'Good Stall question',
+        claims: [
+          'reputation is a feedback system',
+          'Good Stall meaning',
+        ],
+        backgroundClaims: ['reputation is a feedback system'],
+        needsFamiliarityContext: true,
+        familiarityTopic: 'reputation',
+        needsPrivateContext: false,
+        securitySensitive: false,
+      },
+      plan: [
+        {
+          claim: 'reputation is a feedback system',
+          candidateTools: ['knowledge.search'],
+          verificationTier: 'B',
+          privacySensitive: false,
+        },
+        {
+          claim: 'Good Stall meaning',
+          candidateTools: ['knowledge.search'],
+          verificationTier: 'B',
+          privacySensitive: false,
+        },
+      ],
+      decisions: [
+        callTool(
+          'knowledge.search',
+          'reputation is a feedback system',
+          { query: 'background reputation' },
+        ),
+        callTool(
+          'knowledge.search',
+          'Good Stall meaning',
+          { query: 'Good Stall direct answer' },
+        ),
+        FINISH,
+      ],
+    });
+
+    const orchestrator = new AgentOrchestrator({ reasoner, registry });
+    const response = await orchestrator.handleChat(
+      makeRequest('What is Good Stall?', {
+        visibilityCeiling: Visibility.PLAYER_SELF,
+      }),
+    );
+
+    expect(familiarity.callCount).toBe(1);
+    expect(response.text).not.toContain('reputation is a feedback system');
+    expect(response.text).toContain('Good Stall meaning');
+    expect(reasoner.draftArgs[0]?.responseStyle).toMatchObject({
+      topic: 'reputation',
+      familiarity: 'FAMILIAR',
+    });
   });
 });
