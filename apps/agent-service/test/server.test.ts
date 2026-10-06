@@ -56,6 +56,8 @@ function config(): AgentServiceConfig {
     ticketBotBaseUrl: undefined,
     ticketBotApiKey: undefined,
     ticketBotTimeoutMs: 10_000,
+    ticketEvidenceEnabled: false,
+    staffModerationTimeoutMs: 10_000,
     nodeEnv: 'test',
     serviceName: 'agent-service-test',
     serviceVersion: '0.1.0',
