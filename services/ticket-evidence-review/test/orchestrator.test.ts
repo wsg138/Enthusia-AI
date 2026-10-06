@@ -28,63 +28,51 @@ function ticket(): TicketContextBundle {
       updatedAt: '2026-10-06T12:10:00.000Z',
       messageCount: 2,
     },
-    messages: [
-      {
-        id: 'm1',
-        ticketId: '42',
-        author: { id: 'reporter', kind: 'player' },
-        body: 'first',
-        createdAt: '2026-10-06T12:00:00.000Z',
-        attachments: [
-          {
-            id: '1001',
-            name: 'old.png',
-            contentType: 'image/png',
-            size: 100,
-            source: 'discord',
-          },
-          {
-            id: '1002',
-            name: 'notes.pdf',
-            contentType: 'application/pdf',
-            size: 100,
-            source: 'discord',
-          },
-        ],
-      },
-      {
-        id: 'm2',
-        ticketId: '42',
-        author: { id: 'reporter', kind: 'player' },
-        body: 'newer',
-        createdAt: '2026-10-06T12:05:00.000Z',
-        attachments: [
-          {
-            id: '1003',
-            name: 'one.jpg',
-            contentType: 'image/jpeg',
-            size: 100,
-            source: 'discord',
-          },
-          {
-            id: '1004',
-            name: 'two.webp',
-            contentType: 'image/webp',
-            size: 100,
-            source: 'discord',
-          },
-          {
-            id: '1005',
-            name: 'three.gif',
-            contentType: 'image/gif',
-            size: 100,
-            source: 'discord',
-          },
-        ],
-      },
-    ],
+    messages: ticketMessages(),
     participants: [],
     fetchedAt: '2026-10-06T12:10:01.000Z',
+  };
+}
+
+function ticketMessages(): TicketContextBundle['messages'] {
+  return [
+    {
+      id: 'm1',
+      ticketId: '42',
+      author: { id: 'reporter', kind: 'player' },
+      body: 'first',
+      createdAt: '2026-10-06T12:00:00.000Z',
+      attachments: [
+        attachment('1001', 'old.png', 'image/png'),
+        attachment('1002', 'notes.pdf', 'application/pdf'),
+      ],
+    },
+    {
+      id: 'm2',
+      ticketId: '42',
+      author: { id: 'reporter', kind: 'player' },
+      body: 'newer',
+      createdAt: '2026-10-06T12:05:00.000Z',
+      attachments: [
+        attachment('1003', 'one.jpg', 'image/jpeg'),
+        attachment('1004', 'two.webp', 'image/webp'),
+        attachment('1005', 'three.gif', 'image/gif'),
+      ],
+    },
+  ];
+}
+
+function attachment(
+  id: string,
+  name: string,
+  contentType: string,
+): NonNullable<TicketContextBundle['messages'][number]['attachments']>[number] {
+  return {
+    id,
+    name,
+    contentType,
+    size: 100,
+    source: 'discord',
   };
 }
 
