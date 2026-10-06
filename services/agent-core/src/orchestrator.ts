@@ -53,6 +53,10 @@ import {
   proposalFromSuperseded,
 } from './memory-updates.js';
 import { assembleResponse } from './response.js';
+import {
+  TOPIC_FAMILIARITY_TOOL,
+  resolveResponseStyle,
+} from './response-style.js';
 import { assessAllClaims, assessAllClaimsDisclosable } from './verification.js';
 import type { Reasoner } from './reasoner.js';
 import { TimeoutReasoner } from './reasoner.js';
@@ -175,6 +179,27 @@ export class AgentOrchestrator {
     );
     const budget = new BudgetTracker(policy);
     budget.recordReasonerCalls(preReasonerCalls);
+
+    let responseStyle;
+    const wantsFamiliarity =
+      classification.needsFamiliarityContext === true &&
+      request.actor.type === 'player';
+    const hasFamiliarityTool = registry.has(TOPIC_FAMILIARITY_TOOL);
+    if (
+      wantsFamiliarity &&
+      (!hasFamiliarityTool || budget.canCallTools(1))
+    ) {
+      responseStyle = await resolveResponseStyle(request, classification, {
+        registry,
+        ...(this.deps.toolTimeoutMs !== undefined
+          ? { toolTimeoutMs: this.deps.toolTimeoutMs }
+          : {}),
+      });
+      if (hasFamiliarityTool) {
+        budget.recordToolCalls(1);
+      }
+    }
+
     const { steps: plan, warnings: planWarnings } = await this.withReasonerTimeout(
       buildEvidencePlan(reasoner, request, classification, registry, budget),
       'buildEvidencePlan',
@@ -258,6 +283,7 @@ export class AgentOrchestrator {
         factualLines: visibleAssessments.map((a) => factualLine(a)),
         evidence: visibleEvidence,
         escalated: escalation !== null,
+        ...(responseStyle !== undefined ? { responseStyle } : {}),
       }),
       'draftResponse',
     );
@@ -269,6 +295,10 @@ export class AgentOrchestrator {
       escalation,
       memoryProposals,
       draft,
+      ...(classification.backgroundClaims !== undefined
+        ? { backgroundClaims: classification.backgroundClaims }
+        : {}),
+      ...(responseStyle !== undefined ? { responseStyle } : {}),
       notes: [
         ...planWarnings.map((w) => `plan: ${w}`),
         ...terminationNote(outcome.termination),
