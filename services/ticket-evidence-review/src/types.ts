@@ -68,6 +68,8 @@ export interface TicketEvidenceReviewInput {
   ticket: TicketContextBundle;
   imageEvidence: TicketImageAssessmentRecord[];
   concerns: EvidencePolicyConcern[];
+  /** Additional ambiguity identified while mapping observations to current policy. */
+  policyNeedsMoreContext?: boolean;
   moderationState: AuthoritativeModerationState;
 }
 
