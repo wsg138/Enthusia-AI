@@ -324,7 +324,11 @@ function observationIndexes(
   value: unknown,
   observationCount: number,
 ): number[] {
-  if (!Array.isArray(value) || value.length > MAX_IMAGE_OBSERVATIONS) {
+  if (
+    !Array.isArray(value) ||
+    value.length < 1 ||
+    value.length > MAX_IMAGE_OBSERVATIONS
+  ) {
     throw new OpenAIParseError('image inference observation indexes are invalid');
   }
   const indexes = [...new Set(value)];
