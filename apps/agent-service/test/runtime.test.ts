@@ -22,6 +22,7 @@ describe('production Ticket Bot tool registration', () => {
       timeoutMs: 10_000,
     });
     expect(tools.map((tool) => tool.meta.name).sort()).toEqual([
+      'ticket.capabilities',
       'ticket.get_context',
       'ticket.request_close',
       'ticket.request_escalation',
