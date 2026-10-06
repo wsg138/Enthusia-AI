@@ -77,6 +77,9 @@ export {
 } from './events.js';
 export type { TicketEvent, TicketEventHandler, TicketEventType } from './events.js';
 
+export { ticketReportTarget } from './report-target.js';
+export type { TicketReportTarget } from './report-target.js';
+
 // Context adapter
 export { ticketToAgentContext } from './context.js';
 export type {
