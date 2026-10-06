@@ -45,6 +45,8 @@ export type {
   RequestClass,
   ResolvedChatRequest,
   ResponseDraft,
+  ResponseFamiliarityLevel,
+  ResponseStyleProfile,
   SupersededMemory,
   ToolCallProposal,
   TraceId,
@@ -120,5 +122,12 @@ export {
   proposalFromSuperseded,
   looksLikeSecret,
 } from './memory-updates.js';
+export {
+  DEFAULT_STYLE_TOOL_TIMEOUT_MS,
+  MIN_FAMILIARITY_CONFIDENCE,
+  TOPIC_FAMILIARITY_TOOL,
+  resolveResponseStyle,
+} from './response-style.js';
+export type { ResponseStyleDeps } from './response-style.js';
 export { assembleResponse } from './response.js';
 export type { AssembleArgs } from './response.js';
