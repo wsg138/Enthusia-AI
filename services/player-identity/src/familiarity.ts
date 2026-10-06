@@ -35,6 +35,20 @@ export interface TopicFamiliarityProvider {
   }): Promise<TopicFamiliaritySignal>;
 }
 
+interface FamiliarityEnvelopeBase {
+  toolName: string;
+  timestamp: string;
+  source: 'player-context';
+  visibility: Visibility.PLAYER_SELF;
+  correlationId: string;
+}
+
+interface FamiliarityToolError {
+  code: string;
+  message: string;
+  retryable: boolean;
+}
+
 /**
  * Privacy-safe response-style hint.
  *
@@ -42,9 +56,7 @@ export interface TopicFamiliarityProvider {
  * authenticated player actor from ToolCallContext, which prevents this tool
  * from becoming a general player-profile lookup.
  */
-export class TopicFamiliarityTool
-  implements Tool<{ topic: string }>
-{
+export class TopicFamiliarityTool implements Tool<{ topic: string }> {
   readonly meta: ToolMetadata = {
     name: 'player.topic_familiarity',
     description:
@@ -72,77 +84,98 @@ export class TopicFamiliarityTool
     params: { topic: string },
     ctx: ToolCallContext,
   ): Promise<ToolResult<unknown>> {
-    const timestamp = new Date().toISOString();
-    const base = {
-      toolName: this.meta.name,
-      timestamp,
-      source: 'player-context',
-      visibility: Visibility.PLAYER_SELF,
-      correlationId: ctx.traceId,
-    };
+    const base = envelopeBase(this.meta.name, ctx);
+    const accessError = familiarityAccessError(ctx);
+    if (accessError !== null) {
+      return { ...base, error: accessError };
+    }
 
     try {
-      if (ctx.actor.type !== 'player') {
-        return {
-          ...base,
-          error: {
-            code: 'not_authorized',
-            message: 'Topic familiarity is available only for the current player actor.',
-            retryable: false,
-          },
-        };
-      }
-      if (
-        !canDisclose(
-          Visibility.PLAYER_SELF,
-          ctx.visibilityCeiling,
-          { isSubject: true, isStaff: false },
-        )
-      ) {
-        return {
-          ...base,
-          error: {
-            code: 'visibility_denied',
-            message: 'Topic familiarity is above the request visibility ceiling.',
-            retryable: false,
-          },
-        };
-      }
-
       const topic = normalizeTopic(params.topic);
-      const signal = normalizeSignal(
-        await this.provider.getTopicFamiliarity({
-          actor: ctx.actor,
-          topic,
-          ...(ctx.signal !== undefined ? { signal: ctx.signal } : {}),
-        }),
-        topic,
-      );
-
-      return {
-        ...base,
-        freshness: JSON.stringify({
-          version: `familiarity:${signal.observedAt}`,
-          observedTime: signal.observedAt,
-          sourceStatus: SourceStatus.CURRENT,
-        }),
-        result: signal,
-      };
+      const signal = await loadNormalizedSignal(this.provider, ctx, topic);
+      return successEnvelope(base, signal);
     } catch (error) {
-      return {
-        ...base,
-        error: {
-          code: 'familiarity_unavailable',
-          message:
-            error instanceof Error && error.message === 'invalid_topic'
-              ? 'A valid topic is required.'
-              : 'Topic familiarity is temporarily unavailable.',
-          retryable:
-            !(error instanceof Error && error.message === 'invalid_topic'),
-        },
-      };
+      return { ...base, error: unavailableError(error) };
     }
   }
+}
+
+function envelopeBase(
+  toolName: string,
+  ctx: ToolCallContext,
+): FamiliarityEnvelopeBase {
+  return {
+    toolName,
+    timestamp: new Date().toISOString(),
+    source: 'player-context',
+    visibility: Visibility.PLAYER_SELF,
+    correlationId: ctx.traceId,
+  };
+}
+
+function familiarityAccessError(
+  ctx: ToolCallContext,
+): FamiliarityToolError | null {
+  if (ctx.actor.type !== 'player') {
+    return {
+      code: 'not_authorized',
+      message: 'Topic familiarity is available only for the current player actor.',
+      retryable: false,
+    };
+  }
+
+  const allowed = canDisclose(
+    Visibility.PLAYER_SELF,
+    ctx.visibilityCeiling,
+    { isSubject: true, isStaff: false },
+  );
+  if (allowed) return null;
+
+  return {
+    code: 'visibility_denied',
+    message: 'Topic familiarity is above the request visibility ceiling.',
+    retryable: false,
+  };
+}
+
+async function loadNormalizedSignal(
+  provider: TopicFamiliarityProvider,
+  ctx: ToolCallContext,
+  topic: string,
+): Promise<TopicFamiliaritySignal> {
+  const raw = await provider.getTopicFamiliarity({
+    actor: ctx.actor,
+    topic,
+    ...(ctx.signal !== undefined ? { signal: ctx.signal } : {}),
+  });
+  return normalizeSignal(raw, topic);
+}
+
+function successEnvelope(
+  base: FamiliarityEnvelopeBase,
+  signal: TopicFamiliaritySignal,
+): ToolResult<unknown> {
+  return {
+    ...base,
+    freshness: JSON.stringify({
+      version: `familiarity:${signal.observedAt}`,
+      observedTime: signal.observedAt,
+      sourceStatus: SourceStatus.CURRENT,
+    }),
+    result: signal,
+  };
+}
+
+function unavailableError(error: unknown): FamiliarityToolError {
+  const invalidTopic =
+    error instanceof Error && error.message === 'invalid_topic';
+  return {
+    code: 'familiarity_unavailable',
+    message: invalidTopic
+      ? 'A valid topic is required.'
+      : 'Topic familiarity is temporarily unavailable.',
+    retryable: !invalidTopic,
+  };
 }
 
 function normalizeTopic(value: unknown): string {
@@ -156,31 +189,45 @@ function normalizeSignal(
   value: TopicFamiliaritySignal,
   requestedTopic: string,
 ): TopicFamiliaritySignal {
-  if (!TOPIC_FAMILIARITY_LEVELS.includes(value.level)) {
-    throw new Error('invalid_signal');
-  }
-  if (
-    !Number.isFinite(value.confidence) ||
-    value.confidence < 0 ||
-    value.confidence > 1
-  ) {
-    throw new Error('invalid_signal');
-  }
-
-  const observedAt = new Date(value.observedAt);
-  if (!Number.isFinite(observedAt.getTime())) throw new Error('invalid_signal');
-
-  const basis = [...new Set(value.basis)].filter(
-    (item): item is TopicFamiliarityBasis =>
-      TOPIC_FAMILIARITY_BASIS.includes(item),
-  );
-  if (basis.length !== value.basis.length) throw new Error('invalid_signal');
+  validateLevel(value.level);
+  validateConfidence(value.confidence);
+  const observedAt = normalizeObservedAt(value.observedAt);
+  const basis = normalizeBasis(value.basis);
 
   return {
     topic: requestedTopic,
     level: value.level,
     confidence: value.confidence,
     basis,
-    observedAt: observedAt.toISOString(),
+    observedAt,
   };
+}
+
+function validateLevel(level: TopicFamiliarityLevel): void {
+  if (!TOPIC_FAMILIARITY_LEVELS.includes(level)) {
+    throw new Error('invalid_signal');
+  }
+}
+
+function validateConfidence(confidence: number): void {
+  if (!Number.isFinite(confidence)) throw new Error('invalid_signal');
+  if (confidence < 0 || confidence > 1) throw new Error('invalid_signal');
+}
+
+function normalizeObservedAt(value: string): string {
+  const observedAt = new Date(value);
+  if (!Number.isFinite(observedAt.getTime())) throw new Error('invalid_signal');
+  return observedAt.toISOString();
+}
+
+function normalizeBasis(
+  values: TopicFamiliarityBasis[],
+): TopicFamiliarityBasis[] {
+  const basis = [...new Set(values)];
+  for (const item of basis) {
+    if (!TOPIC_FAMILIARITY_BASIS.includes(item)) {
+      throw new Error('invalid_signal');
+    }
+  }
+  return basis;
 }
