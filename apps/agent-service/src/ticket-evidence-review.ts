@@ -36,6 +36,47 @@ export type TicketEvidenceReviewRequest = z.infer<
   typeof ticketEvidenceReviewRequestSchema
 >;
 
+export const ticketEvidenceReviewResponseSchema = z.strictObject({
+  ticketId: ticketIdSchema,
+  status: z.enum([
+    'needs_target',
+    'already_actioned',
+    'needs_more_evidence',
+    'no_escalation',
+    'policy_assessment_unavailable',
+    'moderation_state_unavailable',
+    'staff_escalation_submitted',
+    'staff_escalation_failed',
+  ]),
+  disposition: z.enum([
+    'needs_more_evidence',
+    'staff_review',
+    'already_actioned',
+    'no_escalation',
+  ]).nullable(),
+  summary: z.string().max(1200).nullable(),
+  missingEvidence: z.array(z.string().max(300)).max(6),
+  evidence: z.strictObject({
+    eligibleAttachmentCount: z.number().int().nonnegative().max(128),
+    attemptedCount: z.number().int().nonnegative().max(3),
+    assessedCount: z.number().int().nonnegative().max(3),
+    issueCounts: z.record(z.string().max(64), z.number().int().nonnegative().max(128)),
+  }),
+  policy: z.strictObject({
+    version: z.string().min(1).max(64),
+    fileVersion: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+    needsMoreContext: z.boolean(),
+  }).nullable(),
+  moderation: z.strictObject({
+    verified: z.boolean(),
+    duplicateStatus: z.enum(['none', 'review_open', 'actioned']),
+  }),
+  delivery: z.strictObject({
+    requestId: z.string().min(1).max(128),
+    status: z.enum(['pending', 'accepted', 'rejected', 'superseded', 'expired']),
+  }).nullable(),
+});
+
 export interface TicketEvidenceReviewResponse {
   ticketId: string;
   status: TicketEvidencePipelineStatus;
