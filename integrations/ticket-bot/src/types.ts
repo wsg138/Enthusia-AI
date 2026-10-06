@@ -105,6 +105,21 @@ export const ACTION_REQUEST_KINDS: readonly ActionRequestKind[] = [
   'transition',
 ] as const;
 
+export interface TicketBotCapabilities {
+  service: 'enthusia-support-bot';
+  api: 'ticket-lifecycle';
+  contractVersion: 'w14-v1';
+  reads: Array<
+    | 'tickets.list'
+    | 'tickets.get'
+    | 'tickets.messages'
+    | 'tickets.participants'
+    | 'actions.get'
+  >;
+  actions: ActionRequestKind[];
+  eventDelivery: 'optional-hmac-webhook';
+}
+
 /** Parameters accompanying an action request (all optional; bot validates). */
 export interface ActionRequestParameters {
   /** Desired target state for `transition` requests. */
