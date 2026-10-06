@@ -53,6 +53,16 @@ export function assertAllowedEvidenceRequest(
   }
 }
 
+function requiredBaseUrl(value: string): string {
+  if (value) return value.replace(/\/+$/, '');
+  throw new ValidationError('TicketEvidenceClient requires a baseUrl.');
+}
+
+function requiredApiKey(value: string): string {
+  if (value) return value;
+  throw new ValidationError('TicketEvidenceClient requires an apiKey.');
+}
+
 export class TicketEvidenceClient {
   private readonly baseUrl: string;
   private readonly apiKey: string;
@@ -61,14 +71,8 @@ export class TicketEvidenceClient {
   private readonly userAgent: string;
 
   constructor(config: TicketBotClientConfig) {
-    if (!config.baseUrl) {
-      throw new ValidationError('TicketEvidenceClient requires a baseUrl.');
-    }
-    if (!config.apiKey) {
-      throw new ValidationError('TicketEvidenceClient requires an apiKey.');
-    }
-    this.baseUrl = config.baseUrl.replace(/\/+$/, '');
-    this.apiKey = config.apiKey;
+    this.baseUrl = requiredBaseUrl(config.baseUrl);
+    this.apiKey = requiredApiKey(config.apiKey);
     this.fetchImpl =
       config.fetchImpl ??
       (globalThis.fetch.bind(globalThis) as typeof fetch);
@@ -184,28 +188,50 @@ function evidenceProvenance(
   response: Response,
   expected: { ticketId: string; messageId: string; attachmentId: string },
 ): string {
-  requireTicketMatch(
-    response.headers.get('x-enthusia-ticket-id') ?? '',
-    expected.ticketId,
+  const actual = readEvidenceProvenanceHeaders(response);
+  requireTicketMatch(actual.ticketId, expected.ticketId);
+  requireAttachmentMatch(actual, expected);
+  return requireSha256(actual.sha256);
+}
+
+function readEvidenceProvenanceHeaders(response: Response): {
+  ticketId: string;
+  messageId: string;
+  attachmentId: string;
+  sha256: string;
+} {
+  return {
+    ticketId: response.headers.get('x-enthusia-ticket-id') ?? '',
+    messageId: response.headers.get('x-enthusia-message-id') ?? '',
+    attachmentId: response.headers.get('x-enthusia-attachment-id') ?? '',
+    sha256: (
+      response.headers.get('x-enthusia-content-sha256') ?? ''
+    ).toLowerCase(),
+  };
+}
+
+function requireAttachmentMatch(
+  actual: { messageId: string; attachmentId: string },
+  expected: { messageId: string; attachmentId: string },
+): void {
+  if (
+    actual.messageId === expected.messageId &&
+    actual.attachmentId === expected.attachmentId
+  ) {
+    return;
+  }
+  throw new ExternalServiceError(
+    TICKET_BOT_SERVICE,
+    'Ticket evidence provenance did not match the requested attachment.',
   );
-  const messageId = response.headers.get('x-enthusia-message-id') ?? '';
-  const attachmentId = response.headers.get('x-enthusia-attachment-id') ?? '';
-  if (messageId !== expected.messageId || attachmentId !== expected.attachmentId) {
-    throw new ExternalServiceError(
-      TICKET_BOT_SERVICE,
-      'Ticket evidence provenance did not match the requested attachment.',
-    );
-  }
-  const sha256 = (
-    response.headers.get('x-enthusia-content-sha256') ?? ''
-  ).toLowerCase();
-  if (!/^[a-f0-9]{64}$/.test(sha256)) {
-    throw new ExternalServiceError(
-      TICKET_BOT_SERVICE,
-      'Ticket evidence response did not include a valid content hash.',
-    );
-  }
-  return sha256;
+}
+
+function requireSha256(value: string): string {
+  if (/^[a-f0-9]{64}$/.test(value)) return value;
+  throw new ExternalServiceError(
+    TICKET_BOT_SERVICE,
+    'Ticket evidence response did not include a valid content hash.',
+  );
 }
 
 function requireTicketMatch(actual: string, expected: string): void {
@@ -253,31 +279,27 @@ function validateEvidenceHash(
   );
 }
 
-type EvidenceErrorFactory = (path: string, detail: string) => Error;
-
-const EVIDENCE_ERROR_FACTORIES: Readonly<
-  Partial<Record<number, EvidenceErrorFactory>>
-> = {
-  401: (path, detail) =>
-    new AuthorizationError(`Ticket Bot denied GET ${path}: ${detail}`),
-  403: (path, detail) =>
-    new AuthorizationError(`Ticket Bot denied GET ${path}: ${detail}`),
-  404: (_path, detail) =>
-    new NotFoundError(`Ticket evidence was not found: ${detail}`),
-  429: () => new RateLimitError('Ticket Bot evidence rate limit exceeded.'),
-};
-
 async function evidenceResponseError(
   response: Response,
   path: string,
 ): Promise<Error> {
   const detail = await safeErrorBody(response);
-  const factory = EVIDENCE_ERROR_FACTORIES[response.status];
-  return factory?.(path, detail) ??
-    new ExternalServiceError(
-      TICKET_BOT_SERVICE,
-      `GET ${path} failed with status ${response.status}: ${detail}`,
-    );
+  switch (response.status) {
+    case 401:
+    case 403:
+      return new AuthorizationError(
+        `Ticket Bot denied GET ${path}: ${detail}`,
+      );
+    case 404:
+      return new NotFoundError(`Ticket evidence was not found: ${detail}`);
+    case 429:
+      return new RateLimitError('Ticket Bot evidence rate limit exceeded.');
+    default:
+      return new ExternalServiceError(
+        TICKET_BOT_SERVICE,
+        `GET ${path} failed with status ${response.status}: ${detail}`,
+      );
+  }
 }
 
 function requireImageReadCapability(
