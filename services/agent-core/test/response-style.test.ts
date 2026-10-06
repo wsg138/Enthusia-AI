@@ -267,95 +267,103 @@ describe('adaptive verified response depth', () => {
   });
 });
 
+function familiarityMock(): MockTool {
+  return new MockTool(
+    {
+      name: 'player.topic_familiarity',
+      description: 'topic familiarity',
+      parameters: {
+        type: 'object',
+        properties: { topic: { type: 'string' } },
+        required: ['topic'],
+      },
+      privacySensitive: true,
+      maxVisibility: Visibility.PLAYER_SELF,
+    },
+    (_params, ctx) =>
+      okResult(
+        'player.topic_familiarity',
+        'player-context',
+        {
+          topic: 'reputation',
+          level: 'FAMILIAR',
+          confidence: 0.9,
+          basis: ['CURRENT_MEMORY'],
+          observedAt: '2026-10-06T05:00:00.000Z',
+        },
+        {
+          visibility: Visibility.PLAYER_SELF,
+          correlationId: ctx.traceId,
+        },
+      ),
+  );
+}
+
+function adaptiveKnowledgeMock(): MockTool {
+  return new MockTool(knowledgeSearchMeta, (params) => {
+    const query = String(params['query'] ?? '');
+    return okResult(
+      'knowledge.search',
+      'knowledge-indexer',
+      {
+        value: query.includes('background')
+          ? 'player feedback'
+          : 'positive stall-related feedback',
+      },
+    );
+  });
+}
+
+function adaptiveReasoner(): MockReasoner {
+  return new MockReasoner({
+    classification: {
+      requestClass: 'investigative',
+      summary: 'Good Stall question',
+      claims: ['reputation is a feedback system', 'Good Stall meaning'],
+      backgroundClaims: ['reputation is a feedback system'],
+      needsFamiliarityContext: true,
+      familiarityTopic: 'reputation',
+      needsPrivateContext: false,
+      securitySensitive: false,
+    },
+    plan: [
+      {
+        claim: 'reputation is a feedback system',
+        candidateTools: ['knowledge.search'],
+        verificationTier: 'B',
+        privacySensitive: false,
+      },
+      {
+        claim: 'Good Stall meaning',
+        candidateTools: ['knowledge.search'],
+        verificationTier: 'B',
+        privacySensitive: false,
+      },
+    ],
+    decisions: [
+      callTool(
+        'knowledge.search',
+        'reputation is a feedback system',
+        { query: 'background reputation' },
+      ),
+      callTool(
+        'knowledge.search',
+        'Good Stall meaning',
+        { query: 'Good Stall direct answer' },
+      ),
+      FINISH,
+    ],
+  });
+}
 
 describe('AgentOrchestrator adaptive familiarity integration', () => {
-  it('uses the subject-bound style preflight even when factual private context is unnecessary', async () => {
-    const familiarity = new MockTool(
-      {
-        name: 'player.topic_familiarity',
-        description: 'topic familiarity',
-        parameters: {
-          type: 'object',
-          properties: { topic: { type: 'string' } },
-          required: ['topic'],
-        },
-        privacySensitive: true,
-        maxVisibility: Visibility.PLAYER_SELF,
-      },
-      (_params, ctx) =>
-        okResult(
-          'player.topic_familiarity',
-          'player-context',
-          {
-            topic: 'reputation',
-            level: 'FAMILIAR',
-            confidence: 0.9,
-            basis: ['CURRENT_MEMORY'],
-            observedAt: '2026-10-06T05:00:00.000Z',
-          },
-          {
-            visibility: Visibility.PLAYER_SELF,
-            correlationId: ctx.traceId,
-          },
-        ),
-    );
-    const knowledge = new MockTool(knowledgeSearchMeta, (params) => {
-      const query = String(params['query'] ?? '');
-      return okResult(
-        'knowledge.search',
-        'knowledge-indexer',
-        {
-          value: query.includes('background')
-            ? 'player feedback'
-            : 'positive stall-related feedback',
-        },
-      );
-    });
+  it('uses the subject-bound style preflight without factual private context', async () => {
+    const familiarity = familiarityMock();
+    const knowledge = adaptiveKnowledgeMock();
     const { registry } = mockRegistry([familiarity, knowledge]);
-    const reasoner = new MockReasoner({
-      classification: {
-        requestClass: 'investigative',
-        summary: 'Good Stall question',
-        claims: [
-          'reputation is a feedback system',
-          'Good Stall meaning',
-        ],
-        backgroundClaims: ['reputation is a feedback system'],
-        needsFamiliarityContext: true,
-        familiarityTopic: 'reputation',
-        needsPrivateContext: false,
-        securitySensitive: false,
-      },
-      plan: [
-        {
-          claim: 'reputation is a feedback system',
-          candidateTools: ['knowledge.search'],
-          verificationTier: 'B',
-          privacySensitive: false,
-        },
-        {
-          claim: 'Good Stall meaning',
-          candidateTools: ['knowledge.search'],
-          verificationTier: 'B',
-          privacySensitive: false,
-        },
-      ],
-      decisions: [
-        callTool(
-          'knowledge.search',
-          'reputation is a feedback system',
-          { query: 'background reputation' },
-        ),
-        callTool(
-          'knowledge.search',
-          'Good Stall meaning',
-          { query: 'Good Stall direct answer' },
-        ),
-        FINISH,
-      ],
-    });
-
+    const reasoner = adaptiveReasoner();
     const orchestrator = new AgentOrchestrator({ reasoner, registry });
+
     const response = await orchestrator.handleChat(
       makeRequest('What is Good Stall?', {
         visibilityCeiling: Visibility.PLAYER_SELF,
