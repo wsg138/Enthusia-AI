@@ -226,7 +226,7 @@ describe('parseImageEvidenceAssessment', () => {
     parsed.inferences[0]!['observationIndexes'] = [];
     expect(() =>
       parseImageEvidenceAssessment(JSON.stringify(parsed)),
-    ).toThrow(/observation indexes/);
+    ).toThrow(/invalid JSON shape/);
   });
 
   it('rejects inference references outside the observation list', () => {
