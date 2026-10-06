@@ -81,6 +81,15 @@ const MESSAGES: TicketMessage[] = [
     author: OWNER,
     body: 'My land claim disappeared after the restart.',
     createdAt: '2026-10-01T10:01:00.000Z',
+    attachments: [
+      {
+        id: '120000000000000001',
+        name: 'claim-evidence.png',
+        contentType: 'image/png',
+        size: 524288,
+        source: 'discord',
+      },
+    ],
   },
   {
     id: 'm-2',
@@ -244,6 +253,15 @@ describe('TicketBotClient reads', () => {
     const bundle = await makeClient().getTicketContext('T-1234', { maxMessages: 10 });
     expect(bundle.ticket.id).toBe('T-1234');
     expect(bundle.messages).toHaveLength(2);
+    expect(bundle.messages[0]?.attachments).toEqual([
+      {
+        id: '120000000000000001',
+        name: 'claim-evidence.png',
+        contentType: 'image/png',
+        size: 524288,
+        source: 'discord',
+      },
+    ]);
     expect(bundle.participants).toHaveLength(2);
     expect(bundle.fetchedAt).toBeTruthy();
   });
@@ -564,8 +582,24 @@ describe('ticket context adapter', () => {
     expect(ctx.version).toBe('v7');
     expect(ctx.traceId).toBe('trace-1');
     expect(ctx.transcript).toHaveLength(2);
-    expect(ctx.transcript[0]).toMatchObject({ messageId: 'm-1', ticketId: 'T-1234' });
-    expect(ctx.transcript[1]).toMatchObject({ messageId: 'm-2', ticketId: 'T-1234' });
+    expect(ctx.transcript[0]).toMatchObject({
+      messageId: 'm-1',
+      ticketId: 'T-1234',
+      attachments: [
+        {
+          id: '120000000000000001',
+          name: 'claim-evidence.png',
+          contentType: 'image/png',
+          size: 524288,
+          source: 'discord',
+        },
+      ],
+    });
+    expect(ctx.transcript[1]).toMatchObject({
+      messageId: 'm-2',
+      ticketId: 'T-1234',
+      attachments: [],
+    });
     expect(ctx.totalMessages).toBe(2);
     expect(ctx.summary).toContain('T-1234');
     expect(ctx.summary).toContain('Cannot claim land');
@@ -581,6 +615,48 @@ describe('ticket context adapter', () => {
     expect(ctx.transcript[0]?.author).toBe('ModAlex');
     expect(ctx.transcript[0]?.body.length).toBeLessThanOrEqual(10 + '…[truncated]'.length);
     expect(ctx.totalMessages).toBe(2);
+  });
+
+  it('strips malformed or unexpected attachment fields before model exposure', () => {
+    const unsafeBundle = {
+      ...bundle,
+      messages: [
+        {
+          ...MESSAGES[0]!,
+          attachments: [
+            {
+              id: '120000000000000009',
+              name: 'evidence.png',
+              contentType: 'IMAGE/PNG',
+              size: 1000,
+              source: 'discord',
+              url: 'https://cdn.discordapp.com/private-signed-url',
+              proxyUrl: 'https://media.discordapp.net/private-signed-url',
+            },
+            {
+              id: '../bad',
+              name: 'bad.png',
+              contentType: 'image/png',
+              size: 1,
+              source: 'discord',
+            },
+          ],
+        },
+      ] as TicketMessage[],
+    };
+
+    const ctx = ticketToAgentContext(unsafeBundle, { traceId: 'trace-safe-attachments' });
+    expect(ctx.transcript[0]?.attachments).toEqual([
+      {
+        id: '120000000000000009',
+        name: 'evidence.png',
+        contentType: 'image/png',
+        size: 1000,
+        source: 'discord',
+      },
+    ]);
+    expect(JSON.stringify(ctx)).not.toContain('discordapp.com');
+    expect(JSON.stringify(ctx)).not.toContain('proxyUrl');
   });
 
   it('is a pure transformation (inputs untouched)', () => {
