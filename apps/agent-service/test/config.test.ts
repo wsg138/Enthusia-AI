@@ -11,6 +11,7 @@ describe('agent-service Ticket Bot configuration', () => {
     expect(config.ticketBotApiKey).toBeUndefined();
     expect(redactedAgentServiceConfig(config)).toMatchObject({
       memoryConfigured: false,
+      policyConfigured: false,
       ticketBotConfigured: false,
       ticketBotTimeoutMs: 10_000,
     });
@@ -24,6 +25,36 @@ describe('agent-service Ticket Bot configuration', () => {
     const redacted = redactedAgentServiceConfig(config);
     expect(redacted).toMatchObject({ memoryConfigured: true });
     expect(JSON.stringify(redacted)).not.toContain('/srv/private/state');
+  });
+
+  it('requires a complete named live-policy source and redacts its selectors', () => {
+    expect(() =>
+      loadAgentServiceConfig({
+        NODE_ENV: 'test',
+        ENTHUSIA_AGENT_POLICY_SERVER_ID: 'smp',
+      }),
+    ).toThrow('must be configured together');
+
+    expect(() =>
+      loadAgentServiceConfig({
+        NODE_ENV: 'test',
+        ENTHUSIA_AGENT_POLICY_ENVIRONMENT: 'production',
+      }),
+    ).toThrow('requires a configured policy source');
+
+    const config = loadAgentServiceConfig({
+      NODE_ENV: 'test',
+      ENTHUSIA_AGENT_POLICY_SERVER_ID: 'smp',
+      ENTHUSIA_AGENT_POLICY_SOURCE_ID: 'enthusia-staff-reason-policies',
+    });
+    const redacted = redactedAgentServiceConfig(config);
+    expect(redacted).toMatchObject({
+      policyConfigured: true,
+      policyEnvironment: 'production',
+    });
+    expect(JSON.stringify(redacted)).not.toContain(
+      'enthusia-staff-reason-policies',
+    );
   });
 
   it('fails closed when only half of the Ticket Bot credential pair is set', () => {
