@@ -240,9 +240,7 @@ describe('parseImageEvidenceAssessment', () => {
   });
 
   it('accepts a single JSON code fence but not extra schema fields', () => {
-    const fenced = ```json
-${validAssessment()}
-```;
+    const fenced = '```json\n' + validAssessment() + '\n```';
     expect(parseImageEvidenceAssessment(fenced).summary).toContain('Minecraft');
   });
 });
