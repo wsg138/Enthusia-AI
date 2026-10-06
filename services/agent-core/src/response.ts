@@ -31,6 +31,7 @@ import type {
   EvidenceItem,
   ResolvedChatRequest,
   ResponseDraft,
+  ResponseStyleProfile,
 } from './types.js';
 import {
   toWireEscalation,
@@ -45,6 +46,10 @@ export interface AssembleArgs {
   escalation: EscalationDecision | null;
   memoryProposals: MemoryUpdateProposal[];
   draft: ResponseDraft;
+  /** Verified claims that are optional introductory/background context. */
+  backgroundClaims?: string[];
+  /** Privacy-safe familiarity hint; never contains raw player memory. */
+  responseStyle?: ResponseStyleProfile;
   /** Investigation notes worth surfacing (e.g. budget exhaustion). */
   notes?: string[];
 }
@@ -59,19 +64,24 @@ export function assembleResponse(args: AssembleArgs): AgentResponse {
     args;
   const ceiling = request.visibilityCeiling;
   const disclosure = disclosureOpts(request.actor);
+  const visibleAssessments = assessmentsForStyle(
+    assessments,
+    args.backgroundClaims ?? [],
+    args.responseStyle,
+  );
 
   const lines: string[] = [];
   if (draft.preamble && draft.preamble.trim().length > 0) {
     lines.push(draft.preamble.trim());
   }
 
-  if (assessments.length === 0) {
+  if (visibleAssessments.length === 0) {
     lines.push(
       `${COULD_NOT_VERIFY} an answer: no checkable claims were identified for this request.`,
     );
   }
 
-  for (const assessment of assessments) {
+  for (const assessment of visibleAssessments) {
     lines.push(claimLine(assessment, ceiling, disclosure));
   }
 
@@ -88,7 +98,8 @@ export function assembleResponse(args: AssembleArgs): AgentResponse {
     lines.push(draft.closing.trim());
   }
 
-  const sources = buildCitations(evidence, ceiling, disclosure);
+  const visibleClaims = new Set(visibleAssessments.map((assessment) => assessment.claim));
+  const sources = buildCitations(evidence, ceiling, disclosure, visibleClaims);
 
   return {
     text: lines.join('\n\n'),
@@ -115,6 +126,42 @@ function disclosureOpts(actor: Actor): DisclosureOpts {
     isSubject: false,
     isStaff: actor.type === 'staff',
   };
+}
+
+function assessmentsForStyle(
+  assessments: ClaimAssessment[],
+  backgroundClaims: string[],
+  responseStyle: ResponseStyleProfile | undefined,
+): ClaimAssessment[] {
+  if (
+    responseStyle === undefined ||
+    backgroundClaims.length === 0 ||
+    responseStyle.familiarity === 'NEW'
+  ) {
+    return assessments;
+  }
+
+  const background = new Set(backgroundClaims);
+  if (
+    responseStyle.familiarity === 'FAMILIAR' ||
+    responseStyle.familiarity === 'EXPERT'
+  ) {
+    const direct = assessments.filter((assessment) => !background.has(assessment.claim));
+    return direct.length > 0 ? direct : assessments;
+  }
+
+  // UNKNOWN: one short context fact is useful, but do not turn uncertainty
+  // into a full beginner tutorial.
+  const firstBackground = assessments.find((assessment) =>
+    background.has(assessment.claim),
+  );
+  if (firstBackground === undefined) return assessments;
+
+  const selected = assessments.filter(
+    (assessment) =>
+      !background.has(assessment.claim) || assessment === firstBackground,
+  );
+  return selected.length > 0 ? selected : assessments;
 }
 
 /** One factual line per claim — the policy made visible. */
@@ -165,10 +212,12 @@ function buildCitations(
   evidence: EvidenceItem[],
   ceiling: Visibility,
   disclosure: DisclosureOpts,
+  allowedClaims?: ReadonlySet<string>,
 ): ResponseSource[] {
   const seen = new Set<string>();
   const citations: ResponseSource[] = [];
   for (const item of evidence) {
+    if (allowedClaims !== undefined && !allowedClaims.has(item.claim)) continue;
     if (!canDisclose(item.visibility, ceiling, disclosure)) continue;
     const key = `${item.source}::${item.version ?? ''}`;
     if (seen.has(key)) continue;
