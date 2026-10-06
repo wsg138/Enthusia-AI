@@ -1,0 +1,1 @@
+{"name":"@enthusia/integration-staff-moderation","version":"0.1.0","private":true,"description":"Read-only authoritative EnthusiaStaff moderation-state integration for Enthusia AI.","type":"module","license":"UNLICENSED","main":"./src/index.ts","exports":{".":"./src/index.ts"},"dependencies":{"@enthusia/contracts":"0.1.0","zod":"4.6.5"},"scripts":{"test":"vitest run"}}
