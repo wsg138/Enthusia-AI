@@ -316,7 +316,7 @@ describe('TicketBotClient evidence capabilities', () => {
     });
 
     await expect(
-      client.getTicketImageEvidence(
+      client.getImageEvidence(
         'T-1234',
         'm-1',
         '120000000000000001',
