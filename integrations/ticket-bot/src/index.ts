@@ -59,6 +59,12 @@ export {
 } from './client.js';
 export type { TicketBotClientConfig } from './client.js';
 
+export {
+  TICKET_EVIDENCE_REQUEST_ALLOWLIST,
+  TicketEvidenceClient,
+  assertAllowedEvidenceRequest,
+} from './evidence-client.js';
+
 // Event consumption
 export {
   TICKET_EVENT_TYPES,
