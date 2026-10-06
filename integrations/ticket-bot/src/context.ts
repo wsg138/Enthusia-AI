@@ -25,6 +25,14 @@ import type {
   TicketParticipant,
 } from './types.js';
 
+export interface TranscriptAttachment {
+  id: string;
+  name: string;
+  contentType?: string;
+  size: number;
+  source: 'discord';
+}
+
 export interface TranscriptLine {
   messageId: string;
   ticketId: string;
@@ -32,6 +40,7 @@ export interface TranscriptLine {
   authorKind: 'player' | 'staff' | 'system';
   body: string;
   createdAt: string;
+  attachments: TranscriptAttachment[];
 }
 
 /** Agent-facing context derived from a ticket bundle. */
@@ -119,6 +128,57 @@ function buildSummary(
   return truncate(parts.join(' '), maxChars);
 }
 
+
+function safeTranscriptAttachments(
+  values: TicketMessage['attachments'],
+): TranscriptAttachment[] {
+  if (!Array.isArray(values)) return [];
+
+  const safe: TranscriptAttachment[] = [];
+  for (const value of values.slice(0, 16)) {
+    if (!isSafeAttachment(value)) continue;
+    safe.push({
+      id: value.id,
+      name: value.name,
+      size: value.size,
+      source: 'discord',
+      ...(value.contentType !== undefined
+        ? { contentType: value.contentType.toLowerCase() }
+        : {}),
+    });
+  }
+  return safe;
+}
+
+function isSafeAttachment(
+  value: NonNullable<TicketMessage['attachments']>[number],
+): boolean {
+  if (!/^\d{1,20}$/.test(value.id)) return false;
+  const name = value.name.trim();
+  if (
+    name.length === 0 ||
+    name.length > 255 ||
+    /[\r\n\0]/.test(name)
+  ) {
+    return false;
+  }
+  if (
+    !Number.isSafeInteger(value.size) ||
+    value.size < 0 ||
+    value.size > 100 * 1024 * 1024
+  ) {
+    return false;
+  }
+  if (value.source !== 'discord') return false;
+  if (
+    value.contentType !== undefined &&
+    !/^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/i.test(value.contentType)
+  ) {
+    return false;
+  }
+  return true;
+}
+
 /**
  * Convert a fetched ticket bundle into agent context.
  *
@@ -147,6 +207,7 @@ export function ticketToAgentContext(
     authorKind: m.author.kind,
     body: truncate(m.body, maxBodyChars),
     createdAt: m.createdAt,
+    attachments: safeTranscriptAttachments(m.attachments),
   }));
 
   return {
