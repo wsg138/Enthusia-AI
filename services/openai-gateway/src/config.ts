@@ -20,6 +20,8 @@ export interface GatewayConfig {
   baseUrl: string;
   timeoutMs: number;
   maxOutputTokens: number;
+  /** Explicit vision-capable model. Unset means image assessment is disabled. */
+  visionModel?: string;
   modelSelection: Record<EscalationKind, string>;
   modelPrices: Record<string, ModelPrice>;
   budget: BudgetLimits;
@@ -97,6 +99,9 @@ export function loadConfig(
       DEFAULT_MAX_OUTPUT_TOKENS,
       'ENTHUSIA_OPENAI_MAX_OUTPUT_TOKENS',
     ),
+    ...(env['ENTHUSIA_OPENAI_VISION_MODEL']?.trim()
+      ? { visionModel: env['ENTHUSIA_OPENAI_VISION_MODEL']!.trim() }
+      : {}),
     modelSelection: modelSelectionFromEnv(env),
     modelPrices: DEFAULT_MODEL_PRICES,
     budget: {
