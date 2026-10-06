@@ -21,7 +21,7 @@ describe('production Ticket Bot tool registration', () => {
       apiKey: 'test-only-key',
       timeoutMs: 10_000,
     });
-    expect(tools.map((tool) => tool.name).sort()).toEqual([
+    expect(tools.map((tool) => tool.meta.name).sort()).toEqual([
       'ticket.get_context',
       'ticket.request_close',
       'ticket.request_escalation',
