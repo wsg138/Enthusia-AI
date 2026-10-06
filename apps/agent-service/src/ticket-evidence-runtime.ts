@@ -57,12 +57,19 @@ export class TicketEvidenceReviewRuntime {
   async review(
     ticketId: string,
     traceId: string,
+    triggerMessageId?: string,
   ): Promise<TicketEvidenceRuntimeResult> {
     const ticket = await this.ticketContext(ticketId);
     if (ticket === null) {
       return runtimeResult('ticket_context_unavailable', true);
     }
     if (ticket.ticket.category !== 'report') {
+      return runtimeResult('not_applicable', false);
+    }
+    if (
+      triggerMessageId !== undefined &&
+      !messageHasSupportedImage(ticket, triggerMessageId)
+    ) {
       return runtimeResult('not_applicable', false);
     }
 
@@ -130,6 +137,30 @@ export class TicketEvidenceReviewRuntime {
     const snapshot = await this.deps.staffClient.getState(target);
     return staffSnapshotToModerationState(snapshot, concerns);
   }
+}
+
+const SUPPORTED_TICKET_IMAGE_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+]);
+
+function messageHasSupportedImage(
+  ticket: Awaited<ReturnType<TicketBotClient['getTicketContext']>>,
+  messageId: string,
+): boolean {
+  const message = ticket.messages.find((candidate) => candidate.id === messageId);
+  if (message === undefined) return false;
+  return (message.attachments ?? []).some((attachment) => {
+    const contentType = attachment.contentType?.trim().toLowerCase();
+    return (
+      contentType !== undefined &&
+      SUPPORTED_TICKET_IMAGE_TYPES.has(contentType) &&
+      attachment.size > 0 &&
+      attachment.size <= 8 * 1024 * 1024
+    );
+  });
 }
 
 function runtimeResult(
