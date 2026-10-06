@@ -106,11 +106,11 @@ describe('player.topic_familiarity', () => {
   });
 
   it('rejects malformed provider output without exposing it', async () => {
-    const secretText = 'private support note that must never reach the model';
+    const privateNoteSample = 'private support note that must never reach the model';
     const tool = new TopicFamiliarityTool({
       async getTopicFamiliarity() {
         return {
-          topic: secretText,
+          topic: privateNoteSample,
           level: 'FAMILIAR',
           confidence: 8,
           basis: ['CURRENT_MEMORY'],
@@ -130,7 +130,7 @@ describe('player.topic_familiarity', () => {
 
     expect(result.result).toBeUndefined();
     expect(result.error?.code).toBe('familiarity_unavailable');
-    expect(JSON.stringify(result)).not.toContain(secretText);
+    expect(JSON.stringify(result)).not.toContain(privateNoteSample);
   });
 
   it('rejects blank topics deterministically', async () => {
