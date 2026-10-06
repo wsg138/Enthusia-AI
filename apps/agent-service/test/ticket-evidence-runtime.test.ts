@@ -252,6 +252,24 @@ describe('TicketEvidenceReviewRuntime', () => {
     expect(state.complete).not.toHaveBeenCalled();
   });
 
+  it('ignores a text-only triggering message before policy or model work', async () => {
+    const value = ticket();
+    value.messages[0] = {
+      ...value.messages[0]!,
+      attachments: [],
+    };
+    const state = runtime({ ticket: value });
+
+    const result = await state.reviewer.review('42', 'trace-text-only', 'm1');
+
+    expect(result.status).toBe('not_applicable');
+    expect(result.retryable).toBe(false);
+    expect(state.readApprovedFile).not.toHaveBeenCalled();
+    expect(state.getImageEvidence).not.toHaveBeenCalled();
+    expect(state.getState).not.toHaveBeenCalled();
+    expect(state.complete).not.toHaveBeenCalled();
+  });
+
   it('stops on a missing structured report target before paid/model work', async () => {
     const state = runtime({ ticket: ticket('report', {}) });
 
@@ -321,7 +339,7 @@ describe('TicketEvidenceReviewRuntime', () => {
   it('does not suppress a new report because of an unrelated active sanction', async () => {
     const state = runtime({ staff: staffSnapshot() });
 
-    const result = await state.reviewer.review('42', 'trace-6');
+    const result = await state.reviewer.review('42', 'trace-6', 'm1');
 
     expect(result.status).toBe('staff_escalation_submitted');
     expect(result.retryable).toBe(false);
