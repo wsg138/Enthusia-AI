@@ -123,6 +123,15 @@ async function start(
       reason: string;
     }>;
   },
+  ticketEventIngress?: {
+    handle(
+      rawBody: Buffer,
+      signature: string | undefined,
+    ): Promise<{
+      status: number;
+      body: Record<string, unknown>;
+    }>;
+  },
 ): Promise<string> {
   const registry = new ToolRegistry();
   const orchestrator = new AgentOrchestrator({
@@ -136,6 +145,7 @@ async function start(
     registry,
     inference: inference(),
     ...(staleTicketDecision !== undefined ? { staleTicketDecision } : {}),
+    ...(ticketEventIngress !== undefined ? { ticketEventIngress } : {}),
   });
   return 'http://127.0.0.1:' + running.port;
 }
@@ -226,6 +236,51 @@ describe('agent service', () => {
       }),
     });
     expect(response.status).toBe(503);
+  });
+
+  it('accepts the dedicated ticket webhook without the agent bearer header', async () => {
+    const seen: Array<{ body: string; signature?: string }> = [];
+    const baseUrl = await start(undefined, {
+      async handle(rawBody, signature) {
+        seen.push({
+          body: rawBody.toString('utf8'),
+          ...(signature !== undefined ? { signature } : {}),
+        });
+        return {
+          status: 200,
+          body: {
+            accepted: true,
+            eventType: 'ticket.message',
+            reviewStatus: 'no_escalation',
+            retryable: false,
+          },
+        };
+      },
+    });
+    const response = await fetch(baseUrl + '/v1/ticket/events', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-ticketbot-signature': 'signed-test-value',
+      },
+      body: '{"type":"ticket.message"}',
+    });
+
+    expect(response.status).toBe(200);
+    expect(seen).toEqual([{
+      body: '{"type":"ticket.message"}',
+      signature: 'signed-test-value',
+    }]);
+  });
+
+  it('keeps the ticket webhook unavailable when evidence ingress is disabled', async () => {
+    const baseUrl = await start();
+    const response = await fetch(baseUrl + '/v1/ticket/events', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+    expect(response.status).toBe(404);
   });
 
   it('serves a validated stale ticket recommendation', async () => {
