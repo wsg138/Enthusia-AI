@@ -52,6 +52,7 @@ function config(): AgentServiceConfig {
     port: 0,
     apiKeys: ['agent-key'],
     maxBodyBytes: 65_536,
+    memoryPath: undefined,
     ticketBotBaseUrl: undefined,
     ticketBotApiKey: undefined,
     ticketBotTimeoutMs: 10_000,
