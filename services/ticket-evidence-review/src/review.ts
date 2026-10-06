@@ -354,6 +354,11 @@ function validateConcerns(
         'Policy concern references evidence outside this ticket review.',
       );
     }
+    if (concern.policyRefs.length === 0) {
+      throw new EvidenceReviewValidationError(
+        'Policy concern requires at least one current policy source.',
+      );
+    }
   }
 }
 
