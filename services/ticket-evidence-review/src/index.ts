@@ -32,3 +32,17 @@ export {
   evidenceReviewCorrelationId,
 } from './delivery.js';
 export type { DeliverTicketEvidenceReviewInput } from './delivery.js';
+
+export {
+  MAX_POLICY_CATALOG_BYTES,
+  MAX_POLICY_EXAMPLES,
+  MAX_POLICY_RULES,
+  PolicyCatalogValidationError,
+  parseCurrentReasonPolicyCatalog,
+  policySeverityBand,
+} from './policy-catalog.js';
+export type {
+  CurrentPolicyProvenance,
+  VerifiedPolicyCatalog,
+  VerifiedPolicyRule,
+} from './policy-catalog.js';
