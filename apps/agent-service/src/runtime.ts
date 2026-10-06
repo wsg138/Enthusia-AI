@@ -143,11 +143,16 @@ function envCredential(
   return credentialMaterial(parseCredentialRecord(raw));
 }
 
-export async function loadConfiguredSftpTools(
+export interface ConfiguredSftpRuntime {
+  tools: Tool[];
+  gateway?: LiveServerSourceGateway;
+}
+
+export async function loadConfiguredSftpRuntime(
   configPath: string | undefined,
   env: NodeJS.ProcessEnv = process.env,
-): Promise<Tool[]> {
-  if (configPath === undefined) return [];
+): Promise<ConfiguredSftpRuntime> {
+  if (configPath === undefined) return { tools: [] };
 
   const raw = await readFile(configPath, 'utf8');
   let parsed: unknown;
@@ -164,6 +169,15 @@ export async function loadConfiguredSftpTools(
   );
   const gateway = new LiveServerSourceGateway(compiled, makeClient);
   const toolset = createLiveServerSourceTools(gateway);
+  return {
+    tools: toolset.tools as Tool[],
+    gateway,
+  };
+}
 
-  return toolset.tools as Tool[];
+export async function loadConfiguredSftpTools(
+  configPath: string | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<Tool[]> {
+  return (await loadConfiguredSftpRuntime(configPath, env)).tools;
 }
