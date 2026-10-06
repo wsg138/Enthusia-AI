@@ -15,6 +15,7 @@ export * from './packet.js';
 export * from './packet-format.js';
 export * from './openai-client.js';
 export * from './image-evidence.js';
+export * from './stable-json.js';
 export * from './budget.js';
 export * from './config.js';
 export * from './escalation-policy.js';
