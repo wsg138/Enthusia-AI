@@ -75,6 +75,7 @@ describe('TicketEventIngress', () => {
     expect(review).toHaveBeenCalledTimes(1);
     expect(review.mock.calls[0]?.[0]).toBe('42');
     expect(review.mock.calls[0]?.[1]).toMatch(/^ticket-event-[a-f0-9]{32}$/);
+    expect(review.mock.calls[0]?.[2]).toBe('120000000000000001');
   });
 
   it('rejects an invalid signature before parsing or review', async () => {
