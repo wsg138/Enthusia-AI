@@ -30,7 +30,7 @@ function evidence(id: string, claim: string, value: string): EvidenceItem {
     source: 'knowledge-indexer',
     visibility: Visibility.PUBLIC,
     verificationTier: 'B',
-    version: 'v1',
+    version: id,
     observedTime: '2026-10-06T05:00:00.000Z',
     sourceStatus: SourceStatus.CURRENT,
     current: true,
