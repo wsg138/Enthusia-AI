@@ -45,7 +45,7 @@ const POLICY = [
   '      - label: Secret action',
   '        sanctions:',
   '          - { type: NETWORK_BAN, duration: permanent }',
-].join('\n')
+].join('\n');
 
 describe('parseCurrentReasonPolicyCatalog', () => {
   it('projects current reportable reasons without punishment ladders', () => {
@@ -109,11 +109,13 @@ describe('parseCurrentReasonPolicyCatalog', () => {
   it('rejects duplicate reason ids instead of silently choosing one', () => {
     const duplicated = POLICY.replace(
       '  - id: exploit.major-abuse',
-      `  - id: spam.low-level
-    family: spam
-    display-name: Duplicate spam
-    severity: 20
-  - id: exploit.major-abuse`,
+      [
+        '  - id: spam.low-level',
+        '    family: spam',
+        '    display-name: Duplicate spam',
+        '    severity: 20',
+        '  - id: exploit.major-abuse',
+      ].join('\n'),
     );
     expect(() =>
       parseCurrentReasonPolicyCatalog(duplicated, PROVENANCE),
@@ -147,7 +149,7 @@ describe('parseCurrentReasonPolicyCatalog', () => {
       '    family: internal',
       '    display-name: Internal only',
       '    severity: 50',
-    ].join('\n')
+    ].join('\n');
     expect(() => parseCurrentReasonPolicyCatalog(none, PROVENANCE)).toThrow(
       /no reportable reasons/,
     );
