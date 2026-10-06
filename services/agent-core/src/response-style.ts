@@ -1,6 +1,14 @@
 import { Visibility } from '@enthusia/contracts';
-import type { ResolvedChatRequest, IntentClassification, ResponseStyleProfile } from './types.js';
-import type { ToolCallContext, ToolRegistry } from './tool.js';
+import type {
+  IntentClassification,
+  ResolvedChatRequest,
+  ResponseStyleProfile,
+} from './types.js';
+import type {
+  Tool,
+  ToolCallContext,
+  ToolRegistry,
+} from './tool.js';
 
 export const TOPIC_FAMILIARITY_TOOL = 'player.topic_familiarity';
 export const MIN_FAMILIARITY_CONFIDENCE = 0.6;
@@ -24,55 +32,80 @@ export async function resolveResponseStyle(
   classification: IntentClassification,
   deps: ResponseStyleDeps,
 ): Promise<ResponseStyleProfile | undefined> {
-  if (
-    classification.needsFamiliarityContext !== true ||
-    request.actor.type !== 'player'
-  ) {
-    return undefined;
-  }
+  if (!wantsFamiliarity(request, classification)) return undefined;
 
   const topic = normalizeTopic(
     classification.familiarityTopic ?? classification.summary,
   );
   const fallback = unknownProfile(topic);
   const tool = deps.registry.get(TOPIC_FAMILIARITY_TOOL);
-  if (!tool) return fallback;
+  if (!isFamiliarityTool(tool)) return fallback;
 
-  // This special preflight is permitted only for the one subject-bound,
-  // privacy-sensitive familiarity tool. A generic tool cannot opt into it.
-  if (
-    tool.meta.name !== TOPIC_FAMILIARITY_TOOL ||
-    tool.meta.privacySensitive !== true ||
-    tool.meta.maxVisibility !== Visibility.PLAYER_SELF
-  ) {
-    return fallback;
-  }
+  const ctx = styleToolContext(request, deps.toolTimeoutMs);
+  return executeStyleLookup(tool, topic, ctx, fallback);
+}
 
-  const timeoutMs = deps.toolTimeoutMs ?? DEFAULT_STYLE_TOOL_TIMEOUT_MS;
-  const timeoutSignal =
-    typeof AbortSignal.timeout === 'function'
-      ? AbortSignal.timeout(timeoutMs)
-      : undefined;
-  const ctx: ToolCallContext = {
+function wantsFamiliarity(
+  request: ResolvedChatRequest,
+  classification: IntentClassification,
+): boolean {
+  return (
+    classification.needsFamiliarityContext === true &&
+    request.actor.type === 'player'
+  );
+}
+
+/**
+ * This special preflight is permitted only for the one subject-bound,
+ * privacy-sensitive familiarity tool. A generic tool cannot opt into it.
+ */
+function isFamiliarityTool(tool: Tool | undefined): tool is Tool {
+  if (tool === undefined) return false;
+  if (tool.meta.name !== TOPIC_FAMILIARITY_TOOL) return false;
+  if (tool.meta.privacySensitive !== true) return false;
+  return tool.meta.maxVisibility === Visibility.PLAYER_SELF;
+}
+
+function styleToolContext(
+  request: ResolvedChatRequest,
+  configuredTimeoutMs: number | undefined,
+): ToolCallContext {
+  const timeoutMs = configuredTimeoutMs ?? DEFAULT_STYLE_TOOL_TIMEOUT_MS;
+  const signal = timeoutSignal(timeoutMs);
+  return {
     traceId: request.traceId,
     actor: request.actor,
     visibilityCeiling: request.visibilityCeiling,
-    ...(timeoutSignal !== undefined ? { signal: timeoutSignal } : {}),
+    ...(signal !== undefined ? { signal } : {}),
   };
+}
 
+function timeoutSignal(timeoutMs: number): AbortSignal | undefined {
+  if (typeof AbortSignal.timeout !== 'function') return undefined;
+  return AbortSignal.timeout(timeoutMs);
+}
+
+async function executeStyleLookup(
+  tool: Tool,
+  topic: string,
+  ctx: ToolCallContext,
+  fallback: ResponseStyleProfile,
+): Promise<ResponseStyleProfile> {
   try {
     const envelope = await tool.execute({ topic }, ctx);
-    if (
-      envelope.error !== undefined ||
-      envelope.visibility !== Visibility.PLAYER_SELF
-    ) {
-      return fallback;
-    }
-    const parsed = parseProfile(envelope.result, topic);
-    return parsed ?? fallback;
+    return profileFromEnvelope(envelope, topic) ?? fallback;
   } catch {
     return fallback;
   }
+}
+
+function profileFromEnvelope(
+  envelope: Awaited<ReturnType<Tool['execute']>>,
+  topic: string,
+): ResponseStyleProfile | null {
+  if (envelope.error !== undefined) return null;
+  if (envelope.visibility !== Visibility.PLAYER_SELF) return null;
+  return parseProfile(envelope.result, topic);
 }
 
 function parseProfile(
@@ -81,36 +114,65 @@ function parseProfile(
 ): ResponseStyleProfile | null {
   if (!isRecord(value)) return null;
 
-  const level = value['level'];
-  const confidence = value['confidence'];
-  const basis = value['basis'];
-  if (
-    typeof level !== 'string' ||
-    !LEVELS.has(level) ||
-    typeof confidence !== 'number' ||
-    !Number.isFinite(confidence) ||
-    confidence < 0 ||
-    confidence > 1 ||
-    !Array.isArray(basis)
-  ) {
-    return null;
-  }
+  const level = parseLevel(value['level']);
+  if (level === null) return null;
 
-  const parsedBasis: ResponseStyleProfile['basis'] = [];
-  for (const raw of basis) {
-    if (typeof raw !== 'string' || !BASES.has(raw)) return null;
-    parsedBasis.push(raw as ResponseStyleProfile['basis'][number]);
-  }
+  const confidence = parseConfidence(value['confidence']);
+  if (confidence === null) return null;
+
+  const basis = parseBasis(value['basis']);
+  if (basis === null) return null;
 
   return {
     topic: requestedTopic,
-    familiarity:
-      confidence < MIN_FAMILIARITY_CONFIDENCE
-        ? 'UNKNOWN'
-        : (level as ResponseStyleProfile['familiarity']),
+    familiarity: normalizedFamiliarity(level, confidence),
     confidence,
-    basis: [...new Set(parsedBasis)],
+    basis,
   };
+}
+
+function parseLevel(
+  value: unknown,
+): ResponseStyleProfile['familiarity'] | null {
+  if (typeof value !== 'string') return null;
+  if (!LEVELS.has(value)) return null;
+  return value as ResponseStyleProfile['familiarity'];
+}
+
+function parseConfidence(value: unknown): number | null {
+  if (typeof value !== 'number') return null;
+  if (!Number.isFinite(value)) return null;
+  if (value < 0 || value > 1) return null;
+  return value;
+}
+
+function parseBasis(
+  value: unknown,
+): ResponseStyleProfile['basis'] | null {
+  if (!Array.isArray(value)) return null;
+
+  const parsed: ResponseStyleProfile['basis'] = [];
+  for (const raw of value) {
+    const item = parseBasisItem(raw);
+    if (item === null) return null;
+    parsed.push(item);
+  }
+  return [...new Set(parsed)];
+}
+
+function parseBasisItem(
+  value: unknown,
+): ResponseStyleProfile['basis'][number] | null {
+  if (typeof value !== 'string') return null;
+  if (!BASES.has(value)) return null;
+  return value as ResponseStyleProfile['basis'][number];
+}
+
+function normalizedFamiliarity(
+  level: ResponseStyleProfile['familiarity'],
+  confidence: number,
+): ResponseStyleProfile['familiarity'] {
+  return confidence < MIN_FAMILIARITY_CONFIDENCE ? 'UNKNOWN' : level;
 }
 
 function unknownProfile(topic: string): ResponseStyleProfile {
