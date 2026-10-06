@@ -24,6 +24,7 @@ export const agentServiceConfigSchema = z.object({
   apiKeys: commaSeparatedKeys,
   maxBodyBytes: z.coerce.number().int().positive().default(65_536),
   sftpConfigPath: z.string().min(1).optional(),
+  memoryDbPath: optionalText,
   ticketBotBaseUrl: optionalText,
   ticketBotApiKey: optionalText,
   ticketBotTimeoutMs: z.coerce.number().int().positive().max(30_000).default(10_000),
@@ -57,6 +58,7 @@ export function loadAgentServiceConfig(
     apiKeys: env['ENTHUSIA_AGENT_API_KEYS'],
     maxBodyBytes: env['ENTHUSIA_AGENT_MAX_BODY_BYTES'],
     sftpConfigPath: env['ENTHUSIA_AGENT_SFTP_CONFIG_PATH'],
+    memoryDbPath: env['ENTHUSIA_AGENT_MEMORY_DB_PATH'],
     ticketBotBaseUrl: env['ENTHUSIA_AGENT_TICKET_BOT_BASE_URL'],
     ticketBotApiKey: env['ENTHUSIA_AGENT_TICKET_BOT_API_KEY'],
     ticketBotTimeoutMs: env['ENTHUSIA_AGENT_TICKET_BOT_TIMEOUT_MS'],
@@ -91,6 +93,7 @@ export function redactedAgentServiceConfig(
     authenticationEnabled: config.apiKeys.length > 0,
     maxBodyBytes: config.maxBodyBytes,
     sftpConfigured: config.sftpConfigPath !== undefined,
+    memoryConfigured: config.memoryDbPath !== undefined,
     ticketBotConfigured:
       config.ticketBotBaseUrl !== undefined && config.ticketBotApiKey !== undefined,
     ticketBotTimeoutMs: config.ticketBotTimeoutMs,
