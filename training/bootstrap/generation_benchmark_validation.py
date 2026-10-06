@@ -41,12 +41,15 @@ EXPLICIT_PRODUCTION_RE = re.compile(
     r"active production)\b"
 )
 NONPRODUCTION_RE = re.compile(
-    r"(?i)\b(?:staging|test(?:ing)?|non[- ]production|retained|historical|"
-    r"not presently installed|not currently loaded|when deployed|next deployment)\b"
+    r"(?i)\b(?:non[- ]production|"
+    r"not (?:presently |currently )?(?:installed|loaded|active|available)|"
+    r"not active in production|when deployed|next deployment|"
+    r"retained (?:data|deployment|configuration))\b"
 )
 QUALIFIED_DEPLOYMENT_RE = re.compile(
     r"(?i)\b(?:when|if|once) deployed\b|"
-    r"\b(?:not|isn't|is not) (?:currently |presently )?(?:live|available|installed|loaded)\b|"
+    r"\b(?:not|isn't|is not) (?:currently |presently )?"
+    r"(?:live|active|available|installed|loaded)\b|"
     r"\bcurrently unavailable\b"
 )
 BACKEND_JARGON_RE = re.compile(
@@ -60,23 +63,38 @@ MECHANISM_CLAIM_RE = re.compile(
     r"(?i)\b(?:earn|get|gain|receive|awarded?|obtain)\b.{0,60}"
     r"\b(?:by|when|after|for)\b"
 )
+REPUTATION_EFFECT_RE = re.compile(
+    r"(?i)\b(?:add(?:s|ed)? to|increase(?:s|d)?|boost(?:s|ed)?|"
+    r"improve(?:s|d)?|raise(?:s|d)?|count(?:s|ed)? toward)\b"
+    r".{0,50}\breputation\b"
+)
+TICK_RATE_EQUIVALENCE_RE = re.compile(
+    r"(?i)\b\d+(?:\.\d+)?\s+ticks?\s+(?:equals?|is)\s+"
+    r"(?:up to\s+)?\d+(?:\.\d+)?\s+"
+    r"(?:attempts?|attacks?|times?)\s+per\s+second\b"
+)
 QUESTION_STOPWORDS = {
     "a", "an", "and", "are", "can", "could", "do", "does", "for", "from",
     "how", "i", "in", "is", "it", "me", "my", "of", "on", "or", "the",
     "to", "use", "using", "what", "when", "where", "which", "who", "why",
     "will", "with", "you", "your", "about", "available", "behavior", "command",
     "commands", "definition", "defined", "feature", "features", "frequency",
-    "guide", "mean", "means", "plugin", "plugins", "rule", "rules",
+    "check", "checking", "happening", "see", "show",
+    "guide", "mean", "means", "plugin", "plugins", "rule", "rules", "status",
     "subcommand", "subcommands", "term", "terms",
 }
 SAFE_NATURAL_TERMS = {
-    "actually", "basically", "can", "could", "directly", "help", "helps",
-    "just", "option", "please", "right", "simply", "tell", "that", "that's",
-    "thats", "there", "thing", "tool", "try", "use", "want", "yep",
+    "actually", "access", "accomplish", "accomplishing", "basically", "can",
+    "control", "controls", "could", "directly", "goal", "help", "helps",
+    "internal", "just", "manage", "managing", "management", "normal", "option",
+    "player", "players", "please", "right", "safe", "server", "simply", "staff",
+    "tell", "that", "that's", "thats", "there", "thing", "tool", "try",
+    "trying", "use", "want", "yep",
 }
 SAFE_ABSTRACT_TERMS = {
     "permission", "permissions", "required", "needed", "configuration",
-    "configure", "configured", "specific", "available", "current",
+    "configurations", "configure", "configured", "specific", "available",
+    "current",
 }
 SEMANTIC_SCOPE_CHECKS = (
     (re.compile(r"\brank\b"), re.compile(r"\brank\b")),
@@ -164,6 +182,8 @@ def _resolve_evidence(job: dict, parsed: dict) -> tuple[list[dict], str]:
 
 def _lexeme_variants(token: str) -> set[str]:
     variants = {token}
+    if len(token) > 5 and token.endswith("ies"):
+        variants.add(token[:-3] + "y")
     if len(token) > 4 and token.endswith("s"):
         variants.add(token[:-1])
     if len(token) > 5 and token.endswith("ing"):
@@ -455,9 +475,32 @@ def _answer_terms_supported(assistant: str, support: str) -> bool:
 
 
 def _mechanism_supported(assistant: str, support: str) -> bool:
-    if not MECHANISM_CLAIM_RE.search(assistant):
+    earning_claim = MECHANISM_CLAIM_RE.search(assistant)
+    reputation_effect = REPUTATION_EFFECT_RE.search(assistant)
+    if not earning_claim and not reputation_effect:
         return True
-    return bool(MECHANISM_CLAIM_RE.search(support))
+    earning_supported = not earning_claim or bool(MECHANISM_CLAIM_RE.search(support))
+    effect_supported = (
+        not reputation_effect or bool(REPUTATION_EFFECT_RE.search(support))
+    )
+    return earning_supported and effect_supported
+
+
+def _teaches_staff_subcommand(
+    assistant: str,
+    user: str,
+    subcommand: str,
+) -> bool:
+    term = re.escape(subcommand)
+    if not re.search(rf"(?i)\b{term}\b", assistant):
+        return False
+    if not re.search(rf"(?i)\b{term}\b", user):
+        return True
+    instruction = re.compile(
+        rf"(?i)\b(?:use|run|type|enter|execute|invoke|try)\s+"
+        rf"(?:the\s+)?(?:\w+\s+)?{term}\b"
+    )
+    return bool(instruction.search(assistant))
 
 
 def _validate_boundary(job: dict, parsed: dict, problems: list[str]) -> None:
@@ -465,19 +508,20 @@ def _validate_boundary(job: dict, parsed: dict, problems: list[str]) -> None:
         return
     assistant = str(parsed.get("assistant", ""))
     user = str(parsed.get("user", ""))
-    both = f"{user}\n{assistant}"
-    if COMMAND_RE.search(both):
+    if COMMAND_RE.search(assistant):
         problems.append("staff_command_leak")
-    if PERMISSION_NODE_RE.search(both):
+    if PERMISSION_NODE_RE.search(assistant):
         problems.append("staff_permission_leak")
-    if BACKEND_JARGON_RE.search(both):
+    if BACKEND_JARGON_RE.search(assistant):
         problems.append("staff_backend_jargon_leak")
     subcommands = {
         match.group(1).lower()
         for match in STAFF_SUBCOMMAND_RE.finditer(_evidence_text(job))
     }
-    if any(re.search(rf"(?i)\b{re.escape(term)}\b", both) for term in subcommands):
+    if any(_teaches_staff_subcommand(assistant, user, term) for term in subcommands):
         problems.append("staff_subcommand_leak")
+    if not re.search(r"(?i)\b(?:staff|internal|admin|operator)\b", assistant):
+        problems.append("missing_staff_boundary")
 
 
 def _validate_player_jargon(job: dict, parsed: dict, problems: list[str]) -> None:
@@ -517,8 +561,10 @@ def _validate_semantic_grounding(
     is_boundary = job.get("response_mode") == "player_boundary"
     if not is_boundary and not _answer_terms_supported(assistant, support):
         problems.append("answer_not_fully_grounded")
-    if not _mechanism_supported(assistant, support):
+    if not is_boundary and not _mechanism_supported(assistant, support):
         problems.append("unsupported_mechanism_claim")
+    if TICK_RATE_EQUIVALENCE_RE.search(assistant):
+        problems.append("invalid_tick_rate_equivalence")
 
 
 def _validate_answer_grounding(job: dict, parsed: dict, problems: list[str]) -> None:
@@ -533,7 +579,8 @@ def _validate_answer_grounding(job: dict, parsed: dict, problems: list[str]) -> 
     _validate_semantic_grounding(job, assistant, support, problems)
 
 def _validate_generated_content(job: dict, parsed: dict, problems: list[str]) -> None:
-    if not _question_is_grounded(job, parsed):
+    is_boundary = job.get("response_mode") == "player_boundary"
+    if not is_boundary and not _question_is_grounded(job, parsed):
         problems.append("question_not_fully_grounded")
     _validate_secrets(parsed, problems)
     _validate_boundary(job, parsed, problems)

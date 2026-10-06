@@ -30,6 +30,33 @@ class NaturalResponseRegressionTests(unittest.TestCase):
         )
         self.assertEqual(mod.validate_output(job, parsed), [])
 
+    def test_generic_staging_guide_reference_does_not_force_qualification(self) -> None:
+        job = _job([
+            "Read the production safety and staging guide before upgrading.",
+            "In the Letters inbox, click Mark All Text Read to clear unread letters.",
+        ], repository="Enthusia-Express", target=1)
+        parsed = _parsed(
+            "How do I mark all my letters as read?",
+            "In the Letters inbox, click Mark All Text Read.",
+        )
+        self.assertNotIn(
+            "missing_deployment_qualification",
+            mod.validate_output(job, parsed),
+        )
+
+    def test_not_currently_active_is_valid_deployment_qualification(self) -> None:
+        job = _job([
+            "The plugin is not presently installed as an active production plugin.",
+            "When deployed, /event shows the current event.",
+        ], repository="EnthusiaEvents", target=1)
+        parsed = _parsed(
+            "Can I use /event right now?",
+            "It is not currently active on the server. When deployed, /event shows the current event.",
+        )
+        problems = mod.validate_output(job, parsed)
+        self.assertNotIn("missing_deployment_qualification", problems)
+        self.assertNotIn("unsupported_production_claim", problems)
+
     def test_event_requires_deployment_qualification(self) -> None:
         job = _job([
             "When deployed, /event shows the current event and phase, or reports that " +
@@ -44,6 +71,20 @@ class NaturalResponseRegressionTests(unittest.TestCase):
             mod.validate_output(job, parsed),
         )
 
+    def test_tick_interval_is_not_rewritten_as_rate_equivalence(self) -> None:
+        job = _job([
+            "There are 20 ticks per second.",
+            "| /autoclick 1 | every tick / up to 20 attempts per second |",
+        ], repository="EnthusiaAutoClicker", target=1)
+        parsed = _parsed(
+            "What does 1 mean for autoclick?",
+            "The number is the interval, where 1 tick equals up to 20 attempts per second.",
+        )
+        self.assertIn(
+            "invalid_tick_rate_equivalence",
+            mod.validate_output(job, parsed),
+        )
+
     def test_autoclick_one_is_human_readable(self) -> None:
         job = _job([
             "| /autoclick 1 | every tick / up to 20 attempts per second |"
@@ -53,6 +94,21 @@ class NaturalResponseRegressionTests(unittest.TestCase):
             "/autoclick 1 can try up to about 20 times per second.",
         )
         self.assertEqual(mod.validate_output(job, parsed), [])
+
+    def test_boundary_question_may_contain_unverified_player_assumption(self) -> None:
+        job = _job(
+            ["Staff-only scoreboard control."],
+            visibility="staff",
+            response_mode="player_boundary",
+        )
+        parsed = _parsed(
+            "Can I use this to control what everyone sees?",
+            "That's a staff-only server control, so normal players don't need access to it. "
+            "Tell me what you're trying to do and I'll help you find a normal player option.",
+        )
+        problems = mod.validate_output(job, parsed)
+        self.assertNotIn("question_not_fully_grounded", problems)
+        self.assertNotIn("answer_not_fully_grounded", problems)
 
     def test_staff_backend_command_redirect_does_not_expose_syntax(self) -> None:
         job = _job(
@@ -80,24 +136,44 @@ class NaturalResponseRegressionTests(unittest.TestCase):
         )
         self.assertIn("staff_command_leak", mod.validate_output(job, parsed))
 
-    def test_staff_boundary_rejects_subcommand_without_slash(self) -> None:
+    def test_staff_boundary_allows_acknowledging_term_player_already_used(self) -> None:
         job = _job(
             ["Staff-only command: /ee reload reloads event configuration."],
             visibility="staff", response_mode="player_boundary",
         )
         parsed = _parsed(
-            "Can I use the staff event tool?",
-            "That reload action is for staff. Tell me your player goal.",
+            "Is the reload action available to players?",
+            "Reloading is a staff-only action. Tell me what you're trying to do "
+            "and I can help with a player option.",
         )
-        self.assertIn("staff_subcommand_leak", mod.validate_output(job, parsed))
+        self.assertNotIn("staff_subcommand_leak", mod.validate_output(job, parsed))
 
-    def test_staff_boundary_rejects_syntax_in_question(self) -> None:
+    def test_staff_boundary_rejects_new_subcommand_instruction(self) -> None:
         job = _job(
             ["Staff-only command: /ee reload reloads event configuration."],
             visibility="staff", response_mode="player_boundary",
         )
-        parsed = _parsed("Can I use /ee reload?", "That is staff-only.")
-        self.assertIn("staff_command_leak", mod.validate_output(job, parsed))
+        parsed = _parsed(
+            "Can I manage event settings?",
+            "Use the reload action to update it.",
+        )
+        self.assertIn("staff_subcommand_leak", mod.validate_output(job, parsed))
+
+    def test_staff_boundary_allows_syntax_in_user_but_not_assistant(self) -> None:
+        job = _job(
+            ["Staff-only command: /ee reload reloads event configuration."],
+            visibility="staff", response_mode="player_boundary",
+        )
+        parsed = _parsed(
+            "Can I use /ee reload?",
+            "That's a staff-only tool. Tell me what you're trying to do.",
+        )
+        self.assertNotIn("staff_command_leak", mod.validate_output(job, parsed))
+        leaking = _parsed(
+            "Can I use /ee reload?",
+            "Yes, use /ee reload.",
+        )
+        self.assertIn("staff_command_leak", mod.validate_output(job, leaking))
 
     def test_good_stall_uses_context_without_inventing_earning_mechanism(self) -> None:
         job = _job([
@@ -112,6 +188,19 @@ class NaturalResponseRegressionTests(unittest.TestCase):
             category="onboarding",
         )
         self.assertEqual(mod.validate_output(job, parsed), [])
+
+    def test_good_stall_rejects_invented_reputation_effect(self) -> None:
+        job = _job([
+            "This guide documents Enthusia's player-facing reputation system.",
+            "### Positive reputation categories",
+            "| Good Stall | Ran a fair and reliable market stall |",
+        ], repository="EnthusiaCommend", target=2)
+        parsed = _parsed(
+            "What does Good Stall mean?",
+            "Good Stall means you ran a fair market stall, which adds to your positive reputation.",
+            category="onboarding",
+        )
+        self.assertIn("unsupported_mechanism_claim", mod.validate_output(job, parsed))
 
     def test_good_stall_rejects_invented_earning_mechanism(self) -> None:
         job = _job([

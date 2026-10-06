@@ -217,6 +217,15 @@ class QuestionGroundingTests(unittest.TestCase):
         parsed = {"user": "What permission is required for /mail send?"}
         self.assertTrue(mod._question_is_grounded(job, parsed))
 
+    def test_plural_category_matches_singular_category_evidence(self) -> None:
+        job = _job([
+            "This guide documents the player-facing reputation system.",
+            "## Reputation categories",
+            "| Good Stall | Ran a fair/reliable market stall |",
+        ], repository="EnthusiaCommend", target=2)
+        parsed = {"user": "What does the Good Stall reputation category mean?"}
+        self.assertTrue(mod._question_is_grounded(job, parsed))
+
     def test_rejects_question_with_unsupported_reputation_scope(self) -> None:
         job = _job(
             ["| Good Stall | Ran a fair/reliable market stall |"],
@@ -224,6 +233,13 @@ class QuestionGroundingTests(unittest.TestCase):
         )
         parsed = {"user": "How can I earn a Good Stall reputation point?"}
         self.assertFalse(mod._question_is_grounded(job, parsed))
+
+    def test_natural_event_question_verbs_do_not_break_grounding(self) -> None:
+        job = _job([
+            "/event shows the current event and phase, or reports that no event is running."
+        ], repository="EnthusiaEvents")
+        parsed = {"user": "How do I check what event is happening with the /event command?"}
+        self.assertTrue(mod._question_is_grounded(job, parsed))
 
     def test_current_phase_is_not_treated_as_deployment_claim(self) -> None:
         job = _job(["| /event | Shows the current event and phase. |"])
@@ -271,6 +287,11 @@ class SourceSelectionTests(unittest.TestCase):
             evidence_mod.source_visibility(record, "/pearlglitchblocker reload"),
             "staff",
         )
+
+    def test_operator_command_table_row_is_staff_visibility(self) -> None:
+        record = {"role": "minecraft_plugin", "path": "README.md"}
+        line = "| custombiomes.setbiome | Use /setbiome | op |"
+        self.assertEqual(evidence_mod.source_visibility(record, line), "staff")
 
     def test_staff_heading_marks_context_staff(self) -> None:
         record = {"role": "minecraft_plugin", "path": "PLAYER_GUIDE.md"}
@@ -355,6 +376,31 @@ class SourceSelectionTests(unittest.TestCase):
 
 
 class PersistenceAndReviewTests(unittest.TestCase):
+    def test_natural_rewrite_prompt_preserves_grounding_rules(self) -> None:
+        job = _job(["/mail opens your mailbox."])
+        parsed = _parsed(
+            "How do I open mail?",
+            "You can open your mailbox by using /mail.",
+        )
+        prompt = mod._natural_rewrite_prompt(job, parsed)
+        self.assertIn("Keep the exact same factual meaning", prompt)
+        self.assertIn("may not add a new mechanic", prompt)
+        self.assertIn("Run Y to do X", prompt)
+
+    def test_boundary_response_policy_replaces_model_answer(self) -> None:
+        job = _job(
+            ["Staff-only command: /ee reload reloads event configuration."],
+            visibility="staff",
+            response_mode="player_boundary",
+        )
+        parsed = _parsed(
+            "Can players reload this system?",
+            "Use /ee reload to do it.",
+        )
+        resolved = mod._apply_response_policy(job, parsed)
+        self.assertEqual(resolved["assistant"], mod.BOUNDARY_SAFE_ASSISTANT)
+        self.assertNotIn("/ee", resolved["assistant"])
+
     def test_runner_result_envelope_preserves_bounded_provenance(self) -> None:
         job = _job(["/mail opens your mailbox."])
         envelope = mod._result_envelope(job)
@@ -370,6 +416,23 @@ class PersistenceAndReviewTests(unittest.TestCase):
             path.write_text(json.dumps({"job_id": "one"}) + "\n", encoding="utf-8")
             with self.assertRaises(ValueError):
                 review_mod._load_results(str(path))
+        finally:
+            path.unlink()
+
+    def test_benchmark_summary_carries_run_id(self) -> None:
+        summary = mod._build_summary(mod._initial_stats(), {}, "run-123")
+        self.assertEqual(summary["benchmark_run_id"], "run-123")
+
+    def test_benchmark_output_is_fresh_unless_resume_requested(self) -> None:
+        descriptor, temp_name = tempfile.mkstemp(dir=HERE, suffix=".jsonl")
+        os.close(descriptor)
+        path = pathlib.Path(temp_name)
+        try:
+            path.write_text('{"job_id":"old"}\n', encoding="utf-8")
+            self.assertEqual(mod._prepare_output(path, False), set())
+            self.assertEqual(path.read_text(encoding="utf-8"), "")
+            path.write_text('{"job_id":"old"}\n', encoding="utf-8")
+            self.assertEqual(mod._prepare_output(path, True), {"old"})
         finally:
             path.unlink()
 

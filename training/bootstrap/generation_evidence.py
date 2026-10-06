@@ -47,6 +47,10 @@ STAFF_HEADING_RE = re.compile(
     r"(?i)\b(?:admin|administrative|staff|operator|internal|backend|moderation|"
     r"developer|recovery|maintenance)\b"
 )
+STAFF_OPERATOR_RE = re.compile(
+    r"(?i)(?:\|\s*op\s*\||\brequires?\s+(?:an?\s+)?op\b|"
+    r"\boperator[- ]only\b|\boperators? only\b)"
+)
 
 
 def _path_is_staff(path: str) -> bool:
@@ -75,6 +79,8 @@ def _line_is_staff(line: str) -> bool:
     if any(token in lower for token in STAFF_LINE_TOKENS):
         return True
     if STAFF_GENERIC_TERM_RE.search(lower) and COMMAND_LINE_RE.search(line):
+        return True
+    if STAFF_OPERATOR_RE.search(line) and COMMAND_LINE_RE.search(line):
         return True
     return _staff_pattern_matches(lower)
 
