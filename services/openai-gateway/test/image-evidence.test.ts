@@ -40,30 +40,21 @@ function config(baseUrl: string, overrides: Partial<GatewayConfig> = {}): Gatewa
 }
 
 function validAssessment(): string {
-  return JSON.stringify({
-    summary: 'Minecraft chat evidence screenshot.',
-    observations: [
-      {
-        category: 'visible_text',
-        text: 'Visible chat line reads: example text',
-        confidence: 0.96,
-      },
-      {
-        category: 'game_ui',
-        text: 'Minecraft chat interface is visible.',
-        confidence: 0.99,
-      },
-    ],
-    inferences: [
-      {
-        text: 'The visible text appears to be part of an in-game chat conversation.',
-        confidence: 0.8,
-        observationIndexes: [0, 1],
-      },
-    ],
-    limitations: ['The screenshot does not show messages before this excerpt.'],
-    needsMoreContext: true,
-  });
+  return [
+    '{',
+    '"summary":"Minecraft chat evidence screenshot.",',
+    '"observations":[',
+    '{"category":"visible_text","text":"Visible chat line reads: example text","confidence":0.96},',
+    '{"category":"game_ui","text":"Minecraft chat interface is visible.","confidence":0.99}',
+    '],',
+    '"inferences":[',
+    '{"text":"The visible text appears to be part of an in-game chat conversation.",',
+    '"confidence":0.8,"observationIndexes":[0,1]}',
+    '],',
+    '"limitations":["The screenshot does not show messages before this excerpt."],',
+    '"needsMoreContext":true',
+    '}',
+  ].join('');
 }
 
 describe('runImageEvidenceAssessment', () => {
@@ -106,10 +97,28 @@ describe('runImageEvidenceAssessment', () => {
       expect(result.estimatedCostUsd).toBeGreaterThan(0);
       expect(tracker.callsForRequest('trace-image-1')).toBe(1);
 
-      const body = server.requests[0] as Record<string, unknown>;
-      expect(JSON.stringify(body)).toContain('data:image/png;base64,AQIDBA==');
-      expect(JSON.stringify(body)).not.toContain('discordapp');
-      expect(JSON.stringify(body)).not.toContain('"punishment"');
+      const body = server.requests[0] as {
+        messages?: Array<{
+          content?: string | Array<{
+            type?: string;
+            text?: string;
+            image_url?: { url?: string };
+          }>;
+        }>;
+      };
+      const userContent = body.messages?.[1]?.content;
+      expect(Array.isArray(userContent)).toBe(true);
+      const parts = userContent as Array<{
+        type?: string;
+        text?: string;
+        image_url?: { url?: string };
+      }>;
+      expect(parts[1]?.image_url?.url).toBe(
+        'data:image/png;base64,AQIDBA==',
+      );
+      expect(parts[1]?.image_url?.url).not.toContain('discordapp');
+      const prompt = JSON.parse(parts[0]?.text ?? '{}') as Record<string, unknown>;
+      expect(prompt).not.toHaveProperty('punishment');
     } finally {
       await server.close();
     }
@@ -212,30 +221,32 @@ describe('runImageEvidenceAssessment', () => {
 
 describe('parseImageEvidenceAssessment', () => {
   it('rejects unexpected authority-shaped fields', () => {
-    const parsed = JSON.parse(validAssessment()) as Record<string, unknown>;
-    parsed['punishment'] = 'ban';
+    const withPunishment = validAssessment().replace(
+      '"needsMoreContext":true}',
+      '"needsMoreContext":true,"punishment":"ban"}',
+    );
     expect(() =>
-      parseImageEvidenceAssessment(JSON.stringify(parsed)),
+      parseImageEvidenceAssessment(withPunishment),
     ).toThrowError(OpenAIParseError);
   });
 
   it('rejects free-floating inferences with no observation basis', () => {
-    const parsed = JSON.parse(validAssessment()) as {
-      inferences: Array<Record<string, unknown>>;
-    };
-    parsed.inferences[0]!['observationIndexes'] = [];
+    const ungrounded = validAssessment().replace(
+      '"observationIndexes":[0,1]',
+      '"observationIndexes":[]',
+    );
     expect(() =>
-      parseImageEvidenceAssessment(JSON.stringify(parsed)),
+      parseImageEvidenceAssessment(ungrounded),
     ).toThrow(/invalid JSON shape/);
   });
 
   it('rejects inference references outside the observation list', () => {
-    const parsed = JSON.parse(validAssessment()) as {
-      inferences: Array<Record<string, unknown>>;
-    };
-    parsed.inferences[0]!['observationIndexes'] = [99];
+    const badReference = validAssessment().replace(
+      '"observationIndexes":[0,1]',
+      '"observationIndexes":[99]',
+    );
     expect(() =>
-      parseImageEvidenceAssessment(JSON.stringify(parsed)),
+      parseImageEvidenceAssessment(badReference),
     ).toThrow(/invalid observation/);
   });
 
