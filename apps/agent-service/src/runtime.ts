@@ -25,6 +25,11 @@ export interface AgentRuntime {
   registeredTools: string[];
 }
 
+export interface ConfiguredSftpRuntime {
+  tools: Tool[];
+  gateway?: LiveServerSourceGateway;
+}
+
 export interface TicketBotRuntimeConfig {
   baseUrl?: string;
   apiKey?: string;
@@ -143,11 +148,11 @@ function envCredential(
   return credentialMaterial(parseCredentialRecord(raw));
 }
 
-export async function loadConfiguredSftpTools(
+export async function loadConfiguredSftpRuntime(
   configPath: string | undefined,
   env: NodeJS.ProcessEnv = process.env,
-): Promise<Tool[]> {
-  if (configPath === undefined) return [];
+): Promise<ConfiguredSftpRuntime> {
+  if (configPath === undefined) return { tools: [] };
 
   const raw = await readFile(configPath, 'utf8');
   let parsed: unknown;
@@ -165,5 +170,15 @@ export async function loadConfiguredSftpTools(
   const gateway = new LiveServerSourceGateway(compiled, makeClient);
   const toolset = createLiveServerSourceTools(gateway);
 
-  return toolset.tools as Tool[];
+  return {
+    tools: toolset.tools as Tool[],
+    gateway,
+  };
+}
+
+export async function loadConfiguredSftpTools(
+  configPath: string | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<Tool[]> {
+  return (await loadConfiguredSftpRuntime(configPath, env)).tools;
 }
