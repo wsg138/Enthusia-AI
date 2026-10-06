@@ -157,65 +157,77 @@ async function assessCandidate(
   | { record: TicketImageAssessmentRecord }
   | { issue: TicketImageCollectionIssue }
 > {
-  const evidence = await fetchEvidence(input.evidenceClient, input.ticket, candidate);
-  if (evidence === null) {
-    return {
-      issue: issue(
-        candidate.messageId,
-        candidate.attachment.id,
-        'fetch_failed',
-      ),
-    };
-  }
+  const evidence = await fetchEvidence(
+    input.evidenceClient,
+    input.ticket,
+    candidate,
+  );
+  if (evidence === null) return candidateFailure(candidate, 'fetch_failed');
 
   const contentType = normalizedImageType(evidence.contentType);
   if (contentType === null) {
-    return {
-      issue: issue(
-        candidate.messageId,
-        candidate.attachment.id,
-        'unsupported_type',
-      ),
-    };
+    return candidateFailure(candidate, 'unsupported_type');
   }
 
-  const evidenceRef = evidenceReference(
-    input.ticket.ticket.id,
-    candidate.messageId,
-    candidate.attachment.id,
-  );
   try {
-    const observed = await runner({
-      traceId: input.traceId,
-      evidenceRef,
-      image: {
-        bytes: evidence.bytes,
-        contentType,
-        sha256: evidence.sha256,
-      },
-      context: {
-        ticketCategory: input.ticket.ticket.category,
-        userQuestion: input.ticket.ticket.subject,
-      },
-    });
+    const observed = await runner(
+      assessmentRequest(input, candidate, evidence, contentType),
+    );
     return {
-      record: {
-        messageId: candidate.messageId,
-        attachmentId: candidate.attachment.id,
-        evidenceRef: observed.evidenceRef,
-        evidenceSha256: observed.evidenceSha256,
-        assessment: observed.assessment,
-      },
+      record: assessmentRecord(candidate, observed),
     };
   } catch {
-    return {
-      issue: issue(
-        candidate.messageId,
-        candidate.attachment.id,
-        'assessment_failed',
-      ),
-    };
+    return candidateFailure(candidate, 'assessment_failed');
   }
+}
+
+function assessmentRequest(
+  input: CollectTicketImageAssessmentsInput,
+  candidate: ImageCandidate,
+  evidence: Awaited<
+    ReturnType<Pick<TicketEvidenceClient, 'getImageEvidence'>['getImageEvidence']>
+  >,
+  contentType: VisionImageContentType,
+): RunImageEvidenceInput {
+  return {
+    traceId: input.traceId,
+    evidenceRef: evidenceReference(
+      input.ticket.ticket.id,
+      candidate.messageId,
+      candidate.attachment.id,
+    ),
+    image: {
+      bytes: evidence.bytes,
+      contentType,
+      sha256: evidence.sha256,
+    },
+    context: {
+      ticketCategory: input.ticket.ticket.category,
+      userQuestion: input.ticket.ticket.subject,
+    },
+  };
+}
+
+function assessmentRecord(
+  candidate: ImageCandidate,
+  observed: RunImageEvidenceResult,
+): TicketImageAssessmentRecord {
+  return {
+    messageId: candidate.messageId,
+    attachmentId: candidate.attachment.id,
+    evidenceRef: observed.evidenceRef,
+    evidenceSha256: observed.evidenceSha256,
+    assessment: observed.assessment,
+  };
+}
+
+function candidateFailure(
+  candidate: ImageCandidate,
+  reason: TicketImageCollectionIssueReason,
+): { issue: TicketImageCollectionIssue } {
+  return {
+    issue: issue(candidate.messageId, candidate.attachment.id, reason),
+  };
 }
 
 async function fetchEvidence(
