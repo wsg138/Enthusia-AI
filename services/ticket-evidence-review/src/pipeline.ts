@@ -38,6 +38,9 @@ export interface TicketEvidencePipelineInput {
   policyCatalog: VerifiedPolicyCatalog;
   policyAssessor: Pick<LocalPolicyConcernAssessor, 'assess'>;
   moderationState: AuthoritativeModerationState;
+  resolveModerationState?: (
+    concerns: PolicyConcernAssessmentResult['concerns'],
+  ) => Promise<AuthoritativeModerationState> | AuthoritativeModerationState;
   ticketClient: Pick<TicketBotClient, 'requestAction'>;
   maxImages?: number;
   assessImage?: TicketImageAssessmentRunner;
@@ -85,12 +88,16 @@ export async function runTicketEvidencePipeline(
     };
   }
 
+  const moderationState = await resolvedModerationState(
+    input,
+    policyAssessment,
+  );
   const review = reviewTicketEvidence({
     ticket: input.ticket,
     imageEvidence: collection.assessments,
     concerns: policyAssessment.concerns,
     policyNeedsMoreContext: policyAssessment.needsMoreContext,
-    moderationState: input.moderationState,
+    moderationState,
   });
   return finishReview(input, collection, policyAssessment, review);
 }
@@ -181,6 +188,25 @@ async function assessPolicy(
   }
 }
 
+async function resolvedModerationState(
+  input: TicketEvidencePipelineInput,
+  policyAssessment: PolicyConcernAssessmentResult,
+): Promise<AuthoritativeModerationState> {
+  if (input.resolveModerationState === undefined) {
+    return input.moderationState;
+  }
+  try {
+    return await input.resolveModerationState(policyAssessment.concerns);
+  } catch {
+    return {
+      availability: 'unavailable',
+      target: input.moderationState.target,
+      duplicateStatus: 'none',
+      activeSanctions: [],
+    };
+  }
+}
+
 async function finishReview(
   input: TicketEvidencePipelineInput,
   collection: TicketImageCollectionResult,
@@ -197,7 +223,7 @@ async function finishReview(
     };
   }
 
-  if (input.moderationState.availability !== 'verified') {
+  if (review.moderationState.availability !== 'verified') {
     return {
       status: 'moderation_state_unavailable',
       collection,
