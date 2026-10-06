@@ -25,6 +25,14 @@ import type {
   TicketParticipant,
 } from './types.js';
 
+export interface TranscriptAttachment {
+  id: string;
+  name: string;
+  contentType?: string;
+  size: number;
+  source: 'discord';
+}
+
 export interface TranscriptLine {
   messageId: string;
   ticketId: string;
@@ -32,6 +40,7 @@ export interface TranscriptLine {
   authorKind: 'player' | 'staff' | 'system';
   body: string;
   createdAt: string;
+  attachments: TranscriptAttachment[];
 }
 
 /** Agent-facing context derived from a ticket bundle. */
@@ -147,6 +156,15 @@ export function ticketToAgentContext(
     authorKind: m.author.kind,
     body: truncate(m.body, maxBodyChars),
     createdAt: m.createdAt,
+    attachments: (m.attachments ?? []).map((attachment) => ({
+      id: attachment.id,
+      name: attachment.name,
+      size: attachment.size,
+      source: attachment.source,
+      ...(attachment.contentType !== undefined
+        ? { contentType: attachment.contentType }
+        : {}),
+    })),
   }));
 
   return {
