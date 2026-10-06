@@ -25,6 +25,8 @@ import {
   TICKET_EVIDENCE_REQUEST_ALLOWLIST,
 } from '../src/evidence-client.js';
 import { ticketToAgentContext } from '../src/context.js';
+import { ticketReportTarget } from '../src/report-target.js';
+import { activeTicketEscalation } from '../src/review-state.js';
 import {
   TicketEventRouter,
   parseTicketEvent,
@@ -352,6 +354,88 @@ describe('TicketBotClient capabilities', () => {
         ),
     });
     await expect(client.getCapabilities()).rejects.toThrow(/incompatible capability contract/);
+  });
+});
+
+describe('ticket report target metadata', () => {
+  it('accepts only the bounded report target projection', () => {
+    expect(ticketReportTarget({
+      ...TICKET,
+      category: 'report',
+      metadata: {
+        reportTarget: {
+          kind: 'minecraft_username',
+          value: 'Bad_Player',
+        },
+      },
+    })).toEqual({
+      kind: 'minecraft_username',
+      value: 'Bad_Player',
+    });
+  });
+
+  it('fails closed for missing, malformed, or non-report metadata', () => {
+    expect(ticketReportTarget(TICKET)).toBeNull();
+    expect(ticketReportTarget({
+      ...TICKET,
+      category: 'report',
+      metadata: {
+        reportTarget: {
+          kind: 'minecraft_username',
+          value: '../bad',
+        },
+      },
+    })).toBeNull();
+    expect(ticketReportTarget({
+      ...TICKET,
+      category: 'support',
+      metadata: {
+        reportTarget: {
+          kind: 'minecraft_username',
+          value: 'ValidName',
+        },
+      },
+    })).toBeNull();
+  });
+});
+
+describe('ticket escalation duplicate metadata', () => {
+  it('returns pending or accepted escalation requests only', () => {
+    expect(activeTicketEscalation({
+      ...TICKET,
+      metadata: {
+        recentActionRequests: [
+          {
+            requestId: 'ar-1',
+            action: 'escalate',
+            status: 'accepted',
+            createdAt: '2026-10-06T12:00:00.000Z',
+            updatedAt: '2026-10-06T12:01:00.000Z',
+          },
+        ],
+      },
+    })).toMatchObject({
+      requestId: 'ar-1',
+      status: 'accepted',
+    });
+
+    expect(activeTicketEscalation({
+      ...TICKET,
+      metadata: {
+        recentActionRequests: [
+          {
+            requestId: 'ar-2',
+            action: 'escalate',
+            status: 'rejected',
+          },
+          {
+            requestId: 'ar-3',
+            action: 'close',
+            status: 'accepted',
+          },
+        ],
+      },
+    })).toBeNull();
   });
 });
 
