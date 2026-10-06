@@ -15,6 +15,23 @@ describe('agent-service Ticket Bot configuration', () => {
     });
   });
 
+  it('enables persistent familiarity memory only when an explicit path is configured', () => {
+    const disabled = loadAgentServiceConfig({ NODE_ENV: 'test' });
+    expect(disabled.memoryDbPath).toBeUndefined();
+    expect(redactedAgentServiceConfig(disabled)).toMatchObject({
+      memoryConfigured: false,
+    });
+
+    const enabled = loadAgentServiceConfig({
+      NODE_ENV: 'test',
+      ENTHUSIA_AGENT_MEMORY_DB_PATH: '/run/enthusia-ai/memory.sqlite',
+    });
+    expect(enabled.memoryDbPath).toBe('/run/enthusia-ai/memory.sqlite');
+    const redacted = redactedAgentServiceConfig(enabled);
+    expect(redacted).toMatchObject({ memoryConfigured: true });
+    expect(JSON.stringify(redacted)).not.toContain('/run/enthusia-ai/memory.sqlite');
+  });
+
   it('fails closed when only half of the Ticket Bot credential pair is set', () => {
     expect(() =>
       loadAgentServiceConfig({
