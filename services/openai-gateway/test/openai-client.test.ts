@@ -44,6 +44,50 @@ describe('OpenAIClient against a mock server', () => {
     }
   });
 
+  it('posts bounded base64 image content without an external image URL', async () => {
+    const server = await startMockOpenAIServer(
+      chatCompletionsOk('{"summary":"ok"}'),
+    );
+    try {
+      await clientFor(server.url).imageChatCompletion({
+        model: 'vision-test-model',
+        systemPrompt: 'observe only',
+        userPrompt: 'describe visible evidence',
+        image: {
+          bytes: new Uint8Array([1, 2, 3, 4]),
+          contentType: 'image/png',
+          detail: 'high',
+        },
+        maxOutputTokens: 500,
+        temperature: 0,
+      });
+      const body = server.requests[0] as {
+        messages?: Array<{ content?: unknown }>;
+      };
+      const user = body.messages?.[1] as {
+        content?: Array<{
+          type?: string;
+          text?: string;
+          image_url?: { url?: string; detail?: string };
+        }>;
+      };
+      expect(user.content?.[0]).toEqual({
+        type: 'text',
+        text: 'describe visible evidence',
+      });
+      expect(user.content?.[1]?.type).toBe('image_url');
+      expect(user.content?.[1]?.image_url?.url).toBe(
+        'data:image/png;base64,AQIDBA==',
+      );
+      expect(user.content?.[1]?.image_url?.detail).toBe('high');
+      expect(JSON.stringify(body)).not.toContain('discordapp');
+      expect(JSON.stringify(body)).not.toContain('http://');
+      expect(JSON.stringify(body)).not.toContain('https://');
+    } finally {
+      await server.close();
+    }
+  });
+
   it('maps HTTP errors to OpenAIApiError with status and code', async () => {
     const server = await startMockOpenAIServer(
       chatCompletionsError(429, 'rate_limit_exceeded', 'slow down'),
