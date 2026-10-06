@@ -65,6 +65,7 @@ import type {
   ClaimAssessment,
   IntentClassification,
   ResolvedChatRequest,
+  ResponseStyleProfile,
 } from './types.js';
 
 /** Dependencies injected into the orchestrator (all seams are DI). */
@@ -180,7 +181,7 @@ export class AgentOrchestrator {
     const budget = new BudgetTracker(policy);
     budget.recordReasonerCalls(preReasonerCalls);
 
-    let responseStyle;
+    let responseStyle: ResponseStyleProfile | undefined;
     const wantsFamiliarity =
       classification.needsFamiliarityContext === true &&
       request.actor.type === 'player';
