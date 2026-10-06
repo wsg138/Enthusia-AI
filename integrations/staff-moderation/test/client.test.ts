@@ -44,7 +44,7 @@ function validPayload() {
 
 describe('StaffModerationStateClient', () => {
   it('reads the one allowlisted moderation-state endpoint', async () => {
-    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const calls: Array<{ url: string; init: RequestInit | undefined }> = [];
     const client = new StaffModerationStateClient({
       baseUrl: 'https://moderation-read.example.test/',
       apiKey: API_KEY,
@@ -152,12 +152,13 @@ describe('staff moderation request allowlist', () => {
       ),
     ).not.toThrow();
 
-    for (const [method, path] of [
+    const forbidden: Array<[string, string]> = [
       ['GET', '/v1/ai/moderation-state'],
       ['POST', '/v1/moderation/actions/confirm'],
       ['DELETE', '/v1/ai/moderation-state'],
       ['POST', 'https://example.test/arbitrary'],
-    ]) {
+    ];
+    for (const [method, path] of forbidden) {
       expect(() =>
         assertAllowedStaffModerationRequest(method, path),
       ).toThrow(/refuses/);
