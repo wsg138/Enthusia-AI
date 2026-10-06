@@ -148,24 +148,25 @@ describe('TicketEventIngress', () => {
     });
   });
 
-  it('never echoes the webhook secret or reviewer exception details', async () => {
+  it('converts reviewer exceptions into a generic retryable response', async () => {
     const review = vi.fn(async () => {
       throw new Error('private downstream secret detail');
     });
     const ingress = new TicketEventIngress(SECRET, { review });
     const signed = signedBody(event());
 
-    await expect(
-      ingress.handle(signed.raw, signed.signature),
-    ).rejects.toThrow('private downstream secret detail');
+    const response = await ingress.handle(signed.raw, signed.signature);
 
-    const invalid = await ingress.handle(
-      Buffer.from('not json'),
-      createHmac('sha256', SECRET)
-        .update(Buffer.from('not json'))
-        .digest('hex'),
-    );
-    const serialized = JSON.stringify(invalid);
+    expect(response).toEqual({
+      status: 503,
+      body: {
+        accepted: false,
+        eventType: 'ticket.message',
+        reviewStatus: 'evidence_runtime_unavailable',
+        retryable: true,
+      },
+    });
+    const serialized = JSON.stringify(response);
     expect(serialized).not.toContain(SECRET);
     expect(serialized).not.toContain('private downstream secret detail');
   });
