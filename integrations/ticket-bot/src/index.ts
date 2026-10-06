@@ -14,8 +14,8 @@
  *     events published by the Ticket Bot (one-directional: bot → AI).
  *   - `ticketToAgentContext` — pure adapter from ticket data to agent
  *     context (no I/O, no mutation).
- *   - `createTicketTools` — `ticket.get_context`, `ticket.request_close`,
- *     `ticket.request_escalation` tools, shaped to W12's Tool interface.
+ *   - `createTicketTools` — `ticket.capabilities`, `ticket.get_context`,
+ *     `ticket.request_close`, `ticket.request_escalation` tools, shaped to W12's Tool interface.
  *
  * Migration strategy: see README.md. Do not implement the migration
  * itself here — this package only provides the integration contract.
@@ -31,6 +31,7 @@ export type {
   TicketParticipant,
   TicketPriority,
   TicketStatus,
+  TicketBotCapabilities,
   ActionRequestInput,
   ActionRequestKind,
   ActionRequestParameters,
@@ -78,6 +79,7 @@ export type {
 
 // Agent tools (W12 Tool-interface shape)
 export {
+  TicketCapabilitiesTool,
   GetTicketContextTool,
   RequestTicketCloseTool,
   RequestTicketEscalationTool,
