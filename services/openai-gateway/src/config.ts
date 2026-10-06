@@ -86,6 +86,8 @@ export function loadConfig(
     );
   }
 
+  const visionModel = env['ENTHUSIA_OPENAI_VISION_MODEL']?.trim();
+
   return {
     apiKey: env['OPENAI_API_KEY'] ?? '',
     baseUrl,
@@ -99,9 +101,7 @@ export function loadConfig(
       DEFAULT_MAX_OUTPUT_TOKENS,
       'ENTHUSIA_OPENAI_MAX_OUTPUT_TOKENS',
     ),
-    ...(env['ENTHUSIA_OPENAI_VISION_MODEL']?.trim()
-      ? { visionModel: env['ENTHUSIA_OPENAI_VISION_MODEL']!.trim() }
-      : {}),
+    ...(visionModel ? { visionModel } : {}),
     modelSelection: modelSelectionFromEnv(env),
     modelPrices: DEFAULT_MODEL_PRICES,
     budget: {
