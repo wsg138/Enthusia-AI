@@ -65,3 +65,14 @@ export type {
   TicketEvidencePipelineResult,
   TicketEvidencePipelineStatus,
 } from './pipeline.js';
+
+export {
+  staffSnapshotToModerationState,
+  unavailableModerationState,
+} from './staff-state.js';
+
+export {
+  LivePolicyCatalogUnavailableError,
+  loadCurrentPolicyCatalog,
+} from './live-policy.js';
+export type { LivePolicyCatalogSource } from './live-policy.js';
