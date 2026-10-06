@@ -195,8 +195,7 @@ function requireParam(
   return value;
 }
 
-/** `ticket.get_context` — read ticket context for agent reasoning. */
-export /** `ticket.capabilities` — verify the contract actually deployed by Ticket Bot. */
+/** `ticket.capabilities` — verify the contract actually deployed by Ticket Bot. */
 export class TicketCapabilitiesTool implements TicketTool<Record<string, never>> {
   readonly meta: TicketToolMetadata = {
     name: 'ticket.capabilities',
@@ -224,7 +223,8 @@ export class TicketCapabilitiesTool implements TicketTool<Record<string, never>>
   }
 }
 
-class GetTicketContextTool
+/** `ticket.get_context` — read ticket context for agent reasoning. */
+export class GetTicketContextTool
   implements TicketTool<{ ticketId: string; maxMessages?: number }>
 {
   readonly meta: TicketToolMetadata = {
