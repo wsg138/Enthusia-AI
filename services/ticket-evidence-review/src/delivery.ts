@@ -8,25 +8,11 @@ import type {
   TicketImageAssessmentRecord,
 } from './types.js';
 
-export interface TicketEscalationRequester {
-  requestAction(
-    ticketId: string,
-    input: {
-      action: 'escalate';
-      reason: string;
-      correlationId: string;
-      parameters: {
-        extra: Record<string, unknown>;
-      };
-    },
-  ): Promise<ActionRequestResult>;
-}
-
 export interface DeliverTicketEvidenceReviewInput {
   ticketId: string;
   review: TicketEvidenceReviewResult;
   imageEvidence: TicketImageAssessmentRecord[];
-  ticketClient: TicketEscalationRequester | TicketBotClient;
+  ticketClient: Pick<TicketBotClient, 'requestAction'>;
 }
 
 export async function deliverTicketEvidenceReview(
