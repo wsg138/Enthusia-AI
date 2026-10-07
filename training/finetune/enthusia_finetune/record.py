@@ -14,7 +14,7 @@ from enthusia_datasets.record import RecordValidationError, validate_record
 from enthusia_datasets.secret_scan import scan_record
 from enthusia_datasets.splits import SPECIAL_PARTITIONS
 
-EXCLUDED_QUALITIES = frozenset({"BAD_RESPONSE", "OUTDATED", "PRIVATE_EXCLUDE"})
+TRAINABLE_QUALITIES = frozenset({"GOOD", "IDEAL"})
 EXCLUDED_VISIBILITIES = frozenset({"private", "owner"})
 
 
@@ -32,8 +32,11 @@ def quality_excluded(rec: dict) -> str | None:
     if visibility in EXCLUDED_VISIBILITIES:
         return f"visibility {visibility!r} excluded from training"
     quality = rec.get("quality")
-    if quality in EXCLUDED_QUALITIES:
-        return f"quality {quality!r} excluded from training"
+    if quality not in TRAINABLE_QUALITIES:
+        return (
+            f"quality {quality!r} is not explicitly trainable; "
+            "only reviewed GOOD/IDEAL records may enter training"
+        )
     return None
 
 
