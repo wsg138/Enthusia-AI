@@ -12,6 +12,7 @@ import { InferenceReasoner } from './reasoner.js';
 import { loadConfiguredFamiliarityRuntime } from './familiarity.js';
 import {
   createAgentRuntime,
+  loadConfiguredModerationHistoryTools,
   loadConfiguredSftpRuntime,
   loadConfiguredTicketEvidenceReview,
   loadConfiguredTicketTools,
@@ -51,6 +52,25 @@ async function main(): Promise<void> {
       : {}),
     timeoutMs: config.ticketBotTimeoutMs,
   });
+  const moderationHistoryTools = loadConfiguredModerationHistoryTools({
+    ...(config.staffModerationBaseUrl !== undefined
+      ? { staffModerationBaseUrl: config.staffModerationBaseUrl }
+      : {}),
+    ...(config.staffModerationApiKey !== undefined
+      ? { staffModerationApiKey: config.staffModerationApiKey }
+      : {}),
+    staffModerationTimeoutMs: config.staffModerationTimeoutMs,
+    ...(config.aiModerationBaseUrl !== undefined
+      ? { aiModerationBaseUrl: config.aiModerationBaseUrl }
+      : {}),
+    ...(config.aiModerationClientId !== undefined
+      ? { aiModerationClientId: config.aiModerationClientId }
+      : {}),
+    ...(config.aiModerationApiKey !== undefined
+      ? { aiModerationApiKey: config.aiModerationApiKey }
+      : {}),
+    aiModerationTimeoutMs: config.aiModerationTimeoutMs,
+  });
   const ticketEvidenceReview = loadConfiguredTicketEvidenceReview(
     {
       ...(config.ticketBotBaseUrl !== undefined
@@ -80,7 +100,12 @@ async function main(): Promise<void> {
 
   const runtime = createAgentRuntime(
     reasoner,
-    [...sftp.tools, ...ticketTools, ...familiarity.tools],
+    [
+      ...sftp.tools,
+      ...ticketTools,
+      ...moderationHistoryTools,
+      ...familiarity.tools,
+    ],
     {
       ...(familiarity.onVerifiedTopicHelp !== undefined
         ? { onVerifiedTopicHelp: familiarity.onVerifiedTopicHelp }
