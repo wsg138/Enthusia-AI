@@ -118,13 +118,22 @@ async function createSamplingContext(
   deps: SampleTicketVideoDeps,
 ): Promise<SamplingContext> {
   const resolved = resolveSamplingDeps(deps);
+  const deadline = resolved.now() + MAX_VIDEO_PROCESSING_MS;
   const directory = await mkdtemp(join(tmpdir(), 'enthusia-ticket-video-'));
   const inputPath = join(directory, 'input-video');
-  await writeFile(inputPath, evidence.bytes, { mode: 0o600 });
+  try {
+    await writeFile(inputPath, evidence.bytes, { mode: 0o600 });
+  } catch {
+    await rm(directory, { recursive: true, force: true })
+      .catch(() => undefined);
+    throw new TicketVideoProcessingError(
+      'Video preparation failed before media inspection.',
+    );
+  }
   return {
     ...resolved,
     evidence,
-    deadline: resolved.now() + MAX_VIDEO_PROCESSING_MS,
+    deadline,
     directory,
     inputPath,
   };
