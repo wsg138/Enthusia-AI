@@ -57,14 +57,27 @@ describe('agent-service Ticket Bot configuration', () => {
     expect(JSON.stringify(redacted)).not.toContain('never-log-this');
   });
 
-  it('fails closed for partial ticket evidence review configuration', () => {
+  it('allows standalone Staff reads but fails closed for partial pairs', () => {
     expect(() =>
       loadAgentServiceConfig({
         NODE_ENV: 'test',
         ENTHUSIA_AGENT_STAFF_MODERATION_BASE_URL: 'http://127.0.0.1:8767',
       }),
-    ).toThrow(/requires Staff moderation URL\/key and policy server\/source/);
+    ).toThrow(/must be configured together/);
 
+    const config = loadAgentServiceConfig({
+      NODE_ENV: 'test',
+      ENTHUSIA_AGENT_STAFF_MODERATION_BASE_URL: 'http://127.0.0.1:8767',
+      ENTHUSIA_AGENT_STAFF_MODERATION_API_KEY: 'staff-secret',
+    });
+    expect(redactedAgentServiceConfig(config)).toMatchObject({
+      staffModerationConfigured: true,
+      policySourceConfigured: false,
+      aiModerationHistoryConfigured: false,
+    });
+  });
+
+  it('fails closed when evidence policy is configured without its runtime dependencies', () => {
     expect(() =>
       loadAgentServiceConfig({
         NODE_ENV: 'test',
@@ -73,7 +86,47 @@ describe('agent-service Ticket Bot configuration', () => {
         ENTHUSIA_AGENT_POLICY_SERVER_ID: 'smp',
         ENTHUSIA_AGENT_POLICY_SOURCE_ID: 'enthusia-staff-reason-policies',
       }),
-    ).toThrow(/requires the Ticket Bot runtime configuration/);
+    ).toThrow(/requires Staff moderation and Ticket Bot runtime configuration/);
+  });
+
+  it('requires a complete AI moderation history credential set plus Staff reads', () => {
+    expect(() =>
+      loadAgentServiceConfig({
+        NODE_ENV: 'test',
+        ENTHUSIA_AGENT_AI_MODERATION_BASE_URL: 'http://127.0.0.1:8080',
+      }),
+    ).toThrow(/requires base URL, client ID, and API key together/);
+
+    expect(() =>
+      loadAgentServiceConfig({
+        NODE_ENV: 'test',
+        ENTHUSIA_AGENT_AI_MODERATION_BASE_URL: 'http://127.0.0.1:8080',
+        ENTHUSIA_AGENT_AI_MODERATION_CLIENT_ID: 'enthusia-support',
+        ENTHUSIA_AGENT_AI_MODERATION_API_KEY: 'ai-mod-secret',
+      }),
+    ).toThrow(/requires the authoritative Staff moderation read configuration/);
+  });
+
+  it('redacts AI moderation history credentials', () => {
+    const config = loadAgentServiceConfig({
+      NODE_ENV: 'test',
+      ENTHUSIA_AGENT_STAFF_MODERATION_BASE_URL: 'http://127.0.0.1:8767',
+      ENTHUSIA_AGENT_STAFF_MODERATION_API_KEY: 'staff-secret',
+      ENTHUSIA_AGENT_AI_MODERATION_BASE_URL: 'http://127.0.0.1:8080',
+      ENTHUSIA_AGENT_AI_MODERATION_CLIENT_ID: 'private-client-id',
+      ENTHUSIA_AGENT_AI_MODERATION_API_KEY: 'ai-mod-secret',
+      ENTHUSIA_AGENT_AI_MODERATION_TIMEOUT_MS: '2400',
+    });
+    const redacted = redactedAgentServiceConfig(config);
+    expect(redacted).toMatchObject({
+      staffModerationConfigured: true,
+      aiModerationHistoryConfigured: true,
+      aiModerationTimeoutMs: 2400,
+    });
+    const serialized = JSON.stringify(redacted);
+    expect(serialized).not.toContain('private-client-id');
+    expect(serialized).not.toContain('ai-mod-secret');
+    expect(serialized).not.toContain('staff-secret');
   });
 
   it('accepts complete evidence review wiring while redacting secrets and source ids', () => {

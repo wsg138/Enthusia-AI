@@ -26,6 +26,13 @@ Before any start/restart/deploy of AI services:
       `ffprobe -version` and `ffmpeg -version`. Missing media tools do not
       block agent startup; video evidence fails closed and screenshot evidence
       remains available.
+- [ ] If `moderation.history` is being enabled, EnthusiaStaff has deployed
+      `ai-moderation-state v2`, AI-Moderation-API has deployed the
+      `support:context` read contract, and the configured moderation client
+      has only the required read permission. Verify a linked test player maps
+      to the same EnthusiaStaff `ModerationSubjectId` used as
+      AI-Moderation-API `sender_identity_id`. Do not infer this value from a
+      username, Discord ID, or Minecraft UUID.
 
 ---
 

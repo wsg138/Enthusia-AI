@@ -46,7 +46,9 @@ Current production-capable optional registration:
   `ENTHUSIA_AGENT_MEMORY_PATH`;
 - W14 Ticket Bot tools through
   `ENTHUSIA_AGENT_TICKET_BOT_BASE_URL` +
-  `ENTHUSIA_AGENT_TICKET_BOT_API_KEY`.
+  `ENTHUSIA_AGENT_TICKET_BOT_API_KEY`;
+- staff-only privacy-minimized moderation history through the authoritative
+  EnthusiaStaff read API plus AI-Moderation-API support-context contract.
 
 Memory configuration registers two bounded reads:
 
@@ -73,6 +75,37 @@ Lifecycle operations remain action requests that the Ticket Bot independently
 authorizes and executes; the agent receives no direct ticket mutation primitive.
 The API key remains runtime-only and is never emitted in redacted startup
 configuration.
+
+### Staff-only moderation history
+
+`moderation.history` is registered only when both trusted read sides are
+configured:
+
+- `ENTHUSIA_AGENT_STAFF_MODERATION_BASE_URL` +
+  `ENTHUSIA_AGENT_STAFF_MODERATION_API_KEY`;
+- `ENTHUSIA_AGENT_AI_MODERATION_BASE_URL` +
+  `ENTHUSIA_AGENT_AI_MODERATION_CLIENT_ID` +
+  `ENTHUSIA_AGENT_AI_MODERATION_API_KEY`.
+
+The tool is `STAFF` visibility and performs its own actor check before any
+network call. It accepts an exact current Minecraft username, resolves that
+target through EnthusiaStaff, and calls AI-Moderation-API only when the Staff
+`ai-moderation-state v2` response contains the authoritative current
+`ModerationSubjectId`. Staff v1 remains compatible with punishment/case
+reads but cannot enable moderation-history enrichment. Missing links, v1
+deployments, outages, malformed data, and circuit-open states fail closed.
+
+The moderation-subject UUID is transport-only and is not returned in the tool
+result. The result contains only AI-Moderation-API's privacy-minimized effective
+decision fields; accepted staff corrections have already replaced superseded AI
+outcomes.
+
+**Cross-service identity invariant:** trusted moderation producers must populate
+AI-Moderation-API `sender_identity_id` with the same EnthusiaStaff
+`ModerationSubjectId` UUID. Names, raw Discord IDs, and Minecraft UUIDs must
+never be substituted or inferred. Until that producer convention is deployed
+and verified, the tool is source-ready but historical matches are not a
+production-readiness claim.
 
 The path must point to the strict JSON form accepted by
 `@enthusia/integration-sftp compileConfig`. Credentials are not present in

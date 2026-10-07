@@ -14,6 +14,8 @@ import {
 import {
   StaffModerationStateClient,
 } from '@enthusia/integration-staff-moderation';
+import { ModerationAdapter } from '@enthusia/moderation-adapter';
+import { StaffModerationHistoryTool } from './moderation-history.js';
 import type { InferenceClient } from '@enthusia/inference-adapter';
 import {
   LivePolicyCatalogReader,
@@ -45,6 +47,54 @@ export type AgentRuntimeOptions = Pick<
   'onVerifiedTopicHelp'
 >;
 
+export interface ModerationHistoryRuntimeConfig {
+  staffModerationBaseUrl?: string;
+  staffModerationApiKey?: string;
+  staffModerationTimeoutMs: number;
+  aiModerationBaseUrl?: string;
+  aiModerationClientId?: string;
+  aiModerationApiKey?: string;
+  aiModerationTimeoutMs: number;
+}
+
+export function loadConfiguredModerationHistoryTools(
+  config: ModerationHistoryRuntimeConfig,
+): Tool[] {
+  if (config.aiModerationBaseUrl === undefined) return [];
+  if (
+    config.aiModerationClientId === undefined ||
+    config.aiModerationApiKey === undefined ||
+    config.staffModerationBaseUrl === undefined ||
+    config.staffModerationApiKey === undefined
+  ) {
+    throw new Error(
+      'Moderation history runtime configuration is incomplete.',
+    );
+  }
+
+  const staff = new StaffModerationStateClient({
+    baseUrl: config.staffModerationBaseUrl,
+    apiKey: config.staffModerationApiKey,
+    timeoutMs: config.staffModerationTimeoutMs,
+  });
+  const moderation = new ModerationAdapter({
+    client: {
+      baseUrl: config.aiModerationBaseUrl,
+      clientId: config.aiModerationClientId,
+      apiKey: config.aiModerationApiKey,
+      contextTimeoutMs: config.aiModerationTimeoutMs,
+      healthTimeoutMs: config.aiModerationTimeoutMs,
+    },
+  });
+  return [
+    new StaffModerationHistoryTool({
+      staff,
+      moderation,
+      enrichmentTimeoutMs: config.aiModerationTimeoutMs,
+    }),
+  ];
+}
+
 export interface TicketEvidenceReviewRuntimeConfig {
   ticketBotBaseUrl?: string;
   ticketBotApiKey?: string;
@@ -61,8 +111,11 @@ export function loadConfiguredTicketEvidenceReview(
   gateway: LiveServerSourceGateway | undefined,
   inference: Pick<InferenceClient, 'complete'>,
 ): TicketEvidenceReviewService | undefined {
-  if (config.staffModerationBaseUrl === undefined) return undefined;
+  const policyConfigured =
+    config.policyServerId !== undefined || config.policySourceId !== undefined;
+  if (!policyConfigured) return undefined;
   if (
+    config.staffModerationBaseUrl === undefined ||
     config.staffModerationApiKey === undefined ||
     config.ticketBotBaseUrl === undefined ||
     config.ticketBotApiKey === undefined ||
