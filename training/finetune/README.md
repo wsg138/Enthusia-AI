@@ -69,9 +69,11 @@ prepare  ->  budget gate -> dataset assembly -> eval-before -> [TRAIN on GPU hos
 and this workstream must not modify W16/W17/W18 code):
 
 1. **Validate** every record; invalid ones are excluded with a reason.
-2. **Filter**: `BAD_RESPONSE`, `OUTDATED`, `PRIVATE_EXCLUDE` quality and
-   `private`/`owner` visibility never enter training data; secret-like
-   content is caught by a keyword scan and excluded.
+2. **Filter**: only explicitly reviewed `GOOD` or `IDEAL` records with
+   trainable visibility may enter training data. `USABLE_WITH_EDIT`,
+   `INCOMPLETE`, `OUTDATED`, `BAD_RESPONSE`, `PRIVATE_EXCLUDE`, and
+   missing/unreviewed quality are excluded until corrected and relabeled.
+   `private`/`owner` visibility and secret-like content are also excluded.
 3. **Dedupe** by exact canonical text (keep lowest id), reporting dupes.
 4. **Split by leak-group** (spec §8): records sharing a `template_id`
    (same synthetic template), `ticket_id`/`thread_id` (same thread), or
