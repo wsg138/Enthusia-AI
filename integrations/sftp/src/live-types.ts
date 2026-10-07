@@ -103,6 +103,28 @@ export interface ApprovedFileReadResult {
   provenance: LiveFileProvenance;
 }
 
+export type SafeConfigScalar = string | number | boolean | null;
+
+export interface ApprovedConfigValueResult {
+  sourceId: string;
+  valueKey: string;
+  value: SafeConfigScalar;
+  valueType: 'string' | 'number' | 'boolean' | 'null';
+  evidence: 'approved-config-scalar';
+  file: {
+    fileName: string;
+    sha256: string;
+    version: string;
+    modifiedAt: string;
+  };
+  provenance: {
+    file: {
+      version: string;
+    };
+    observedAt: string;
+  };
+}
+
 export type LiveSourceErrorCode =
   | 'UNKNOWN_SERVER'
   | 'SOURCE_NOT_CONFIGURED'
