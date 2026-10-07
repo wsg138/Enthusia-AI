@@ -112,3 +112,22 @@ but public windows may not absorb staff-only context from mixed documentation.
 render_owner_review.py renders exactly 10 attempted results into the compact owner
 review artifact. It refuses any other attempt count and labels the output as review-only,
 not admitted to W16 or training data.
+
+### Current owner-review gate
+
+For the current 10-example gate on the owner's Windows machine, use:
+
+```bat
+training\bootstrap\Run-Qwen35-Owner-Review-10.cmd
+```
+
+That wrapper fails closed unless the checkout is on `training/bootstrap-data-prep`,
+has no tracked changes, exactly matches the remote branch head, has the generated job
+artifact, and port 8091 is unused. It then starts the known local Qwen3.5-35B-A3B
+baseline, runs exactly 10 attempts, renders `owner-review-10.md`, stops the server it
+started, and explicitly stops before the 30/W16 gates.
+
+The legacy 30-example benchmark wrapper is intentionally guarded. The generic
+`Run-Baseline-Generation-Benchmark.cmd` refuses to run unless the explicitly named
+`Run-Qwen35-Baseline-30.cmd` opts in. Do not use the 30-example wrapper until the
+owner has approved the fresh 10-example review.
