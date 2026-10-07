@@ -119,6 +119,7 @@ export class ModerationServiceClient {
       '/health/ready',
       { method: 'GET', authenticated: false, acceptedStatuses: [503] },
       this.healthTimeoutMs,
+      '/health/ready',
     );
     return normalizeHealth(raw);
   }
@@ -136,6 +137,7 @@ export class ModerationServiceClient {
       path,
       { method: 'GET', authenticated: true },
       this.contextTimeoutMs,
+      '/v1/support-context/{subject_id}',
     );
     const response = normalizeContextResponse(raw, request.subjectId);
     return response.decisions
@@ -156,6 +158,7 @@ export class ModerationServiceClient {
     path: string,
     options: RequestOptions,
     timeoutMs: number,
+    diagnosticPath: string,
   ): Promise<unknown> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -169,7 +172,7 @@ export class ModerationServiceClient {
       if (!response.ok && !accepted) {
         throw new ExternalServiceError(
           'moderation',
-          `API responded ${response.status} for ${options.method} ${path}`,
+          `API responded ${response.status} for ${options.method} ${diagnosticPath}`,
         );
       }
       return await response.json();
@@ -178,12 +181,12 @@ export class ModerationServiceClient {
       if (err instanceof Error && err.name === 'AbortError') {
         throw new ExternalServiceError(
           'moderation',
-          `API timed out after ${timeoutMs} ms for ${path}`,
+          `API timed out after ${timeoutMs} ms for ${diagnosticPath}`,
         );
       }
       throw new ExternalServiceError(
         'moderation',
-        `API unreachable for ${options.method} ${path}: ${errorMessage(err)}`,
+        `API unreachable for ${options.method} ${diagnosticPath}: ${errorMessage(err)}`,
       );
     } finally {
       clearTimeout(timer);
@@ -300,8 +303,12 @@ function stringArray(value: unknown): string[] | null {
   return value.slice(0, 32) as string[];
 }
 
-function validCredentialPart(value: string): boolean {
-  return value.trim().length > 0 && !/[\u0000-\u001f\u007f]/.test(value);
+function validCredentialPart(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.trim().length > 0 &&
+    !/[\u0000-\u001f\u007f]/.test(value)
+  );
 }
 
 function validateSubjectId(value: string): void {
