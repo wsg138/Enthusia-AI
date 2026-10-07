@@ -4,31 +4,31 @@ import type {
   TicketEvidenceClient,
   TicketVideoEvidence,
 } from '@enthusia/integration-ticket-bot';
-import {
-  MAX_IMAGE_INFERENCES,
-  MAX_IMAGE_LIMITATIONS,
-  MAX_IMAGE_OBSERVATIONS,
-  type ImageEvidenceAssessment,
-  type RunImageEvidenceInput,
-  type RunImageEvidenceResult,
+import type {
+  RunImageEvidenceInput,
+  RunImageEvidenceResult,
 } from '@enthusia/openai-gateway';
 import {
   createDefaultTicketImageAssessmentRunner,
   type TicketImageAssessmentRunner,
 } from './orchestrator.js';
 import {
-  MAX_VIDEO_DIMENSION,
-  MAX_VIDEO_DURATION_SECONDS,
-  MAX_VIDEO_FRAMES,
-  MAX_VIDEO_PIXELS,
   sampleTicketVideo,
   type SampleTicketVideoDeps,
   type TicketVideoSample,
 } from './video-media.js';
+import {
+  aggregateFrameAssessments,
+  type VideoFrameObservation,
+} from './video-aggregation.js';
+import { validateVideoSampleProvenance } from './video-provenance.js';
 import type {
   TicketVideoAssessmentRecord,
   TicketVideoFrameProvenance,
 } from './types.js';
+
+export { aggregateFrameAssessments } from './video-aggregation.js';
+export type { VideoFrameObservation } from './video-aggregation.js';
 
 export const MAX_TICKET_VIDEO_ASSESSMENTS = 1;
 const MAX_VIDEO_COLLECTION_ISSUES = 8;
@@ -76,12 +76,6 @@ interface VideoCandidate {
   messageId: string;
   attachment: TicketAttachment;
   contentType: TicketVideoEvidence['contentType'];
-}
-
-export interface VideoFrameObservation {
-  frameIndex: number;
-  timestampSeconds: number;
-  result: RunImageEvidenceResult;
 }
 
 export async function collectTicketVideoAssessments(
@@ -202,7 +196,7 @@ async function assessVideoCandidate(
   let sample: TicketVideoSample;
   try {
     sample = await sampler(evidence);
-    validateSampleProvenance(evidence, sample);
+    validateVideoSampleProvenance(evidence, sample);
   } catch {
     return candidateFailure(candidate, 'processing_failed');
   }
@@ -325,118 +319,6 @@ function aggregateVideoAssessment(
   };
 }
 
-export function aggregateFrameAssessments(
-  sample: TicketVideoSample,
-  frames: VideoFrameObservation[],
-): ImageEvidenceAssessment {
-  const observations: ImageEvidenceAssessment['observations'] = [];
-  const inferences: ImageEvidenceAssessment['inferences'] = [];
-  const limitations: string[] = [sample.limitation];
-  const indexMap = new Map<string, number>();
-  const summaries: string[] = [];
-  let needsMoreContext = false;
-
-  for (const frame of frames) {
-    summaries.push(
-      `${frame.timestampSeconds.toFixed(3)}s: ${frame.result.assessment.summary}`,
-    );
-    needsMoreContext ||= frame.result.assessment.needsMoreContext;
-    for (const limitation of frame.result.assessment.limitations) {
-      pushUniqueBounded(
-        limitations,
-        limitation,
-        MAX_IMAGE_LIMITATIONS,
-      );
-    }
-    for (const [localIndex, observation] of
-      frame.result.assessment.observations.entries()) {
-      if (observations.length >= MAX_IMAGE_OBSERVATIONS) break;
-      const globalIndex = observations.length;
-      indexMap.set(
-        frameObservationKey(frame.frameIndex, localIndex),
-        globalIndex,
-      );
-      observations.push({
-        ...observation,
-        text: truncate(
-          `[${frame.timestampSeconds.toFixed(3)}s] ${observation.text}`,
-          400,
-        ),
-      });
-    }
-  }
-
-  for (const frame of frames) {
-    for (const inference of frame.result.assessment.inferences) {
-      if (inferences.length >= MAX_IMAGE_INFERENCES) break;
-      const mapped = inference.observationIndexes.map((localIndex) =>
-        indexMap.get(frameObservationKey(frame.frameIndex, localIndex)),
-      );
-      if (mapped.some((index) => index === undefined)) continue;
-      inferences.push({
-        ...inference,
-        text: truncate(
-          `[${frame.timestampSeconds.toFixed(3)}s] ${inference.text}`,
-          400,
-        ),
-        observationIndexes: mapped as number[],
-      });
-    }
-  }
-
-  return {
-    summary: truncate(
-      `Sampled video evidence: ${summaries.join(' | ')}`,
-      600,
-    ),
-    observations,
-    inferences,
-    limitations,
-    needsMoreContext,
-  };
-}
-
-function validateSampleProvenance(
-  evidence: TicketVideoEvidence,
-  sample: TicketVideoSample,
-): void {
-  if (sample.videoSha256.toLowerCase() !== evidence.sha256.toLowerCase()) {
-    throw new Error('sampled video provenance mismatch');
-  }
-  if (
-    !Number.isFinite(sample.metadata.durationSeconds) ||
-    sample.metadata.durationSeconds <= 0 ||
-    sample.metadata.durationSeconds > MAX_VIDEO_DURATION_SECONDS ||
-    !Number.isInteger(sample.metadata.width) ||
-    !Number.isInteger(sample.metadata.height) ||
-    sample.metadata.width < 1 ||
-    sample.metadata.height < 1 ||
-    sample.metadata.width > MAX_VIDEO_DIMENSION ||
-    sample.metadata.height > MAX_VIDEO_DIMENSION ||
-    sample.metadata.width * sample.metadata.height > MAX_VIDEO_PIXELS ||
-    sample.frames.length < 1 ||
-    sample.frames.length > MAX_VIDEO_FRAMES
-  ) {
-    throw new Error('sampled video metadata is outside bounded limits');
-  }
-
-  const indexes = new Set<number>();
-  for (const frame of sample.frames) {
-    if (
-      indexes.has(frame.index) ||
-      !Number.isInteger(frame.index) ||
-      frame.index < 0 ||
-      !Number.isFinite(frame.timestampSeconds) ||
-      frame.timestampSeconds < 0 ||
-      frame.timestampSeconds > sample.metadata.durationSeconds ||
-      !/^[a-f0-9]{64}$/.test(frame.sha256.toLowerCase())
-    ) {
-      throw new Error('sampled frame provenance is invalid');
-    }
-    indexes.add(frame.index);
-  }
-}
-
 async function fetchVideoEvidence(
   client: Pick<TicketEvidenceClient, 'getVideoEvidence'>,
   ticket: TicketContextBundle,
@@ -511,30 +393,6 @@ function issue(
   return { messageId, attachmentId, reason };
 }
 
-function frameObservationKey(
-  frameIndex: number,
-  localIndex: number,
-): string {
-  return `${frameIndex}:${localIndex}`;
-}
 
-function pushUniqueBounded(
-  values: string[],
-  raw: string,
-  maximum: number,
-): void {
-  const value = raw.trim();
-  if (
-    value.length === 0 ||
-    values.includes(value) ||
-    values.length >= maximum
-  ) {
-    return;
-  }
-  values.push(truncate(value, 300));
-}
 
-function truncate(value: string, maximum: number): string {
-  if (value.length <= maximum) return value;
-  return value.slice(0, maximum - 1) + '…';
-}
+
