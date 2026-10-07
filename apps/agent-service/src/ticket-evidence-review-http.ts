@@ -114,34 +114,16 @@ export async function handleTicketEvidenceReviewHttp(
   deps: TicketEvidenceReviewHttpDeps,
 ): Promise<void> {
   if (deps.service === undefined) {
-    sendJson(res, 503, {
-      error: {
-        code: 'TICKET_EVIDENCE_REVIEW_UNAVAILABLE',
-        message: 'ticket evidence review service is unavailable',
-      },
-    });
+    sendUnavailable(res);
     return;
   }
 
-  let value: unknown;
-  try {
-    value = await parseBody(req, deps.maxBodyBytes);
-  } catch (error) {
-    if (error instanceof TicketEvidenceReviewHttpError) {
-      sendKnownError(res, error);
-      return;
-    }
-    throw error;
-  }
+  const value = await parseBodyOrRespond(req, res, deps.maxBodyBytes);
+  if (value === BODY_REJECTED) return;
 
   const parsed = ticketEvidenceReviewRequestSchema.safeParse(value);
   if (!parsed.success) {
-    sendJson(res, 400, {
-      error: {
-        code: 'INVALID_TICKET_EVIDENCE_REVIEW_REQUEST',
-        message: 'request does not match ticket evidence review contract',
-      },
-    });
+    sendInvalidRequest(res);
     return;
   }
 
@@ -152,16 +134,57 @@ export async function handleTicketEvidenceReviewHttp(
     sendJson(res, 200, result, traceId);
   } catch (error) {
     deps.onFailure?.(error, traceId);
-    sendJson(
-      res,
-      503,
-      {
-        error: {
-          code: 'TICKET_EVIDENCE_REVIEW_FAILED',
-          message: 'ticket evidence review could not be completed',
-        },
-      },
-      traceId,
-    );
+    sendReviewFailure(res, traceId);
   }
+}
+
+const BODY_REJECTED = Symbol('BODY_REJECTED');
+
+async function parseBodyOrRespond(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  maxBodyBytes: number,
+): Promise<unknown | typeof BODY_REJECTED> {
+  try {
+    return await parseBody(req, maxBodyBytes);
+  } catch (error) {
+    if (!(error instanceof TicketEvidenceReviewHttpError)) throw error;
+    sendKnownError(res, error);
+    return BODY_REJECTED;
+  }
+}
+
+function sendUnavailable(res: http.ServerResponse): void {
+  sendJson(res, 503, {
+    error: {
+      code: 'TICKET_EVIDENCE_REVIEW_UNAVAILABLE',
+      message: 'ticket evidence review service is unavailable',
+    },
+  });
+}
+
+function sendInvalidRequest(res: http.ServerResponse): void {
+  sendJson(res, 400, {
+    error: {
+      code: 'INVALID_TICKET_EVIDENCE_REVIEW_REQUEST',
+      message: 'request does not match ticket evidence review contract',
+    },
+  });
+}
+
+function sendReviewFailure(
+  res: http.ServerResponse,
+  traceId: string,
+): void {
+  sendJson(
+    res,
+    503,
+    {
+      error: {
+        code: 'TICKET_EVIDENCE_REVIEW_FAILED',
+        message: 'ticket evidence review could not be completed',
+      },
+    },
+    traceId,
+  );
 }
