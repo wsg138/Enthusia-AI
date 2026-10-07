@@ -2,6 +2,7 @@ export interface StaffModerationTarget {
   requested: string;
   playerId: string;
   username?: string | null | undefined;
+  moderationSubjectId?: string | null | undefined;
 }
 
 export interface StaffActiveSanction {
@@ -27,7 +28,7 @@ export interface StaffModerationCase {
 export interface StaffModerationStateSnapshot {
   service: 'enthusia-staff';
   api: 'ai-moderation-state';
-  contractVersion: 'v1';
+  contractVersion: 'v1' | 'v2';
   target: StaffModerationTarget;
   activeSanctions: StaffActiveSanction[];
   recentCases: StaffModerationCase[];
