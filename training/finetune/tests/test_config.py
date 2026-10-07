@@ -84,6 +84,22 @@ def test_unknown_key_rejected():
         config_mod.validate_config(bad)
 
 
+def test_all_linear_qlora_targets_are_supported():
+    cfg = _base()
+    cfg["lora"] = copy.deepcopy(cfg["lora"])
+    cfg["lora"]["target_modules"] = "all-linear"
+    validated = config_mod.validate_config(cfg)
+    assert validated.lora["target_modules"] == "all-linear"
+
+
+def test_invalid_lora_target_modules_rejected():
+    cfg = _base()
+    cfg["lora"] = copy.deepcopy(cfg["lora"])
+    cfg["lora"]["target_modules"] = []
+    with pytest.raises(ConfigError, match="target_modules"):
+        config_mod.validate_config(cfg)
+
+
 def test_lora_r_must_be_positive():
     bad = _base()
     bad["lora"] = copy.deepcopy(bad["lora"])
