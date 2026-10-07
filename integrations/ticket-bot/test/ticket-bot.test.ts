@@ -324,6 +324,56 @@ describe('TicketBotClient evidence capabilities', () => {
     ]);
   });
 
+  it('aborts video evidence streaming once actual bytes exceed the hard limit', async () => {
+    const client = new TicketEvidenceClient({
+      baseUrl,
+      apiKey: API_KEY,
+      timeoutMs: 5_000,
+      fetchImpl: async (input: Parameters<typeof fetch>[0]) => {
+        const url = String(input);
+        if (url.endsWith('/v1/evidence/capabilities')) {
+          return new Response(JSON.stringify({
+            service: 'enthusia-support-bot',
+            api: 'ticket-evidence',
+            contractVersion: 'evidence-v2',
+            reads: ['attachment.image', 'attachment.video'],
+            maxImageBytes: 1024,
+            maxVideoBytes: 5,
+          }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new Uint8Array([1, 2, 3, 4]));
+            controller.enqueue(new Uint8Array([5, 6, 7, 8]));
+            controller.close();
+          },
+        });
+        return new Response(body, {
+          status: 200,
+          headers: {
+            'Content-Type': 'video/mp4',
+            'X-Enthusia-Ticket-Id': '1234',
+            'X-Enthusia-Message-Id': 'm-1',
+            'X-Enthusia-Attachment-Id': '120000000000000002',
+            'X-Enthusia-Content-Sha256':
+              'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          },
+        });
+      },
+    });
+
+    await expect(
+      client.getVideoEvidence(
+        'T-1234',
+        'm-1',
+        '120000000000000002',
+      ),
+    ).rejects.toThrow(/exceeded the advertised size limit/);
+  });
+
   it('keeps v1 image reads compatible but refuses video until v2 is deployed', async () => {
     const client = new TicketEvidenceClient({
       baseUrl,
