@@ -6,6 +6,7 @@ import type {
 import type {
   TicketEvidenceReviewResult,
   TicketImageAssessmentRecord,
+  TicketVideoAssessmentRecord,
 } from './types.js';
 
 export interface DeliverTicketEvidenceReviewInput {
@@ -33,9 +34,49 @@ export async function deliverTicketEvidenceReview(
         disposition: input.review.disposition,
         confidence: input.review.confidence,
         evidenceRefs: input.imageEvidence.map((item) => item.evidenceRef),
+        evidenceProvenance: input.imageEvidence.map(evidenceAuditRecord),
       },
     },
   });
+}
+
+function evidenceAuditRecord(
+  item: TicketImageAssessmentRecord,
+): Record<string, unknown> {
+  if (isVideoAssessment(item)) {
+    return {
+      kind: 'video',
+      ref: item.evidenceRef,
+      sha256: item.evidenceSha256,
+      contentType: item.video.contentType,
+      durationSeconds: item.video.durationSeconds,
+      width: item.video.width,
+      height: item.video.height,
+      codec: item.video.codec,
+      format: item.video.format,
+      frames: item.video.frames.map((frame) => ({
+        index: frame.index,
+        timestampSeconds: frame.timestampSeconds,
+        ref: frame.evidenceRef,
+        sha256: frame.sha256,
+      })),
+    };
+  }
+  return {
+    kind: 'image',
+    ref: item.evidenceRef,
+    sha256: item.evidenceSha256,
+  };
+}
+
+function isVideoAssessment(
+  item: TicketImageAssessmentRecord,
+): item is TicketVideoAssessmentRecord {
+  return (
+    'mediaKind' in item &&
+    item.mediaKind === 'video' &&
+    'video' in item
+  );
 }
 
 export function evidenceReviewCorrelationId(
