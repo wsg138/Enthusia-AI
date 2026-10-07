@@ -5,3 +5,4 @@ export * from './server.js';
 export * from './stale-ticket.js';
 export * from './familiarity.js';
 export * from './ticket-evidence-review.js';
+export * from './moderation-history.js';
