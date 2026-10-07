@@ -10,6 +10,7 @@ import {
   type ResponseDraft,
 } from '@enthusia/agent-core';
 import {
+  TRACE_ID_HEADER,
   Visibility,
   agentResponseSchema,
   readinessResponseSchema,
@@ -302,7 +303,7 @@ describe('agent service', () => {
     expect(response.status).toBe(200);
     expect(seenInput).toEqual({ ticketId: '42' });
     expect(seenTrace).toMatch(/^[0-9a-f-]{36}$/i);
-    expect(response.headers.get('x-trace-id')).toBe(seenTrace);
+    expect(response.headers.get(TRACE_ID_HEADER)).toBe(seenTrace);
     await expect(response.json()).resolves.toMatchObject({
       ticketId: '42',
       status: 'needs_more_evidence',
