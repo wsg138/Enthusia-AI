@@ -1,0 +1,75 @@
+# First real Enthusia AI domain LoRA run on the already-rented A100 80 GB.
+#
+# This config is intentionally NOT executable by itself. gpu_train.py also
+# requires an exact training-release JSON binding:
+# - the W16 train/validation hashes,
+# - completed exact-10 + exact-30 owner review,
+# - the pre-training W20 report,
+# - this config's SHA-256.
+#
+# Observed current pod rate on 2026-10-07: $1.59/hour. Re-check the live rate
+# before authorizing the release if the pod changes.
+name: a100-qwen35-lora-v1
+description: >
+  One-epoch bf16 LoRA domain tune of the post-trained Qwen3.5-35B-A3B on one
+  A100 80GB. Completion-only loss; no routed-expert tensor adaptation.
+
+base_model: Qwen/Qwen3.5-35B-A3B
+tokenizer: Qwen/Qwen3.5-35B-A3B
+quantization: none
+
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules:
+    # Gated attention layers.
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    # Gated DeltaNet / linear-attention layers.
+    - in_proj_qkv
+    - in_proj_z
+    - in_proj_b
+    - in_proj_a
+    - out_proj
+    # Shared expert only. Routed experts are raw packed parameter tensors
+    # (gate_up_proj/down_proj) and are deliberately not targeted.
+    - gate_proj
+    - up_proj
+    - down_proj
+
+training:
+  learning_rate: 0.00002
+  optimizer: adamw_torch
+  scheduler: cosine
+  warmup_ratio: 0.03
+  batch_size: 1
+  gradient_accumulation: 16
+  max_seq_length: 4096
+  epochs: 1
+  seed: 1337
+
+dataset:
+  version: enthusia-ai-dataset-2026.10.07-v1
+  train_path: ""
+  validation_path: ""
+
+budget:
+  price_per_hour_usd: 1.59
+  estimated_hours: 4
+  storage_usd: 0.0
+
+output:
+  adapter_dir: runs/a100-qwen35-lora-v1/adapter
+  gguf_path: runs/a100-qwen35-lora-v1/enthusia-ai-qwen35.Q4_K_M.gguf
+  quant: Q4_K_M
+
+eval:
+  w20_checkout: ""
+
+notes: >
+  The first paid/full run is deliberately one epoch. Evaluate W20 and held-out
+  validation before considering another epoch. Never train directly from raw
+  ticket exports or unapproved PR #25 generations.
