@@ -22,6 +22,7 @@ import {
 import { createLogger } from '@enthusia/logging';
 import type { AgentServiceConfig } from '../src/config.js';
 import { startAgentService, type RunningAgentService } from '../src/server.js';
+import type { TicketEvidenceReviewService } from '../src/ticket-evidence-review.js';
 
 class NoFactReasoner implements Reasoner {
   async classifyIntent(): Promise<IntentClassification> {
@@ -56,7 +57,11 @@ function config(): AgentServiceConfig {
     ticketBotBaseUrl: undefined,
     ticketBotApiKey: undefined,
     ticketBotTimeoutMs: 10_000,
+    staffModerationBaseUrl: undefined,
+    staffModerationApiKey: undefined,
     staffModerationTimeoutMs: 10_000,
+    policyServerId: undefined,
+    policySourceId: undefined,
     nodeEnv: 'test',
     serviceName: 'agent-service-test',
     serviceVersion: '0.1.0',
@@ -122,12 +127,7 @@ async function start(
       reason: string;
     }>;
   },
-  ticketEvidenceReview?: {
-    review(
-      input: unknown,
-      traceId: string,
-    ): Promise<Record<string, unknown>>;
-  },
+  ticketEvidenceReview?: Pick<TicketEvidenceReviewService, 'review'>,
 ): Promise<string> {
   const registry = new ToolRegistry();
   const orchestrator = new AgentOrchestrator({
