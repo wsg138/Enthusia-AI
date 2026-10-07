@@ -126,9 +126,10 @@ export const ACTION_REQUEST_KINDS: readonly ActionRequestKind[] = [
 export interface TicketEvidenceCapabilities {
   service: 'enthusia-support-bot';
   api: 'ticket-evidence';
-  contractVersion: 'evidence-v1';
-  reads: Array<'attachment.image'>;
+  contractVersion: 'evidence-v2';
+  reads: Array<'attachment.image' | 'attachment.video'>;
   maxImageBytes: number;
+  maxVideoBytes: number;
 }
 
 export interface TicketImageEvidence {
@@ -136,6 +137,16 @@ export interface TicketImageEvidence {
   messageId: string;
   attachmentId: string;
   contentType: string;
+  size: number;
+  sha256: string;
+  bytes: Uint8Array;
+}
+
+export interface TicketVideoEvidence {
+  ticketId: string;
+  messageId: string;
+  attachmentId: string;
+  contentType: 'video/mp4' | 'video/webm' | 'video/quicktime';
   size: number;
   sha256: string;
   bytes: Uint8Array;
