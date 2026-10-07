@@ -16,6 +16,7 @@ surface -> AI Gateway -> agent-service -> AgentOrchestrator
 - `GET /health/live` — process liveness.
 - `GET /health/ready` — local-inference readiness plus tool-registry status.
 - `GET /v1/capabilities` — authenticated list of tools actually registered.
+- `POST /v1/ticket/evidence-review` — authenticated bounded ticket visual-evidence review when the Ticket Bot/policy integration is configured.
 
 ## Local reasoner boundary
 
@@ -76,6 +77,45 @@ Database tools are not falsely registered just because their library contracts
 exist. Player identity still has no general production profile backend here;
 the familiarity surface is the intentionally narrow exception and reads only
 its dedicated W05 memory namespace.
+
+## Ticket visual evidence
+
+Ticket evidence is retrieved only through the authenticated Ticket Bot
+ticket/message/attachment tuple API. The agent never accepts an attachment URL
+from a caller.
+
+Image evidence remains available through the existing bounded image path.
+Video evidence additionally requires Ticket Bot `evidence-v2` and a local
+media decoder on the agent-service host:
+
+- `ffprobe` must be available on `PATH` for metadata inspection;
+- `ffmpeg` must be available on `PATH` for deterministic PNG frame extraction.
+
+Missing or failing decoder binaries do **not** crash the service and do not
+disable screenshot review. That video is recorded as a bounded
+`processing_failed` evidence issue and the review fails closed.
+
+Current source-level video ceilings are:
+
+- producer byte limit: 25 MiB;
+- duration: at most 120 seconds;
+- derived frames: at most 6;
+- decoded dimensions: at most 4096 on either axis and 2560×1440 total pixels;
+- derived PNG frame: at most 8 MiB;
+- total local media-processing wall clock: at most 30 seconds;
+- per-command timeouts: 5 seconds for `ffprobe`, 8 seconds per `ffmpeg`
+  frame extraction;
+- accepted containers/MIME types: MP4, WebM, QuickTime;
+- accepted video codecs: H.264, HEVC, VP8, VP9, AV1.
+
+Frame timestamps are deterministic. The original video SHA-256, sampled frame
+timestamps, frame SHA-256 values, and evidence references are preserved into
+the Ticket Bot escalation audit metadata. Sampling is explicitly recorded as
+a limitation because events between sampled frames may not be visible.
+
+No full video is sent to a model. Only locally derived, provenance-linked PNG
+frames pass through the existing structured image observer. AI output remains
+advisory; EnthusiaStaff/staff retain punishment authority.
 
 ## Service authentication
 
