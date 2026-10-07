@@ -49,6 +49,18 @@ _UNSAFE_ENCOURAGEMENT_RE = re.compile(
     r"(?<!don(?:'|’)t )(?<!do not )\b(?:nah\s+)?(?:go ahead(?: and)?\s+|feel free to\s+)?(?:abuse|exploit)\s+(?:it|this|that)\b",
     re.I,
 )
+_CURRENT_STATE_RE = re.compile(
+    r"\b(?:known bug|being worked on|working on (?:it|this)|"
+    r"aware of (?:it|this)|fix (?:it|this) later|fix this next time|"
+    r"next time i(?:'|’)m on|when i(?:'|’)m home|will be fixed|"
+    r"we are fixing|i can fix this later)\b",
+    re.I,
+)
+_PUNISHMENT_CONTEXT_RE = re.compile(
+    r"\b(?:ban(?:ned|ning)?|mute(?:d|ing)?|unban(?:ned|ning)?|"
+    r"unmute(?:d|ing)?|appeal|punishment|ban evasion|warn(?:ed|ing)?)\b",
+    re.I,
+)
 
 
 @dataclass
@@ -116,6 +128,13 @@ def label_quality(ctx: TicketContext) -> QualityLabel:
     meaningful_staff = _meaningful_staff_messages(ctx)
     if not meaningful_staff:
         return QualityLabel("INCOMPLETE", ("low_signal_staff_response",))
+    meaningful_staff_text = " ".join(meaningful_staff)
+    if (
+        len(meaningful_staff_text) < 12
+        and not ctx.staff_decisions
+        and not ctx.evidence_requests
+    ):
+        return QualityLabel("INCOMPLETE", ("staff_response_too_thin",))
     if _staff_is_only_meta_or_deferral(ctx):
         return QualityLabel("INCOMPLETE", ("staff_only_deferred_or_managed_ticket",))
 
@@ -146,16 +165,20 @@ def label_quality(ctx: TicketContext) -> QualityLabel:
         reasons.append("secret_redacted")
     if ctx.category in ("lost-items", "grief-theft", "bug-report") and not ctx.evidence_requests:
         reasons.append("missing_evidence_request")
-    if ctx.category == "punishment-appeal":
+    if ctx.category == "punishment-appeal" or _PUNISHMENT_CONTEXT_RE.search(text):
         reasons.append("human_decision_like_content")
     if len(ctx.ticket.messages) > 80:
         reasons.append("long_conversation_to_trim")
+    if ctx.staff_decisions:
+        reasons.append("staff_action_claim_requires_context")
+    if any(m.stale_risk == "medium" for m in ctx.marked_claims):
+        reasons.append("volatile_claim_requires_verification")
+    if _CURRENT_STATE_RE.search(staff_text):
+        reasons.append("current_state_claim_requires_verification")
+    if len(meaningful_staff_text) < 40:
+        reasons.append("thin_staff_response")
     if reasons:
         return QualityLabel("USABLE_WITH_EDIT", tuple(reasons))
 
-    # 6. Good: resolved-looking, clean, evidence gathered where expected.
-    if ctx.staff_decisions or "resolved" in staff_text.casefold():
-        reasons.append("staff_decision_present")
-    else:
-        reasons.append("clean_conversation")
-    return QualityLabel("GOOD", tuple(reasons))
+    # 6. Good: substantive, clean, and reusable without action/fact rewriting.
+    return QualityLabel("GOOD", ("clean_conversation",))

@@ -41,8 +41,7 @@ def test_end_to_end_stats():
     assert result.stats["candidates"] == 6
     assert result.stats["rejected"] == 1
     assert result.stats["labels"] == {
-        "GOOD": 1,
-        "USABLE_WITH_EDIT": 2,
+        "USABLE_WITH_EDIT": 3,
         "OUTDATED": 1,
         "INCOMPLETE": 1,
         "BAD_RESPONSE": 1,
@@ -52,7 +51,7 @@ def test_end_to_end_stats():
 def test_expected_labels_per_fixture():
     result = _run()
     by_ticket = {c["ticket_id"]: c for c in result.candidates}
-    assert by_ticket["fx-lost-items-001"]["quality"] == "GOOD"
+    assert by_ticket["fx-lost-items-001"]["quality"] == "USABLE_WITH_EDIT"
     assert by_ticket["fx-ban-appeal-002"]["quality"] == "USABLE_WITH_EDIT"
     assert by_ticket["fx-server-ip-003"]["quality"] == "OUTDATED"
     assert by_ticket["fx-bug-secret-004"]["quality"] == "USABLE_WITH_EDIT"
