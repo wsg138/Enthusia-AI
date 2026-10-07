@@ -1,10 +1,12 @@
 # Data Governance Checkpoint — Historical Ticket Corpus (W18)
 
-**Status:** ⏳ CHECKPOINT — required before any real ticket extraction.
+**Status:** 🟡 OWNER AUTHORIZATION RECORDED — run-specific sign-off is still required before any real content export.
 **Workstream:** W18 — Historical ticket corpus (Enthusia-AI).
 **Applies to:** `training/ticket-corpus/` pipeline and any future real-ticket extraction job.
 **Fixtures only so far:** This workstream has processed SYNTHETIC FIXTURE tickets only.
-**ABSOLUTELY NO real ticket data has been extracted, accessed, or processed.**
+**No real ticket message content has been extracted or processed by W18 yet.**
+
+**Tracking:** `wsg138/Enthusia-AI#65` records Lincoln's 2026-10-06 authorization to use historical Ticket Bot data for Enthusia AI training.
 
 Per MASTER-SPECIFICATION §26.1, §41; TRAINING-AND-EVALUATION-SPEC §2; and
 WORKER-EXECUTION-PLAN §21, real-ticket extraction/training **must not** begin
@@ -18,7 +20,7 @@ until this checkpoint is complete **and** the sign-off block (§9) is filled in.
 |---|---|
 | System | Enthusia Discord guild support tickets — ticket channels created by the server's Ticket Bot integration (see MASTER-SPEC §20, workstream W14) |
 | Data | Ticket channel transcripts: message content, author IDs/usernames, speaker role (player / staff / bot), message timestamps, channel metadata (ticket ID, category, opened/closed timestamps) |
-| Mechanism | Export via the Ticket Bot's transcript capability or the Discord API under the bot's guild authorization. Exact mechanism is confirmed at extraction time — it is NOT assumed by this checkpoint. |
+| Mechanism | Preferred path: read-only export from the Support Bot's structured ticket database (`Ticket`, `TicketMessage`, `TicketStaffAction`, edit/deletion state), then immediate W18 sanitization. Rendered HTML/PDF transcripts are fallback evidence, not the primary extraction source. Support Bot PR #19 implements the bounded exporter. |
 | Scope | Closed support tickets in public support ticket categories only |
 
 **Explicitly out of scope for extraction** — see §5 Exclusions.
@@ -31,8 +33,7 @@ Historical tickets are an **owner-directed planned data source**:
 - MASTER-SPECIFICATION §41 — "The project owner explicitly wants historical tickets included in the training plan."
 - TRAINING-AND-EVALUATION-SPEC §2 — lists "historical real Enthusia support tickets" as a planned source and requires this governance checkpoint first.
 
-Owner direction covers the *plan*. It does **not** pre-authorize a specific
-extraction run. Before the first real extraction:
+On **2026-10-06**, Lincoln explicitly authorized exporting historical Ticket Bot data and using eligible sanitized derivatives for Enthusia AI training. That authorization is recorded in issue #65. It authorizes the workstream and exporter implementation; it does **not** waive the run-specific privacy/scope controls below. Before the first real content extraction:
 
 1. This checkpoint document must be reviewed and approved by the owner.
 2. The owner must confirm the ticket scope (which categories / date range).
@@ -144,6 +145,8 @@ Enforced by the pipeline:
 
 ## 9. Sign-off — required before the first real extraction
 
+Owner workstream authorization: **Lincoln — 2026-10-06 — recorded in issue #65.**
+
 - [ ] Owner has reviewed and approved this checkpoint (name + date):
 - [ ] Ticket scope confirmed (categories, date range):
 - [ ] Retention periods in §4 confirmed or amended:
@@ -151,8 +154,7 @@ Enforced by the pipeline:
 - [ ] Extraction operator authorized (name):
 - [ ] Extraction run recorded (date, scope, dataset version produced):
 
-**Until every box is checked, the only permissible input to
-`training/ticket-corpus/` is synthetic fixture data.**
+**Until every run-specific box is checked, real ticket message content must not be exported into `training/ticket-corpus/`. Metadata-only/count-only validation of the read path is allowed because it does not expose ticket message content.**
 
 ---
 
