@@ -236,6 +236,36 @@ function interfaceEvidence(
   };
 }
 
+function configValueEvidence(
+  root: Record<string, unknown>,
+  result: unknown,
+): CurrentEvidenceValue | undefined {
+  const sourceId = root['sourceId'];
+  const valueKey = root['valueKey'];
+  const value = root['value'];
+  if (typeof sourceId !== 'string' || typeof valueKey !== 'string') {
+    return undefined;
+  }
+  if (
+    value !== null &&
+    typeof value !== 'string' &&
+    typeof value !== 'number' &&
+    typeof value !== 'boolean'
+  ) {
+    return undefined;
+  }
+
+  return {
+    value: boundedText(
+      'source=' + sourceId +
+      '; key=' + valueKey +
+      '; value=' + JSON.stringify(value),
+      3000,
+    ),
+    excerpt: evidenceExcerpt(result),
+  };
+}
+
 function currentEvidenceValue(
   toolName: string,
   result: unknown,
@@ -250,6 +280,8 @@ function currentEvidenceValue(
       return freshnessEvidence(root, result);
     case 'server.current_plugin_interface':
       return interfaceEvidence(root, result);
+    case 'server.current_config_value':
+      return configValueEvidence(root, result);
     default:
       return undefined;
   }
@@ -361,6 +393,24 @@ const DEFINITIONS: readonly LiveToolDefinition[] = [
       params['serverId'] ?? '',
       params['directoryId'] ?? '',
       params['fileName'] ?? '',
+      options,
+    ),
+  },
+  {
+    meta: meta(
+      'server.current_config_value',
+      'Return one explicitly allowlisted scalar from a current approved config source.',
+      {
+        serverId: 'Configured server identity.',
+        sourceId: 'Configured approved-file identity.',
+        valueKey: 'Configured safe-value alias; raw config paths are not accepted.',
+      },
+    ),
+    keys: ['serverId', 'sourceId', 'valueKey'],
+    invoke: (gateway, params, options) => gateway.readApprovedConfigValue(
+      params['serverId'] ?? '',
+      params['sourceId'] ?? '',
+      params['valueKey'] ?? '',
       options,
     ),
   },
