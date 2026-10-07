@@ -360,6 +360,15 @@ async function handleProtectedRoute(
         ...(deps.ticketEvidenceReview !== undefined
           ? { service: deps.ticketEvidenceReview }
           : {}),
+        onFailure: (error, traceId) => {
+          deps.logger.withTraceId(traceId).error(
+            {
+              errorClass:
+                error instanceof Error ? error.constructor.name : typeof error,
+            },
+            'ticket evidence review failed',
+          );
+        },
       });
     } finally {
       state.activeRequests -= 1;
