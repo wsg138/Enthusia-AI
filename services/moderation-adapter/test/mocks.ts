@@ -1,21 +1,16 @@
 /**
- * Mock moderation API fetch (W15 tests).
+ * Mock AI-Moderation-API fetch used by W15 contract/failure-isolation tests.
  *
- * NO real moderation service connection. This mock stands in for the
- * sibling moderation service's HTTP API so the client's request shape,
- * error handling, and the adapter's failure isolation can be tested
- * deterministically.
+ * The fixtures mirror the privacy-safe support-context contract implemented
+ * by AI-Moderation-API Policy v1. No real moderation service is contacted.
  */
 import type { FetchFn } from '../src/types.js';
 
 type MockResponseSpec = {
   status?: number;
   body?: unknown;
-  /** Reject the request instead of resolving (e.g. network down). */
   rejectWith?: string;
-  /** Hang until the request is aborted (tests timeouts). */
   hang?: boolean;
-  /** Assert on the outgoing request; throw to fail the test. */
   assertRequest?: (input: string | URL | Request, init?: RequestInit) => void;
 };
 
@@ -29,7 +24,6 @@ export class MockModerationApi {
     this.defaultHandler = defaultHandler;
   }
 
-  /** Queue one-shot responses, consumed in order. */
   queue(...handlers: MockResponseSpec[]): void {
     this.handlers.push(...handlers);
   }
@@ -42,6 +36,7 @@ export class MockModerationApi {
       } else {
         this.calls.push({ url, init });
       }
+
       const spec = this.handlers.shift() ?? this.defaultHandler;
       spec.assertRequest?.(input, init);
       if (spec.rejectWith !== undefined) {
@@ -51,11 +46,14 @@ export class MockModerationApi {
         const signal = init?.signal as AbortSignal | undefined;
         await new Promise<never>((_, reject) => {
           if (signal?.aborted === true) reject(new DOMException('aborted', 'AbortError'));
-          signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), {
-            once: true,
-          });
+          signal?.addEventListener(
+            'abort',
+            () => reject(new DOMException('aborted', 'AbortError')),
+            { once: true },
+          );
         });
       }
+
       const status = spec.status ?? 200;
       const body = spec.body === undefined ? {} : spec.body;
       return {
@@ -70,34 +68,74 @@ export class MockModerationApi {
 export function healthyApi(): MockModerationApi {
   return new MockModerationApi({
     status: 200,
-    body: { status: 'ok', version: 'mod-1.4.2' },
+    body: readyHealthBody(),
   });
 }
 
+export function readyHealthBody() {
+  return {
+    status: 'ready',
+    ready: true,
+    schema_version: 3,
+    request_queue_depth: 0,
+    request_queue_capacity: 256,
+    request_workers: 4,
+    classifier_ready: true,
+    classifier_mode: 'onnx',
+    local_model_version: 'w12-test',
+    advisory_enabled: false,
+    advisory_queue_depth: 0,
+    advisory_queue_capacity: 256,
+    rehydrated_context_messages: 42,
+    context_ready: true,
+  };
+}
+
+export function notReadyHealthBody() {
+  return {
+    ...readyHealthBody(),
+    status: 'not_ready',
+    ready: false,
+    classifier_ready: false,
+    classifier_mode: 'unavailable',
+  };
+}
+
 export function downApi(): MockModerationApi {
-  return new MockModerationApi({ rejectWith: 'connect ECONNREFUSED 127.0.0.1:8080' });
+  return new MockModerationApi({
+    rejectWith: 'connect ECONNREFUSED 127.0.0.1:8080',
+  });
 }
 
 export function sampleDecisionBody() {
   return {
-    subjectId: 'mod-subject-42',
+    subject_id: 'canonical-player-42',
     decisions: [
       {
-        id: 'dec-1',
-        subjectId: 'mod-subject-42',
-        verdict: 'flagged',
-        categories: ['spam'],
-        summary: 'Repeated identical trade spam in hub chat.',
-        decidedAt: '2026-09-30T12:00:00.000Z',
-        appealed: false,
+        event_id: 'event-1',
+        occurred_at: '2026-09-30T12:00:00.000Z',
+        platform: 'minecraft',
+        semantic_label: 'SEVERE_HARASSMENT',
+        message_action: 'BLOCK',
+        review_priority: 'NORMAL',
+        strike_recommendation: 'STRIKE',
+        containment: 'NONE',
+        support_flow: 'NONE',
+        reason_codes: ['repeated_targeted_harassment'],
+        decision_source: 'AI',
       },
       {
-        id: 'dec-2',
-        subjectId: 'mod-subject-42',
-        verdict: 'clean',
-        categories: [],
-        summary: 'Appealed and cleared by staff.',
-        decidedAt: '2026-09-25T09:00:00.000Z',
+        event_id: 'event-2',
+        occurred_at: '2026-09-25T09:00:00.000Z',
+        platform: 'discord',
+        semantic_label: 'LOW_LEVEL_HARASSMENT',
+        message_action: 'ALLOW',
+        review_priority: 'NONE',
+        strike_recommendation: 'EVIDENCE',
+        containment: 'NONE',
+        support_flow: 'NONE',
+        reason_codes: ['staff_corrected'],
+        decision_source: 'ACCEPTED_CORRECTION',
       },
     ],
   };
