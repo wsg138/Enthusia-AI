@@ -216,6 +216,7 @@ def build_training_plan(
         "model": cfg.base_model,
         "tokenizer": cfg.tokenizer,
         "quantization": cfg.quantization,
+        "lora": dict(cfg.lora),
         "target_modules": _target_modules(cfg),
         "output_dir": out,
         "train": train.summary.as_dict(),
