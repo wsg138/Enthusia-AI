@@ -12,9 +12,11 @@
   "dependencies": {
     "@enthusia/contracts": "^0.1.0",
     "ssh2": "^1.17.0",
-    "zod": "^4.0.0"
+    "zod": "^4.0.0",
+    "js-yaml": "4.3.2"
   },
   "devDependencies": {
-    "@types/ssh2": "^1.15.6"
+    "@types/ssh2": "^1.15.6",
+    "@types/js-yaml": "4.0.9"
   }
 }
