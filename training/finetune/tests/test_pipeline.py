@@ -38,7 +38,15 @@ def test_prepare_runs_local_stages(tmp_path):
     counts = result.dataset["counts"]
     assert counts["train"] + counts["validation"] == 6
     assert result.training["executed"] is False
-    assert "--model_name_or_path" in result.training["command"]
+    assert "python -m enthusia_finetune.trainer" in result.training["command"]
+    assert "--train-json" in result.training["command"]
+    assert "--validation-json" in result.training["command"]
+    assert os.path.isfile(result.training["config_path"])
+    resolved = json.loads(
+        open(result.training["config_path"], encoding="utf-8").read()
+    )
+    assert resolved["dataset"]["train_path"] == result.training["train_path"]
+    assert resolved["dataset"]["validation_path"] == result.training["validation_path"]
     assert result.export["dry_run_plan"]
     # Run record persisted.
     assert os.path.isfile(os.path.join(out_dir, "prepare.json"))
