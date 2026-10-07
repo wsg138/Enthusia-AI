@@ -281,6 +281,42 @@ describe('runTicketEvidencePipeline', () => {
     expect(state.requestAction).not.toHaveBeenCalled();
   });
 
+  it('resolves authoritative moderation state after verified policy concerns exist', async () => {
+    const state = input({
+      moderationState: moderation('unavailable'),
+    });
+    const resolver = vi.fn(async () => moderation('verified'));
+    state.value.moderationStateResolver = resolver;
+
+    const result = await runTicketEvidencePipeline(state.value);
+
+    expect(resolver).toHaveBeenCalledTimes(1);
+    expect(resolver).toHaveBeenCalledWith({
+      target: 'Bad_Player',
+      concerns: [concern()],
+    });
+    expect(result.status).toBe('staff_escalation_submitted');
+    expect(result.review?.moderationState.availability).toBe('verified');
+    expect(state.requestAction).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed when post-policy authoritative moderation resolution fails', async () => {
+    const state = input({
+      moderationState: moderation('unavailable'),
+    });
+    state.value.moderationStateResolver = vi.fn(async () => {
+      throw new Error('private Staff API transport detail');
+    });
+
+    const result = await runTicketEvidencePipeline(state.value);
+
+    expect(result.status).toBe('moderation_state_unavailable');
+    expect(result.review?.disposition).toBe('staff_review');
+    expect(result.review?.moderationState.availability).toBe('unavailable');
+    expect(result.delivery).toBeNull();
+    expect(state.requestAction).not.toHaveBeenCalled();
+  });
+
   it('holds a valid staff review when authoritative moderation state is unavailable', async () => {
     const state = input({
       moderationState: moderation('unavailable'),
@@ -292,6 +328,35 @@ describe('runTicketEvidencePipeline', () => {
     expect(result.review?.disposition).toBe('staff_review');
     expect(result.review?.shouldEscalate).toBe(true);
     expect(result.delivery).toBeNull();
+    expect(state.requestAction).not.toHaveBeenCalled();
+  });
+
+  it('does not require Staff state for a non-escalating policy result', async () => {
+    const state = input({
+      moderationState: moderation('unavailable'),
+    });
+    state.value.policyAssessor = {
+      assess: vi.fn(async () => ({
+        concerns: [],
+        needsMoreContext: false,
+        model: 'qwen-test',
+        usage: {
+          promptTokens: 300,
+          completionTokens: 40,
+          totalTokens: 340,
+        },
+        policyVersion: '2026-10-06.1',
+        policyFileVersion: 'sha256:' + 'a'.repeat(64),
+      })),
+    };
+    const resolver = vi.fn(async () => moderation('verified'));
+    state.value.moderationStateResolver = resolver;
+
+    const result = await runTicketEvidencePipeline(state.value);
+
+    expect(result.status).toBe('no_escalation');
+    expect(result.review?.disposition).toBe('no_escalation');
+    expect(resolver).not.toHaveBeenCalled();
     expect(state.requestAction).not.toHaveBeenCalled();
   });
 

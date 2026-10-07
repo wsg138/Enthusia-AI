@@ -65,3 +65,9 @@ export type {
   TicketEvidencePipelineResult,
   TicketEvidencePipelineStatus,
 } from './pipeline.js';
+
+export {
+  correlateStaffModerationState,
+  unavailableModerationState,
+} from './staff-correlation.js';
+export type { StaffModerationCorrelationInput } from './staff-correlation.js';

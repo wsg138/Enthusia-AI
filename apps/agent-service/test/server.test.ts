@@ -10,6 +10,7 @@ import {
   type ResponseDraft,
 } from '@enthusia/agent-core';
 import {
+  TRACE_ID_HEADER,
   Visibility,
   agentResponseSchema,
   readinessResponseSchema,
@@ -19,9 +20,10 @@ import {
   emptyMetricsSnapshot,
   type InferenceClient,
 } from '@enthusia/inference-adapter';
-import { createLogger } from '@enthusia/logging';
+import { createLogger, type EnthusiaLogger } from '@enthusia/logging';
 import type { AgentServiceConfig } from '../src/config.js';
 import { startAgentService, type RunningAgentService } from '../src/server.js';
+import type { TicketEvidenceReviewService } from '../src/ticket-evidence-review.js';
 
 class NoFactReasoner implements Reasoner {
   async classifyIntent(): Promise<IntentClassification> {
@@ -56,6 +58,11 @@ function config(): AgentServiceConfig {
     ticketBotBaseUrl: undefined,
     ticketBotApiKey: undefined,
     ticketBotTimeoutMs: 10_000,
+    staffModerationBaseUrl: undefined,
+    staffModerationApiKey: undefined,
+    staffModerationTimeoutMs: 10_000,
+    policyServerId: undefined,
+    policySourceId: undefined,
     nodeEnv: 'test',
     serviceName: 'agent-service-test',
     serviceVersion: '0.1.0',
@@ -63,7 +70,7 @@ function config(): AgentServiceConfig {
   };
 }
 
-function silentLogger() {
+function silentLogger(): EnthusiaLogger {
   const sink = new Writable({
     write(_chunk, _encoding, callback) {
       callback();
@@ -74,6 +81,27 @@ function silentLogger() {
     level: 'fatal',
     stream: sink,
   });
+}
+
+function capturedLogger(): {
+  logger: EnthusiaLogger;
+  lines: string[];
+} {
+  const lines: string[] = [];
+  const sink = new Writable({
+    write(chunk, _encoding, callback) {
+      lines.push(String(chunk));
+      callback();
+    },
+  });
+  return {
+    logger: createLogger({
+      name: 'agent-service-test',
+      level: 'error',
+      stream: sink,
+    }),
+    lines,
+  };
 }
 
 function inference(): Pick<InferenceClient, 'getModels' | 'getMetrics'> {
@@ -121,6 +149,8 @@ async function start(
       reason: string;
     }>;
   },
+  ticketEvidenceReview?: Pick<TicketEvidenceReviewService, 'review'>,
+  logger: EnthusiaLogger = silentLogger(),
 ): Promise<string> {
   const registry = new ToolRegistry();
   const orchestrator = new AgentOrchestrator({
@@ -129,13 +159,26 @@ async function start(
   });
   running = await startAgentService({
     config: config(),
-    logger: silentLogger(),
+    logger,
     orchestrator,
     registry,
     inference: inference(),
     ...(staleTicketDecision !== undefined ? { staleTicketDecision } : {}),
+    ...(ticketEvidenceReview !== undefined ? { ticketEvidenceReview } : {}),
   });
   return 'http://127.0.0.1:' + running.port;
+}
+
+function fetchEvidenceReview(
+  baseUrl: string,
+  init: RequestInit,
+): Promise<Response> {
+  const endpoint = new URL('/v1/ticket/evidence-review', baseUrl);
+  if (endpoint.protocol !== 'http:' || endpoint.hostname !== '127.0.0.1') {
+    throw new Error('Evidence-review tests only allow the local loopback server.');
+  }
+  // nosemgrep: Semgrep_rules_lgpl_javascript_ssrf_rule-node-ssrf -- endpoint is verified loopback test infrastructure.
+  return fetch(endpoint, init);
 }
 
 describe('agent service', () => {
@@ -224,6 +267,133 @@ describe('agent service', () => {
       }),
     });
     expect(response.status).toBe(503);
+  });
+
+  it('protects the ticket evidence review endpoint and fails safely when unavailable', async () => {
+    const baseUrl = await start();
+
+    const denied = await fetchEvidenceReview(baseUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ticketId: '42' }),
+    });
+    expect(denied.status).toBe(401);
+
+    const unavailable = await fetchEvidenceReview(baseUrl, {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer agent-key',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ ticketId: '42' }),
+    });
+    expect(unavailable.status).toBe(503);
+    await expect(unavailable.json()).resolves.toMatchObject({
+      error: { code: 'TICKET_EVIDENCE_REVIEW_UNAVAILABLE' },
+    });
+  });
+
+  it('accepts only the bounded ticket id and returns a validated evidence review', async () => {
+    let seenTrace = '';
+    let seenInput: unknown;
+    const baseUrl = await start(undefined, {
+      async review(input, traceId) {
+        seenInput = input;
+        seenTrace = traceId;
+        return {
+          ticketId: '42',
+          status: 'needs_more_evidence',
+          disposition: 'needs_more_evidence',
+          summary: 'More context is needed.',
+          missingEvidence: ['Provide a wider screenshot.'],
+          evidence: {
+            eligibleAttachmentCount: 1,
+            attemptedCount: 1,
+            assessedCount: 1,
+            issueCounts: {},
+          },
+          policy: {
+            version: '2026-10-06.1',
+            fileVersion: 'sha256:' + 'a'.repeat(64),
+            needsMoreContext: true,
+          },
+          moderation: {
+            verified: false,
+            duplicateStatus: 'none',
+          },
+          delivery: null,
+        };
+      },
+    });
+
+    const inboundTrace = '123e4567-e89b-12d3-a456-426614174000';
+    const response = await fetchEvidenceReview(baseUrl, {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer agent-key',
+        'content-type': 'application/json',
+        [TRACE_ID_HEADER]: inboundTrace,
+      },
+      body: JSON.stringify({ ticketId: '42' }),
+    });
+    expect(response.status).toBe(200);
+    expect(seenInput).toEqual({ ticketId: '42' });
+    expect(seenTrace).toBe(inboundTrace);
+    expect(response.headers.get(TRACE_ID_HEADER)).toBe(inboundTrace);
+    await expect(response.json()).resolves.toMatchObject({
+      ticketId: '42',
+      status: 'needs_more_evidence',
+      moderation: { verified: false },
+    });
+
+    const invalid = await fetchEvidenceReview(baseUrl, {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer agent-key',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        ticketId: '42',
+        imageUrl: 'https://example.invalid/evidence.png',
+      }),
+    });
+    expect(invalid.status).toBe(400);
+  });
+
+  it('logs evidence-review failures by trace without exposing internal details', async () => {
+    const captured = capturedLogger();
+    const baseUrl = await start(
+      undefined,
+      {
+        async review() {
+          throw new Error('staff-secret signed-url private-policy-path');
+        },
+      },
+      captured.logger,
+    );
+    const inboundTrace = '123e4567-e89b-12d3-a456-426614174111';
+    const response = await fetchEvidenceReview(baseUrl, {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer agent-key',
+        'content-type': 'application/json',
+        [TRACE_ID_HEADER]: inboundTrace,
+      },
+      body: JSON.stringify({ ticketId: '42' }),
+    });
+    expect(response.status).toBe(503);
+    const body = JSON.stringify(await response.json());
+    expect(body).not.toContain('staff-secret');
+    expect(body).not.toContain('signed-url');
+    expect(body).not.toContain('private-policy-path');
+
+    const logged = captured.lines.join('');
+    expect(logged).toContain(inboundTrace);
+    expect(logged).toContain('ticket evidence review failed');
+    expect(logged).toContain('"errorClass":"Error"');
+    expect(logged).not.toContain('staff-secret');
+    expect(logged).not.toContain('signed-url');
+    expect(logged).not.toContain('private-policy-path');
   });
 
   it('serves a validated stale ticket recommendation', async () => {

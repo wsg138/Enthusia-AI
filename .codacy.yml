@@ -1,0 +1,9 @@
+---
+# Codacy's enabled ESLint8 cloud profile applies legacy ES5/Flow rules to
+# TypeScript (for example es-x/no-modules and Flow annotation requirements).
+# TypeScript remains enforced by this repository's required ESLint 9,
+# TypeScript build/typecheck, tests, and Codacy's non-ESLint analyzers.
+engines:
+  eslint-8:
+    exclude_paths:
+      - "**/*.ts"

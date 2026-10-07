@@ -28,6 +28,11 @@ export const agentServiceConfigSchema = z.object({
   ticketBotBaseUrl: optionalText,
   ticketBotApiKey: optionalText,
   ticketBotTimeoutMs: z.coerce.number().int().positive().max(30_000).default(10_000),
+  staffModerationBaseUrl: optionalText,
+  staffModerationApiKey: optionalText,
+  staffModerationTimeoutMs: z.coerce.number().int().positive().max(30_000).default(10_000),
+  policyServerId: optionalText,
+  policySourceId: optionalText,
 });
 
 export type AgentServiceConfigFields = z.infer<typeof agentServiceConfigSchema>;
@@ -49,6 +54,33 @@ function validateTicketBotPair(fields: AgentServiceConfigFields): void {
   }
 }
 
+function validateEvidenceReviewConfig(fields: AgentServiceConfigFields): void {
+  const values = [
+    fields.staffModerationBaseUrl,
+    fields.staffModerationApiKey,
+    fields.policyServerId,
+    fields.policySourceId,
+  ];
+  const configured = values.filter((value) => value !== undefined).length;
+  if (configured !== 0 && configured !== values.length) {
+    throw new Error(
+      'Ticket evidence review requires Staff moderation URL/key and policy server/source together.',
+    );
+  }
+  if (configured === values.length) {
+    if (fields.ticketBotBaseUrl === undefined || fields.ticketBotApiKey === undefined) {
+      throw new Error(
+        'Ticket evidence review requires the Ticket Bot runtime configuration.',
+      );
+    }
+    if (fields.sftpConfigPath === undefined) {
+      throw new Error(
+        'Ticket evidence review requires ENTHUSIA_AGENT_SFTP_CONFIG_PATH for the live policy source.',
+      );
+    }
+  }
+}
+
 export function loadAgentServiceConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): AgentServiceConfig {
@@ -62,8 +94,14 @@ export function loadAgentServiceConfig(
     ticketBotBaseUrl: env['ENTHUSIA_AGENT_TICKET_BOT_BASE_URL'],
     ticketBotApiKey: env['ENTHUSIA_AGENT_TICKET_BOT_API_KEY'],
     ticketBotTimeoutMs: env['ENTHUSIA_AGENT_TICKET_BOT_TIMEOUT_MS'],
+    staffModerationBaseUrl: env['ENTHUSIA_AGENT_STAFF_MODERATION_BASE_URL'],
+    staffModerationApiKey: env['ENTHUSIA_AGENT_STAFF_MODERATION_API_KEY'],
+    staffModerationTimeoutMs: env['ENTHUSIA_AGENT_STAFF_MODERATION_TIMEOUT_MS'],
+    policyServerId: env['ENTHUSIA_AGENT_POLICY_SERVER_ID'],
+    policySourceId: env['ENTHUSIA_AGENT_POLICY_SOURCE_ID'],
   });
   validateTicketBotPair(fields);
+  validateEvidenceReviewConfig(fields);
 
   if (base.nodeEnv === 'production' && fields.apiKeys.length === 0) {
     throw new Error(
@@ -97,5 +135,11 @@ export function redactedAgentServiceConfig(
     ticketBotConfigured:
       config.ticketBotBaseUrl !== undefined && config.ticketBotApiKey !== undefined,
     ticketBotTimeoutMs: config.ticketBotTimeoutMs,
+    staffModerationConfigured:
+      config.staffModerationBaseUrl !== undefined &&
+      config.staffModerationApiKey !== undefined,
+    staffModerationTimeoutMs: config.staffModerationTimeoutMs,
+    policySourceConfigured:
+      config.policyServerId !== undefined && config.policySourceId !== undefined,
   };
 }
