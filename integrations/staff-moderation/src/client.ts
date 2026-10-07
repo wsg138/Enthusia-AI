@@ -16,10 +16,14 @@ export const STAFF_MODERATION_STATE_PATH = '/v1/ai/moderation-state';
 
 const minecraftUsername = /^[A-Za-z0-9_]{3,16}$/;
 
-const targetSchema = z.strictObject({
+const targetV1Schema = z.strictObject({
   requested: z.string().regex(minecraftUsername),
   playerId: z.string().uuid(),
   username: z.string().regex(minecraftUsername).nullable().optional(),
+});
+
+const targetV2Schema = targetV1Schema.extend({
+  moderationSubjectId: z.string().uuid().nullable().optional(),
 });
 
 const activeSanctionSchema = z.strictObject({
@@ -42,15 +46,27 @@ const caseSchema = z.strictObject({
   configurationVersion: z.string().min(1).max(128),
 });
 
-const stateSchema = z.strictObject({
+const stateV1Schema = z.strictObject({
   service: z.literal('enthusia-staff'),
   api: z.literal('ai-moderation-state'),
   contractVersion: z.literal('v1'),
-  target: targetSchema,
+  target: targetV1Schema,
   activeSanctions: z.array(activeSanctionSchema).max(32),
   recentCases: z.array(caseSchema).max(16),
   fetchedAt: z.iso.datetime(),
 });
+
+const stateV2Schema = z.strictObject({
+  service: z.literal('enthusia-staff'),
+  api: z.literal('ai-moderation-state'),
+  contractVersion: z.literal('v2'),
+  target: targetV2Schema,
+  activeSanctions: z.array(activeSanctionSchema).max(32),
+  recentCases: z.array(caseSchema).max(16),
+  fetchedAt: z.iso.datetime(),
+});
+
+const stateSchema = z.union([stateV1Schema, stateV2Schema]);
 
 export function assertAllowedStaffModerationRequest(
   method: string,
@@ -77,7 +93,7 @@ export class StaffModerationStateClient {
       config.fetchImpl ??
       (globalThis.fetch.bind(globalThis) as typeof fetch);
     this.userAgent =
-      config.userAgent ?? 'enthusia-ai/staff-moderation-read (+v1)';
+      config.userAgent ?? 'enthusia-ai/staff-moderation-read (+v1,+v2)';
   }
 
   async getState(target: string): Promise<StaffModerationStateSnapshot> {
