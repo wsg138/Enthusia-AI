@@ -4,6 +4,7 @@ import type {
 } from '@enthusia/integration-ticket-bot';
 import {
   collectTicketImageAssessments,
+  createDefaultTicketImageAssessmentRunner,
   type TicketImageAssessmentRunner,
   type TicketImageCollectionIssue,
 } from './orchestrator.js';
@@ -51,7 +52,8 @@ export interface CollectTicketVisualAssessmentsInput {
 export async function collectTicketVisualAssessments(
   input: CollectTicketVisualAssessmentsInput,
 ): Promise<TicketVisualCollectionResult> {
-  const video = await collectVideos(input);
+  const assessImage = sharedLazyAssessmentRunner(input.assessImage);
+  const video = await collectVideos(input, assessImage);
   const remainingPolicySlots = Math.max(
     1,
     MAX_POLICY_EVIDENCE_ITEMS - video.assessments.length,
@@ -66,9 +68,7 @@ export async function collectTicketVisualAssessments(
     evidenceClient: input.evidenceClient,
     traceId: input.traceId,
     maxImages: requestedImages,
-    ...(input.assessImage !== undefined
-      ? { assessImage: input.assessImage }
-      : {}),
+    assessImage,
   });
 
   return {
@@ -84,6 +84,7 @@ export async function collectTicketVisualAssessments(
 
 async function collectVideos(
   input: CollectTicketVisualAssessmentsInput,
+  assessImage: TicketImageAssessmentRunner,
 ) {
   const getVideoEvidence = input.evidenceClient.getVideoEvidence;
   if (getVideoEvidence === undefined) {
@@ -102,13 +103,21 @@ async function collectVideos(
     ticket: input.ticket,
     evidenceClient,
     traceId: input.traceId,
-    ...(input.assessImage !== undefined
-      ? { assessImage: input.assessImage }
-      : {}),
+    assessImage,
     ...(input.sampleVideo !== undefined
       ? { sampleVideo: input.sampleVideo }
       : {}),
   });
+}
+
+function sharedLazyAssessmentRunner(
+  injected: TicketImageAssessmentRunner | undefined,
+): TicketImageAssessmentRunner {
+  let runner = injected;
+  return async (request) => {
+    runner ??= createDefaultTicketImageAssessmentRunner();
+    return runner(request);
+  };
 }
 
 function withoutVideoAttachments(
