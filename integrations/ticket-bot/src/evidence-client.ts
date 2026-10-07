@@ -234,7 +234,7 @@ async function readEvidenceResponse(
   const sha256 = evidenceProvenance(response, expected);
   validateDeclaredEvidenceLength(response, maximumBytes);
 
-  const bytes = new Uint8Array(await response.arrayBuffer());
+  const bytes = await readBoundedEvidenceBytes(response, maximumBytes);
   validateEvidenceBytes(bytes, maximumBytes);
   validateEvidenceHash(bytes, sha256);
 
@@ -343,6 +343,55 @@ function validateDeclaredEvidenceLength(
     TICKET_BOT_SERVICE,
     'Ticket evidence response exceeded the advertised size limit.',
   );
+}
+
+async function readBoundedEvidenceBytes(
+  response: Response,
+  maximumBytes: number,
+): Promise<Uint8Array> {
+  if (response.body === null) {
+    throw new ExternalServiceError(
+      TICKET_BOT_SERVICE,
+      'Ticket evidence response did not include a readable body.',
+    );
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value === undefined || value.byteLength === 0) continue;
+
+      total += value.byteLength;
+      if (total > maximumBytes) {
+        await reader.cancel().catch(() => undefined);
+        throw new ExternalServiceError(
+          TICKET_BOT_SERVICE,
+          'Ticket evidence response exceeded the advertised size limit.',
+        );
+      }
+      chunks.push(value);
+    }
+  } catch (error) {
+    if (error instanceof ExternalServiceError) throw error;
+    throw new ExternalServiceError(
+      TICKET_BOT_SERVICE,
+      'Ticket evidence response failed while reading bounded bytes.',
+    );
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
 }
 
 function validateEvidenceBytes(
