@@ -158,6 +158,7 @@ function expectCollectedVideoRecord(
   );
   expect(record.evidenceSha256).toBe(VIDEO_SHA);
   expect(record.video).toMatchObject({
+    ticketId: '42',
     source: 'discord',
     submitterId: 'reporter',
     submitterKind: 'player',
