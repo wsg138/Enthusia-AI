@@ -292,18 +292,20 @@ describe('agent service', () => {
       },
     });
 
+    const inboundTrace = '123e4567-e89b-12d3-a456-426614174000';
     const response = await fetch(baseUrl + '/v1/ticket/evidence-review', {
       method: 'POST',
       headers: {
         authorization: 'Bearer agent-key',
         'content-type': 'application/json',
+        [TRACE_ID_HEADER]: inboundTrace,
       },
       body: JSON.stringify({ ticketId: '42' }),
     });
     expect(response.status).toBe(200);
     expect(seenInput).toEqual({ ticketId: '42' });
-    expect(seenTrace).toMatch(/^[0-9a-f-]{36}$/i);
-    expect(response.headers.get(TRACE_ID_HEADER)).toBe(seenTrace);
+    expect(seenTrace).toBe(inboundTrace);
+    expect(response.headers.get(TRACE_ID_HEADER)).toBe(inboundTrace);
     await expect(response.json()).resolves.toMatchObject({
       ticketId: '42',
       status: 'needs_more_evidence',
