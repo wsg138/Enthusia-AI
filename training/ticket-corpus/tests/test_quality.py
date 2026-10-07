@@ -48,6 +48,61 @@ def test_profanity_is_bad():
     assert label.label == "BAD_RESPONSE"
 
 
+def test_low_signal_staff_reply_is_incomplete():
+    label = label_quality(_ctx(["Can I have the missing tag?"], ["Given!"]))
+    assert label.label == "INCOMPLETE"
+    assert "low_signal_staff_response" in label.reasons
+
+
+def test_ticket_management_only_reply_is_incomplete():
+    label = label_quality(
+        _ctx(
+            ["The bug is still happening."],
+            ["Did you mean to leave the ticket open?"],
+        )
+    )
+    assert label.label == "INCOMPLETE"
+    assert "staff_only_deferred_or_managed_ticket" in label.reasons
+
+
+def test_staff_deferral_only_is_incomplete():
+    label = label_quality(
+        _ctx(
+            ["Can someone help with this?"],
+            ["I'm off for the night; someone will get to this."],
+        )
+    )
+    assert label.label == "INCOMPLETE"
+
+
+def test_encouraging_bug_abuse_is_bad_response():
+    label = label_quality(_ctx(["Can I keep doing this bug?"], ["nah abuse it"]))
+    assert label.label == "BAD_RESPONSE"
+    assert "staff_encourages_abuse_or_exploit" in label.reasons
+
+
+def test_do_not_abuse_is_not_false_positive():
+    label = label_quality(
+        _ctx(
+            ["Can I keep doing this bug?"],
+            ["Do not abuse it. Please stop and send us the reproduction steps."],
+        )
+    )
+    assert label.label != "BAD_RESPONSE"
+
+
+def test_punishment_like_support_ticket_needs_manual_edit():
+    label = label_quality(
+        _ctx(
+            ["Why did my ban become permanent?"],
+            ["Using an alternate account while banned is ban evasion."],
+            category="punishment-appeal",
+        )
+    )
+    assert label.label == "USABLE_WITH_EDIT"
+    assert "human_decision_like_content" in label.reasons
+
+
 def test_high_stale_claim_is_outdated():
     ctx = _ctx(
         ["what is the ip"],
