@@ -6,15 +6,18 @@ import {
 
 const API_KEY = 'a'.repeat(48);
 
-function validPayload() {
+function validPayload(version: 'v1' | 'v2' = 'v1') {
   return {
     service: 'enthusia-staff',
     api: 'ai-moderation-state',
-    contractVersion: 'v1',
+    contractVersion: version,
     target: {
       requested: 'Bad_Player',
       playerId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
       username: 'Bad_Player',
+      ...(version === 'v2'
+        ? { moderationSubjectId: '12345678-1234-4234-8234-123456789abc' }
+        : {}),
     },
     activeSanctions: [
       {
@@ -69,6 +72,42 @@ describe('StaffModerationStateClient', () => {
     expect(calls[0]?.init?.body).toBe('{"target":"Bad_Player"}');
     const headers = calls[0]?.init?.headers as Record<string, string>;
     expect(headers.Authorization).toBe(`Bearer ${API_KEY}`);
+  });
+
+  it('accepts v2 and surfaces only the authoritative moderation subject field', async () => {
+    const client = new StaffModerationStateClient({
+      baseUrl: 'https://moderation-read.example.test',
+      apiKey: API_KEY,
+      fetchImpl: async () =>
+        new Response(JSON.stringify(validPayload('v2')), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    });
+
+    const result = await client.getState('Bad_Player');
+
+    expect(result.contractVersion).toBe('v2');
+    expect(result.target.moderationSubjectId).toBe(
+      '12345678-1234-4234-8234-123456789abc',
+    );
+  });
+
+  it('keeps v1 compatible without inventing a moderation subject', async () => {
+    const client = new StaffModerationStateClient({
+      baseUrl: 'https://moderation-read.example.test',
+      apiKey: API_KEY,
+      fetchImpl: async () =>
+        new Response(JSON.stringify(validPayload('v1')), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    });
+
+    const result = await client.getState('Bad_Player');
+
+    expect(result.contractVersion).toBe('v1');
+    expect(result.target.moderationSubjectId).toBeUndefined();
   });
 
   it('rejects invalid targets before network access', async () => {
