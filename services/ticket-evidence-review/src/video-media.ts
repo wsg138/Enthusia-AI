@@ -131,15 +131,14 @@ async function createSamplingContext(
 }
 
 function resolveSamplingDeps(
-  deps: SampleTicketVideoDeps,
+  {
+    runner = nodeMediaCommandRunner(),
+    now = Date.now,
+    ffprobePath = 'ffprobe',
+    ffmpegPath = 'ffmpeg',
+  }: SampleTicketVideoDeps,
 ): ResolvedSamplingDeps {
-  const now = deps.now ?? Date.now;
-  return {
-    runner: deps.runner ?? nodeMediaCommandRunner(),
-    now,
-    ffprobePath: deps.ffprobePath ?? 'ffprobe',
-    ffmpegPath: deps.ffmpegPath ?? 'ffmpeg',
-  };
+  return { runner, now, ffprobePath, ffmpegPath };
 }
 
 async function samplePreparedVideo(
