@@ -12,6 +12,7 @@ import {
 export interface TicketEvidenceReviewHttpDeps {
   maxBodyBytes: number;
   service?: Pick<TicketEvidenceReviewService, 'review'>;
+  /** Redacted operational failure hook; callers must not log raw error text. */
   onFailure?: (error: unknown, traceId: string) => void;
 }
 
