@@ -1,0 +1,59 @@
+# A100 80 GB bounded smoke — Qwen3 30B-A3B Instruct, 4-bit QLoRA.
+#
+# Purpose: prove the exact production GPU path (model load, QLoRA attachment,
+# prompt-completion masking, one validation pass, adapter save) on a tiny
+# reviewed dataset before any full run.
+#
+# This is intentionally NOT a quality-training run.
+name: a100-qwen3-30b-a3b-ticket-smoke
+description: >
+  Two-step A100 smoke for the first reviewed real-ticket-derived Enthusia AI
+  dataset. Uses the same model and QLoRA target strategy as the production
+  candidate but a short sequence length and only two optimizer steps.
+
+base_model: Qwen/Qwen3-30B-A3B-Instruct-2507
+tokenizer: Qwen/Qwen3-30B-A3B-Instruct-2507
+quantization: 4bit
+
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.0
+  target_modules: [q_proj, k_proj, v_proj, o_proj]
+  target_parameters:
+    - mlp.experts.gate_up_proj
+    - mlp.experts.down_proj
+  rank_pattern:
+    experts.gate_up_proj: 1
+    experts.down_proj: 1
+
+training:
+  learning_rate: 0.00005
+  optimizer: paged_adamw_8bit
+  scheduler: constant
+  warmup_ratio: 0.0
+  batch_size: 1
+  gradient_accumulation: 1
+  max_seq_length: 1024
+  max_steps: 2
+  seed: 1337
+
+dataset:
+  version: enthusia-ai-dataset-2026.10.07-v1
+  train_path: ""
+  validation_path: ""
+
+budget:
+  # Actual A100 rate observed during the 2026-10-07 W25 run was $1.59/hr.
+  # Half an hour is deliberately reserved for model download + two-step smoke.
+  price_per_hour_usd: 1.59
+  estimated_hours: 0.5
+  storage_usd: 0.00
+
+output:
+  adapter_dir: runs/a100-qwen3-ticket-smoke/adapter
+  gguf_path: runs/a100-qwen3-ticket-smoke/enthusia-ai-qwen3-ticket-smoke.Q4_K_M.gguf
+  quant: Q4_K_M
+
+eval:
+  w20_checkout: ""
