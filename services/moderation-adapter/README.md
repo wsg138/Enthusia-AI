@@ -7,7 +7,9 @@ release lineage.
 ## Live cross-repo contract
 
 This package now targets the reviewed Policy-v1 support-enrichment boundary in
-`wsg138/AI-Moderation-API`:
+`wsg138/AI-Moderation-API`, introduced on `main` by commit
+`9e4e83416eb21f4bfa7a8b9a5f646adbda14778a` (service version 0.2.0,
+SQLite schema v3):
 
 - `GET /health/ready` — unauthenticated readiness;
 - `GET /v1/support-context/{subject_id}?limit=N` — authenticated,
