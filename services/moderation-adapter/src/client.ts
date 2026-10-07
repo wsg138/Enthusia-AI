@@ -186,7 +186,7 @@ export class ModerationServiceClient {
       }
       throw new ExternalServiceError(
         'moderation',
-        `API unreachable for ${options.method} ${diagnosticPath}: ${errorMessage(err)}`,
+        `API unreachable for ${options.method} ${diagnosticPath}`,
       );
     } finally {
       clearTimeout(timer);
@@ -358,8 +358,4 @@ function normalizedLimit(value: number | undefined): number {
 
 function nullableFiniteNumber(value: unknown): boolean {
   return value === null || (typeof value === 'number' && Number.isFinite(value));
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
