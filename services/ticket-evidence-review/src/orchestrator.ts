@@ -95,7 +95,7 @@ export function createDefaultTicketImageAssessmentRunner(): TicketImageAssessmen
 
 function boundedMaxImages(value: number | undefined): number {
   if (value === undefined) return MAX_TICKET_IMAGE_ASSESSMENTS;
-  if (!Number.isInteger(value) || value < 1) return 1;
+  if (!Number.isInteger(value) || value <= 0) return 0;
   return Math.min(value, MAX_TICKET_IMAGE_ASSESSMENTS);
 }
 
@@ -118,8 +118,9 @@ function selectImageCandidates(
     }
   }
 
-  const selected = candidates.slice(-maxImages);
-  for (const omitted of candidates.slice(0, Math.max(0, candidates.length - maxImages))) {
+  const selected = maxImages === 0 ? [] : candidates.slice(-maxImages);
+  const omittedCount = candidates.length - selected.length;
+  for (const omitted of candidates.slice(0, omittedCount)) {
     issues.push(issue(omitted.messageId, omitted.attachment.id, 'limit_exceeded'));
   }
   return {
