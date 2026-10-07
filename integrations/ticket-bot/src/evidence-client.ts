@@ -17,7 +17,15 @@ import type {
   TicketVideoEvidence,
 } from './types.js';
 
-const evidenceCapabilitiesSchema = z.strictObject({
+const evidenceCapabilitiesV1Schema = z.strictObject({
+  service: z.literal('enthusia-support-bot'),
+  api: z.literal('ticket-evidence'),
+  contractVersion: z.literal('evidence-v1'),
+  reads: z.array(z.literal('attachment.image')),
+  maxImageBytes: z.number().int().positive().max(8 * 1024 * 1024),
+});
+
+const evidenceCapabilitiesV2Schema = z.strictObject({
   service: z.literal('enthusia-support-bot'),
   api: z.literal('ticket-evidence'),
   contractVersion: z.literal('evidence-v2'),
@@ -25,6 +33,11 @@ const evidenceCapabilitiesSchema = z.strictObject({
   maxImageBytes: z.number().int().positive().max(8 * 1024 * 1024),
   maxVideoBytes: z.number().int().positive().max(25 * 1024 * 1024),
 });
+
+const evidenceCapabilitiesSchema = z.union([
+  evidenceCapabilitiesV1Schema,
+  evidenceCapabilitiesV2Schema,
+]);
 
 const SUPPORTED_VIDEO_TYPES = new Set<TicketVideoEvidence['contentType']>([
   'video/mp4',
@@ -147,7 +160,7 @@ export class TicketEvidenceClient {
     return readVideoEvidenceResponse(
       response,
       { ticketId, messageId, attachmentId },
-      capabilities.maxVideoBytes,
+      videoByteLimit(capabilities),
     );
   }
 
@@ -391,11 +404,29 @@ function requireImageReadCapability(
 function requireVideoReadCapability(
   capabilities: TicketEvidenceCapabilities,
 ): void {
-  if (capabilities.reads.includes('attachment.video')) return;
+  if (
+    capabilities.contractVersion === 'evidence-v2' &&
+    capabilities.reads.includes('attachment.video')
+  ) {
+    return;
+  }
   throw new ExternalServiceError(
     TICKET_BOT_SERVICE,
     'Deployed Ticket Bot does not advertise video evidence reads.',
   );
+}
+
+function videoByteLimit(
+  capabilities: TicketEvidenceCapabilities,
+): number {
+  requireVideoReadCapability(capabilities);
+  if (capabilities.contractVersion !== 'evidence-v2') {
+    throw new ExternalServiceError(
+      TICKET_BOT_SERVICE,
+      'Deployed Ticket Bot video evidence contract is unavailable.',
+    );
+  }
+  return capabilities.maxVideoBytes;
 }
 
 function evidenceTransportError(error: unknown): ExternalServiceError {
