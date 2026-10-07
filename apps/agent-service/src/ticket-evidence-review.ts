@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import {
   TicketBotClient,
-  TicketEvidenceClient,
   activeTicketEscalation,
   ticketReportTarget,
   type ActionRequestResult,
