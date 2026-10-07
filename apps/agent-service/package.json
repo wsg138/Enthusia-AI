@@ -14,9 +14,9 @@
     }
   },
   "scripts": {
-    "build": "npm run build -w @enthusia/contracts -w @enthusia/logging -w @enthusia/config -w @enthusia/inference-adapter -w @enthusia/memory && tsc -p tsconfig.json",
+    "build": "npm run build -w @enthusia/contracts -w @enthusia/logging -w @enthusia/config -w @enthusia/inference-adapter -w @enthusia/integration-staff-moderation -w @enthusia/moderation-adapter -w @enthusia/memory && tsc -p tsconfig.json",
     "start": "node dist/main.js",
-    "typecheck": "npm run build -w @enthusia/contracts -w @enthusia/logging -w @enthusia/config -w @enthusia/inference-adapter -w @enthusia/memory && tsc --noEmit -p tsconfig.typecheck.json"
+    "typecheck": "npm run build -w @enthusia/contracts -w @enthusia/logging -w @enthusia/config -w @enthusia/inference-adapter -w @enthusia/integration-staff-moderation -w @enthusia/moderation-adapter -w @enthusia/memory && tsc --noEmit -p tsconfig.typecheck.json"
   },
   "dependencies": {
     "@enthusia/agent-core": "0.1.0",
