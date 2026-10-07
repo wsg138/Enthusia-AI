@@ -76,7 +76,7 @@ export type VerifiedAnswerPart =
       values: string[];
     };
 
-const COULD_NOT_VERIFY = "I couldn't verify";
+const COULD_NOT_VERIFY = 'I could not verify';
 const SAFE_PREAMBLES = new Set(["Here's what I found."]);
 const SAFE_CLOSINGS = new Set(['Hope that helps.']);
 
