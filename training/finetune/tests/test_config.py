@@ -41,7 +41,7 @@ def _base():
     }
 
 
-@pytest.mark.parametrize("name", ["smoke.yaml", "small-adapter.yaml", "full-run.yaml", "a100-qwen3-30b-a3b.yaml"])
+@pytest.mark.parametrize("name", ["smoke.yaml", "small-adapter.yaml", "full-run.yaml", "a100-qwen3-30b-a3b.yaml", "a100-qwen3-30b-a3b-ticket-smoke.yaml"])
 def test_shipped_configs_validate(name):
     cfg = load_and_validate(os.path.join(CONFIGS, name))
     assert cfg.name
