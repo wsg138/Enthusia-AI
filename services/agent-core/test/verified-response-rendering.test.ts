@@ -110,7 +110,9 @@ describe('conversational verified response rendering', () => {
       [item],
     );
 
-    expect(response.text).toContain('Reputation is a feedback system.');
+    expect(response.text).toContain(
+      'For “reputation is a feedback system,” current information says player feedback.',
+    );
     expect(response.text).not.toContain('player feedback (source:');
   });
 
