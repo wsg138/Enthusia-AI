@@ -1,0 +1,13 @@
+---
+# Codacy's cloud ESLint profiles currently apply legacy ES5/Flow rules to this
+# TypeScript-only runtime composition file, producing false positives such as
+# "ES2015 modules are forbidden" and "Type imports require valid Flow declaration".
+# The file remains fully covered by this repository's required ESLint 9,
+# TypeScript build/typecheck, tests, and the rest of Codacy's enabled analyzers.
+engines:
+  eslint-8:
+    exclude_paths:
+      - "apps/agent-service/src/ticket-evidence-review.ts"
+  eslint-9:
+    exclude_paths:
+      - "apps/agent-service/src/ticket-evidence-review.ts"
