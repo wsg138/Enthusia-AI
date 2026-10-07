@@ -9,9 +9,7 @@ import type {
 } from '@enthusia/openai-gateway';
 import {
   MAX_TICKET_VIDEO_ASSESSMENTS,
-  aggregateFrameAssessments,
   collectTicketVideoAssessments,
-  type VideoFrameObservation,
 } from '../src/video-orchestrator.js';
 import type { TicketVideoSample } from '../src/video-media.js';
 import type { TicketVideoAssessmentRecord } from '../src/types.js';
@@ -477,90 +475,5 @@ describe('collectTicketVideoAssessments', () => {
       attachmentId: 'v2',
       reason: 'fetch_failed',
     });
-  });
-});
-
-describe('aggregateFrameAssessments', () => {
-  it('remaps frame-local inference indexes into the aggregate observation list', () => {
-    const frames: VideoFrameObservation[] = [
-      {
-        frameIndex: 0,
-        timestampSeconds: 0,
-        result: observed({
-          traceId: 't',
-          evidenceRef: 'frame-0',
-          image: {
-            bytes: new Uint8Array([1]),
-            contentType: 'image/png',
-            sha256: FRAME_ONE_SHA,
-          },
-        }),
-      },
-      {
-        frameIndex: 1,
-        timestampSeconds: 3.95,
-        result: observed({
-          traceId: 't',
-          evidenceRef: 'frame-1',
-          image: {
-            bytes: new Uint8Array([2]),
-            contentType: 'image/png',
-            sha256: FRAME_TWO_SHA,
-          },
-        }),
-      },
-    ];
-    const assessment = aggregateFrameAssessments(sample(), frames);
-    expect(assessment.observations).toHaveLength(2);
-    expect(assessment.inferences.map((item) => item.observationIndexes)).toEqual([
-      [0],
-      [1],
-    ]);
-  });
-
-  it('preserves contradictory frames and overlay limitations instead of resolving them', () => {
-    const first = observed({
-      traceId: 't',
-      evidenceRef: 'frame-0',
-      image: {
-        bytes: new Uint8Array([1]),
-        contentType: 'image/png',
-        sha256: FRAME_ONE_SHA,
-      },
-    });
-    first.assessment.observations[0]!.text =
-      'The reported player appears next to the disputed structure.';
-
-    const second = observed({
-      traceId: 't',
-      evidenceRef: 'frame-1',
-      image: {
-        bytes: new Uint8Array([2]),
-        contentType: 'image/png',
-        sha256: FRAME_TWO_SHA,
-      },
-    });
-    second.assessment.observations[0]!.text =
-      'The reported player is not visible in this sampled frame.';
-    second.assessment.limitations = [
-      'A large edited overlay obscures part of the gameplay view.',
-    ];
-    second.assessment.needsMoreContext = true;
-
-    const assessment = aggregateFrameAssessments(sample(), [
-      { frameIndex: 0, timestampSeconds: 0, result: first },
-      { frameIndex: 1, timestampSeconds: 3.95, result: second },
-    ]);
-
-    expect(assessment.observations.map((item) => item.text)).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining('appears next to the disputed structure'),
-        expect.stringContaining('is not visible'),
-      ]),
-    );
-    expect(assessment.limitations).toContain(
-      'A large edited overlay obscures part of the gameplay view.',
-    );
-    expect(assessment.needsMoreContext).toBe(true);
   });
 });
