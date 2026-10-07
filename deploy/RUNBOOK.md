@@ -20,6 +20,12 @@ Before any start/restart/deploy of AI services:
 - [ ] Secrets are present in the panel/systemd env (never in the repo, §34.1).
 - [ ] Resource bounds match `deploy/RESOURCE-LIMITS.md` (panel allocation or systemd unit).
 - [ ] Previous known-good artifact + config are retained for rollback (§2).
+- [ ] If ticket **video** evidence is being enabled, the Ticket Bot has already
+      deployed the `ticket-evidence evidence-v2` contract and the agent runtime
+      provides both `ffprobe` and `ffmpeg`. Verify with
+      `ffprobe -version` and `ffmpeg -version`. Missing media tools do not
+      block agent startup; video evidence fails closed and screenshot evidence
+      remains available.
 
 ---
 
