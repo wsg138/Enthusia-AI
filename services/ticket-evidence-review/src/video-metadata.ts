@@ -4,7 +4,7 @@ import {
   MAX_VIDEO_DURATION_SECONDS,
   MAX_VIDEO_PIXELS,
   TicketVideoProcessingError,
-} from './video-media.js';
+} from './video-constraints.js';
 
 const SUPPORTED_CODECS = new Set([
   'h264',
