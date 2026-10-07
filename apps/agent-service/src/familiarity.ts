@@ -12,6 +12,7 @@ import {
 } from '@enthusia/player-identity';
 import type { Tool } from '@enthusia/agent-core';
 import type { VerifiedTopicHelpEvent } from '@enthusia/agent-core';
+import { PublicCurrentMemoryTool } from './current-memory.js';
 
 const MEMORY_NAMESPACE = 'player';
 const MEMORY_KEY_PREFIX = 'topic_familiarity.';
@@ -105,9 +106,10 @@ export function loadConfiguredFamiliarityRuntime(
   const provider = new MemoryTopicFamiliarityProvider(memory);
   const recorder = new VerifiedHelpFamiliarityRecorder(memory);
   const tool = new TopicFamiliarityTool(provider) as Tool;
+  const currentMemory = new PublicCurrentMemoryTool(memory) as Tool;
 
   return {
-    tools: [tool],
+    tools: [tool, currentMemory],
     onVerifiedTopicHelp: (event) => recorder.record(event),
     close: () => memory.close(),
   };
