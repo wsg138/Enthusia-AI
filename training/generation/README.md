@@ -32,6 +32,18 @@ training/generation/
 └── pyproject.toml
 ```
 
+## Production-training boundary
+
+The checked-in `corpus/w17-sample-corpus.jsonl` is a **sample/fixture
+artifact**, not an approved production tuning corpus. Its facts are purposely
+plausible fixture data so the generation and evaluation machinery can be
+tested deterministically without depending on live server state.
+
+Do not relabel or feed this sample directly into a production fine-tune.
+Production synthetic examples must be regenerated from current authoritative
+Enthusia sources and pass the normal review/admission gates. W19 independently
+blocks this fixture generator from production train/validation.
+
 ## Key rules
 
 - **No real Enthusia data.** All facts come from `fixtures/sources.json`,
