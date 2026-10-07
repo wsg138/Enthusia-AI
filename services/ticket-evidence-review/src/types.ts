@@ -34,6 +34,10 @@ export interface TicketVideoFrameProvenance {
 export interface TicketVideoAssessmentRecord extends TicketImageAssessmentRecord {
   mediaKind: 'video';
   video: {
+    source: 'discord';
+    submitterId: string;
+    submitterKind: 'player' | 'staff' | 'system';
+    submittedAt: string;
     contentType: 'video/mp4' | 'video/webm' | 'video/quicktime';
     durationSeconds: number;
     width: number;
