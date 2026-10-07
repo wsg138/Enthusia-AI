@@ -132,5 +132,12 @@ export {
   resolveResponseStyle,
 } from './response-style.js';
 export type { ResponseStyleDeps } from './response-style.js';
-export { assembleResponse } from './response.js';
-export type { AssembleArgs } from './response.js';
+export {
+  assembleResponse,
+  buildVerifiedAnswerParts,
+} from './response.js';
+export type {
+  AnswerDisclosure,
+  AssembleArgs,
+  VerifiedAnswerPart,
+} from './response.js';
