@@ -17,6 +17,10 @@ import {
   type TicketImageAssessmentRunner,
 } from './orchestrator.js';
 import {
+  MAX_VIDEO_DIMENSION,
+  MAX_VIDEO_DURATION_SECONDS,
+  MAX_VIDEO_FRAMES,
+  MAX_VIDEO_PIXELS,
   sampleTicketVideo,
   type SampleTicketVideoDeps,
   type TicketVideoSample,
@@ -87,11 +91,11 @@ export async function collectTicketVideoAssessments(
   const selection = selectVideoCandidates(input.ticket, maximum);
   const assessments: TicketVideoAssessmentRecord[] = [];
   const issues = [...selection.issues];
-  const runner =
-    input.assessImage ?? createDefaultTicketImageAssessmentRunner();
+  let runner = input.assessImage;
   const sampler = input.sampleVideo ?? sampleTicketVideo;
 
   for (const candidate of selection.selected) {
+    runner ??= createDefaultTicketImageAssessmentRunner();
     const outcome = await assessVideoCandidate(
       input,
       candidate,
@@ -399,6 +403,23 @@ function validateSampleProvenance(
   if (sample.videoSha256.toLowerCase() !== evidence.sha256.toLowerCase()) {
     throw new Error('sampled video provenance mismatch');
   }
+  if (
+    !Number.isFinite(sample.metadata.durationSeconds) ||
+    sample.metadata.durationSeconds <= 0 ||
+    sample.metadata.durationSeconds > MAX_VIDEO_DURATION_SECONDS ||
+    !Number.isInteger(sample.metadata.width) ||
+    !Number.isInteger(sample.metadata.height) ||
+    sample.metadata.width < 1 ||
+    sample.metadata.height < 1 ||
+    sample.metadata.width > MAX_VIDEO_DIMENSION ||
+    sample.metadata.height > MAX_VIDEO_DIMENSION ||
+    sample.metadata.width * sample.metadata.height > MAX_VIDEO_PIXELS ||
+    sample.frames.length < 1 ||
+    sample.frames.length > MAX_VIDEO_FRAMES
+  ) {
+    throw new Error('sampled video metadata is outside bounded limits');
+  }
+
   const indexes = new Set<number>();
   for (const frame of sample.frames) {
     if (
@@ -407,6 +428,7 @@ function validateSampleProvenance(
       frame.index < 0 ||
       !Number.isFinite(frame.timestampSeconds) ||
       frame.timestampSeconds < 0 ||
+      frame.timestampSeconds > sample.metadata.durationSeconds ||
       !/^[a-f0-9]{64}$/.test(frame.sha256.toLowerCase())
     ) {
       throw new Error('sampled frame provenance is invalid');
