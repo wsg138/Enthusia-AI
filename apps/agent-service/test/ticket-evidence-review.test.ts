@@ -171,6 +171,7 @@ function imageRunner() {
 function service(overrides: {
   ticket?: TicketContextBundle;
   moderation?: StaffModerationStateSnapshot | Error;
+  inference?: Pick<InferenceClient, 'complete'>;
 } = {}) {
   const requestAction = vi.fn(async (ticketId: string) => ({
     requestId: 'ar-1',
@@ -205,7 +206,7 @@ function service(overrides: {
     },
     policyReader: policyReader(),
     moderationClient: { getState },
-    inference: fakeInference(),
+    inference: overrides.inference ?? fakeInference(),
     assessImage: imageRunner(),
   });
   return { reviewService, requestAction, getState, getTicketContext };
@@ -298,6 +299,40 @@ describe('TicketEvidenceReviewService', () => {
 
     expect(result.status).toBe('needs_target');
     expect(result.disposition).toBe('needs_more_evidence');
+    expect(state.getState).not.toHaveBeenCalled();
+    expect(state.requestAction).not.toHaveBeenCalled();
+  });
+
+  it('does not query Staff state when verified policy finds no concern', async () => {
+    const state = service({
+      inference: {
+        async complete() {
+          return {
+            content: JSON.stringify({
+              concerns: [],
+              needsMoreContext: false,
+            }),
+            model: 'qwen-test',
+            finishReason: 'stop',
+            usage: {
+              promptTokens: 200,
+              completionTokens: 20,
+              totalTokens: 220,
+            },
+            latencyMs: 10,
+            attempts: 1,
+          };
+        },
+      } as Pick<InferenceClient, 'complete'>,
+    });
+
+    const result = await state.reviewService.review(
+      { ticketId: '42' },
+      'trace-benign',
+    );
+
+    expect(result.status).toBe('no_escalation');
+    expect(result.disposition).toBe('no_escalation');
     expect(state.getState).not.toHaveBeenCalled();
     expect(state.requestAction).not.toHaveBeenCalled();
   });
