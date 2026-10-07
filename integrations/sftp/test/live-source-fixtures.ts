@@ -142,6 +142,20 @@ function approvedFiles(root: string) {
       kind: 'server-properties' as const,
       format: 'properties' as const,
       visibility: Visibility.STAFF,
+      safeValues: [
+        { id: 'motd', path: ['motd'] },
+        { id: 'rcon-password-test', path: ['rcon.password'] },
+      ],
+    },
+    {
+      id: 'example-config',
+      path: root + '/plugins/ExamplePlugin/config.yml',
+      kind: 'config' as const,
+      format: 'yaml' as const,
+      visibility: Visibility.STAFF,
+      safeValues: [
+        { id: 'feature-enabled', path: ['feature'] },
+      ],
     },
     {
       id: 'deployment',
