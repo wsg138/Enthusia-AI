@@ -104,6 +104,19 @@ Test fixtures in `fixtures/` (W17-style synthetic + W18-style ticket
 records, 17 records) exercise every filter, the dedupe path, leak-group
 integrity, and special-partition routing.
 
+## Fixture/sample corpus policy
+
+The checked-in W17 `w17-sample-corpus.jsonl` is a deterministic pipeline
+fixture built from **plausible synthetic facts**, not authoritative Enthusia
+production truth. It is useful for generator, schema, dedupe, and evaluation
+tests, but it is **not a production fine-tuning source**.
+
+W19 therefore fails closed on records whose generator is
+`enthusia-generation-v0.1.0`, even if such a record is later stamped
+`GOOD` or `IDEAL`. Production synthetic training data must be regenerated
+from current authoritative Enthusia sources under a separate approved
+generator/version rather than relabeling the fixture sample.
+
 ## Training configs
 
 `configs/` — one YAML per run stage (spec §18 hyperparameter tracking:
