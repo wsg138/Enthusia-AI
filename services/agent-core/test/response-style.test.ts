@@ -244,7 +244,7 @@ describe('adaptive verified response depth', () => {
     const response = render(style('NEW'));
     expect(response.text).toContain('reputation is a feedback system');
     expect(response.text).toContain('reputation has named reasons');
-    expect(response.text).toContain('Good Stall meaning');
+    expect(response.text).toContain('Good Stall means positive stall-related feedback.');
     expect(response.sources).toHaveLength(3);
   });
 
@@ -253,7 +253,7 @@ describe('adaptive verified response depth', () => {
       const response = render(style(level));
       expect(response.text).not.toContain('reputation is a feedback system');
       expect(response.text).not.toContain('reputation has named reasons');
-      expect(response.text).toContain('Good Stall meaning');
+      expect(response.text).toContain('Good Stall means positive stall-related feedback.');
       expect(response.sources).toHaveLength(1);
       expect(response.sources[0]?.description).toContain('Good Stall meaning');
     }
@@ -263,7 +263,7 @@ describe('adaptive verified response depth', () => {
     const response = render(style('UNKNOWN'));
     expect(response.text).toContain('reputation is a feedback system');
     expect(response.text).not.toContain('reputation has named reasons');
-    expect(response.text).toContain('Good Stall meaning');
+    expect(response.text).toContain('Good Stall means positive stall-related feedback.');
     expect(response.sources).toHaveLength(2);
   });
 });
@@ -381,7 +381,7 @@ describe('AgentOrchestrator adaptive familiarity integration', () => {
 
     expect(familiarity.callCount).toBe(1);
     expect(response.text).not.toContain('reputation is a feedback system');
-    expect(response.text).toContain('Good Stall meaning');
+    expect(response.text).toContain('Good Stall means positive stall-related feedback.');
     expect(reasoner.draftArgs[0]?.responseStyle).toMatchObject({
       topic: 'reputation',
       familiarity: 'FAMILIAR',

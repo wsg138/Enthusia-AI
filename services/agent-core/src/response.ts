@@ -7,17 +7,18 @@
  * The assembler is deterministic and policy-enforcing:
  * - every factual sentence comes from an orchestrator-computed
  *   {@link ClaimAssessment}, never from model output;
- * - supported claims are asserted with their source;
- * - unsupported claims say "could not verify" — the answer never guesses;
- * - contradicted claims surface the uncertainty and note the escalation;
- * - only evidence disclosable under the request's visibility ceiling is
- *   cited (§17); SECRET_DENY is never disclosable, and PLAYER_SELF evidence
- *   additionally requires staff (or subject) standing.
+ * - supported claims become bounded, conversational answer parts;
+ * - unsupported claims say they could not be verified — the answer never guesses;
+ * - contradicted claims surface the conflicting disclosable values without
+ *   leaking backend source labels;
+ * - source provenance remains structural in AgentResponse.sources rather than
+ *   being printed as internal diagnostics in player-facing prose;
+ * - only evidence disclosable under the request's visibility ceiling may
+ *   contribute to rendered content (§17); SECRET_DENY is never disclosable.
  *
- * The reasoner's draft contributes conversational framing (greeting,
- * sign-off) only. Factual content is assembled here so tests are
- * deterministic and the "no evidence → could not verify" policy cannot be
- * bypassed by model wording.
+ * Model-produced ResponseDraft text is treated as untrusted framing. Only a
+ * tiny allowlist of non-factual social phrases may survive. Factual content is
+ * assembled here so prompt wording cannot bypass verification.
  */
 import { canDisclose, Visibility } from '@enthusia/contracts';
 import type {
@@ -54,7 +55,30 @@ export interface AssembleArgs {
   notes?: string[];
 }
 
+/**
+ * Bounded factual representation used by the player-facing renderer.
+ * Every value here comes from deterministic verification, never free-form
+ * model prose.
+ */
+export type VerifiedAnswerPart =
+  | {
+      kind: 'supported';
+      claim: string;
+      value: string;
+    }
+  | {
+      kind: 'unsupported';
+      claim: string;
+    }
+  | {
+      kind: 'contradicted';
+      claim: string;
+      values: string[];
+    };
+
 const COULD_NOT_VERIFY = 'I could not verify';
+const SAFE_PREAMBLES = new Set(["Here's what I found."]);
+const SAFE_CLOSINGS = new Set(['Hope that helps.']);
 
 /**
  * Assemble the final {@link AgentResponse} from verified claim assessments.
@@ -71,18 +95,22 @@ export function assembleResponse(args: AssembleArgs): AgentResponse {
   );
 
   const lines: string[] = [];
-  if (draft.preamble && draft.preamble.trim().length > 0) {
-    lines.push(draft.preamble.trim());
+  const preamble = safeFraming(draft.preamble, SAFE_PREAMBLES);
+  if (preamble !== undefined) {
+    lines.push(preamble);
   }
 
-  if (visibleAssessments.length === 0) {
+  const answerParts = buildVerifiedAnswerParts(
+    visibleAssessments,
+    ceiling,
+    disclosure,
+  );
+  if (answerParts.length === 0) {
     lines.push(
-      `${COULD_NOT_VERIFY} an answer: no checkable claims were identified for this request.`,
+      `${COULD_NOT_VERIFY} an answer because there weren't any checkable claims to verify.`,
     );
-  }
-
-  for (const assessment of visibleAssessments) {
-    lines.push(claimLine(assessment, ceiling, disclosure));
+  } else {
+    lines.push(...answerParts.map(renderAnswerPart));
   }
 
   if (escalation) {
@@ -91,11 +119,12 @@ export function assembleResponse(args: AssembleArgs): AgentResponse {
 
   const surfacedNotes = (args.notes ?? []).filter((n) => n.trim().length > 0);
   if (surfacedNotes.length > 0) {
-    lines.push(`Note: ${surfacedNotes[0] as string}`);
+    lines.push(`One limitation: ${ensureSentence(surfacedNotes[0] as string)}`);
   }
 
-  if (draft.closing && draft.closing.trim().length > 0) {
-    lines.push(draft.closing.trim());
+  const closing = safeFraming(draft.closing, SAFE_CLOSINGS);
+  if (closing !== undefined) {
+    lines.push(closing);
   }
 
   const visibleClaims = new Set(visibleAssessments.map((assessment) => assessment.claim));
@@ -111,7 +140,7 @@ export function assembleResponse(args: AssembleArgs): AgentResponse {
   };
 }
 
-interface DisclosureOpts {
+export interface AnswerDisclosure {
   isSubject: boolean;
   isStaff: boolean;
 }
@@ -121,7 +150,7 @@ interface DisclosureOpts {
  * PLAYER_SELF evidence; anyone else may not (the orchestrator cannot prove
  * subject identity here — W11 owns that — so isSubject stays false).
  */
-function disclosureOpts(actor: Actor): DisclosureOpts {
+function disclosureOpts(actor: Actor): AnswerDisclosure {
   return {
     isSubject: false,
     isStaff: actor.type === 'staff',
@@ -185,36 +214,196 @@ function fallbackIfEmpty(
   return selected.length === 0 ? fallback : selected;
 }
 
-/** One factual line per claim — the policy made visible. */
-function claimLine(
-  assessment: ClaimAssessment,
+/**
+ * Convert verified assessments into a bounded factual answer plan.
+ *
+ * A nominally supported assessment is downgraded to unsupported when no
+ * supporting evidence is actually disclosable at this boundary. This makes
+ * the exported assembler fail closed even when called outside the normal
+ * orchestrator path.
+ */
+export function buildVerifiedAnswerParts(
+  assessments: ClaimAssessment[],
   ceiling: Visibility,
-  disclosure: DisclosureOpts,
-): string {
-  switch (assessment.verdict) {
-    case 'supported': {
-      const citable = assessment.supporting.filter((e) =>
-        canDisclose(e.visibility, ceiling, disclosure),
+  disclosure: AnswerDisclosure,
+): VerifiedAnswerPart[] {
+  return assessments.map((assessment) => {
+    if (assessment.verdict === 'supported') {
+      const hasDisclosableSupport = assessment.supporting.some((item) =>
+        canDisclose(item.visibility, ceiling, disclosure),
       );
-      const sourceNote =
-        citable.length > 0
-          ? ` (source: ${(citable[0] as EvidenceItem).source})`
-          : '';
-      return `${assessment.claim}: ${assessment.assertedValue ?? '(no value)'}${sourceNote}`;
+      const value = assessment.assertedValue?.trim();
+      if (hasDisclosableSupport && value) {
+        return {
+          kind: 'supported',
+          claim: assessment.claim,
+          value,
+        };
+      }
+      return { kind: 'unsupported', claim: assessment.claim };
     }
+
+    if (assessment.verdict === 'unsupported') {
+      return { kind: 'unsupported', claim: assessment.claim };
+    }
+
+    const values = unique(
+      assessment.contradicting
+        .filter((item) => canDisclose(item.visibility, ceiling, disclosure))
+        .map((item) => item.value.trim())
+        .filter(Boolean),
+    );
+    return {
+      kind: 'contradicted',
+      claim: assessment.claim,
+      values,
+    };
+  });
+}
+
+function renderAnswerPart(part: VerifiedAnswerPart): string {
+  switch (part.kind) {
+    case 'supported':
+      return renderSupportedFact(part.claim, part.value);
     case 'unsupported':
-      return `${COULD_NOT_VERIFY} ${assessment.claim}: no current evidence was found.`;
+      return `${COULD_NOT_VERIFY} ${naturalClaim(part.claim)} from current sources.`;
     case 'contradicted': {
-      const parts = assessment.contradicting
-        .filter((e) => canDisclose(e.visibility, ceiling, disclosure))
-        .map((e) => `${e.source} says "${e.value}"`);
-      const detail = parts.length > 0 ? `: ${parts.join('; ')}` : '.';
+      const subject = naturalClaim(part.claim);
+      if (part.values.length === 0) {
+        return (
+          `I found conflicting current information about ${subject}, so I'm not ` +
+          'going to guess which answer is right.'
+        );
+      }
       return (
-        `I found conflicting evidence about ${assessment.claim}${detail} ` +
-        `I've flagged this for staff review rather than guessing.`
+        `I found conflicting current information about ${subject}: ` +
+        `${part.values.join(' versus ')}. I'm not going to guess which one is current.`
       );
     }
   }
+}
+
+const PROPOSITION_WORDS = new Set([
+  'is',
+  'are',
+  'was',
+  'were',
+  'has',
+  'have',
+  'can',
+  'cannot',
+  'will',
+  'should',
+  'use',
+  'uses',
+  'allow',
+  'allows',
+  'require',
+  'requires',
+]);
+
+const LEADING_DETERMINERS = [
+  'the ',
+  'your ',
+  'my ',
+  'this ',
+  'that ',
+  'these ',
+  'those ',
+] as const;
+
+function renderSupportedFact(claim: string, value: string): string {
+  const cleanClaim = trimSentencePunctuation(claim);
+  const cleanValue = trimSentencePunctuation(value);
+  const meaning = meaningSubject(cleanClaim);
+  if (meaning !== undefined) {
+    return `${meaning} means ${cleanValue}.`;
+  }
+
+  if (looksLikeCompleteSentence(value)) {
+    return ensureSentence(value);
+  }
+
+  if (looksLikeProposition(cleanClaim)) {
+    return `For “${cleanClaim},” current information says ${cleanValue}.`;
+  }
+
+  const lowerClaim = cleanClaim.toLowerCase();
+  const hasDeterminer = LEADING_DETERMINERS.some((prefix) =>
+    lowerClaim.startsWith(prefix),
+  );
+  return `${hasDeterminer ? '' : 'The '}${cleanClaim} is ${cleanValue}.`;
+}
+
+function naturalClaim(claim: string): string {
+  const clean = trimSentencePunctuation(claim);
+  const meaning = meaningSubject(clean);
+  return meaning === undefined ? clean : `what ${meaning} means`;
+}
+
+function meaningSubject(claim: string): string | undefined {
+  const suffix = ' meaning';
+  if (!claim.toLowerCase().endsWith(suffix)) return undefined;
+  const subject = claim.slice(0, -suffix.length).trim();
+  return subject.length === 0 ? undefined : subject;
+}
+
+function words(value: string): string[] {
+  return value
+    .toLowerCase()
+    .split(' ')
+    .map((word) => trimSentencePunctuation(word))
+    .filter(Boolean);
+}
+
+function looksLikeCompleteSentence(value: string): boolean {
+  const clean = value.trim();
+  if (endsSentence(clean)) return true;
+  const tokens = words(clean);
+  return (
+    tokens.length >= 4 &&
+    tokens.some((word) => PROPOSITION_WORDS.has(word))
+  );
+}
+
+function looksLikeProposition(claim: string): boolean {
+  return words(claim).some((word) => PROPOSITION_WORDS.has(word));
+}
+
+function trimSentencePunctuation(value: string): string {
+  let end = value.trim().length;
+  const trimmed = value.trim();
+  while (end > 0 && isSentencePunctuation(trimmed[end - 1] as string)) {
+    end -= 1;
+  }
+  return trimmed.slice(0, end);
+}
+
+function isSentencePunctuation(value: string): boolean {
+  return value === '.' || value === '!' || value === '?';
+}
+
+function endsSentence(value: string): boolean {
+  if (value.length === 0) return false;
+  return isSentencePunctuation(value[value.length - 1] as string);
+}
+
+function ensureSentence(value: string): string {
+  const clean = value.trim();
+  if (clean.length === 0) return clean;
+  return endsSentence(clean) ? clean : `${clean}.`;
+}
+
+function unique(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+function safeFraming(
+  value: string | undefined,
+  allowlist: ReadonlySet<string>,
+): string | undefined {
+  const clean = value?.trim();
+  return clean !== undefined && allowlist.has(clean) ? clean : undefined;
 }
 
 function escalationLine(escalation: EscalationDecision): string {
@@ -232,7 +421,7 @@ function escalationLine(escalation: EscalationDecision): string {
 function buildCitations(
   evidence: EvidenceItem[],
   ceiling: Visibility,
-  disclosure: DisclosureOpts,
+  disclosure: AnswerDisclosure,
   allowedClaims?: ReadonlySet<string>,
 ): ResponseSource[] {
   const seen = new Set<string>();
