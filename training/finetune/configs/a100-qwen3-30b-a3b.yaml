@@ -1,0 +1,61 @@
+# A100 80 GB candidate — Qwen3 30B-A3B Instruct, 4-bit QLoRA.
+#
+# This is the leading candidate from the Enthusia AI model strategy. Qwen3-MoE
+# stores its routed expert weights as fused parameters, so the attention
+# projections use normal target_modules while the experts use PEFT
+# target_parameters with rank 1 per expert. This keeps the expert adapter
+# budget bounded instead of applying rank 16 independently to all 128 experts.
+#
+# Budget values remain an estimate. Replace price_per_hour_usd with the actual
+# current rental rate before a paid run; the W19 budget gate still applies.
+name: a100-qwen3-30b-a3b
+description: >
+  Initial production-candidate QLoRA run for Enthusia AI on a single A100 80 GB.
+  Uses the non-thinking Qwen3 30B-A3B Instruct checkpoint for concise support
+  and tool-oriented assistant behavior.
+
+base_model: Qwen/Qwen3-30B-A3B-Instruct-2507
+tokenizer: Qwen/Qwen3-30B-A3B-Instruct-2507
+quantization: 4bit
+
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.0
+  target_modules: [q_proj, k_proj, v_proj, o_proj]
+  target_parameters:
+    - mlp.experts.gate_up_proj
+    - mlp.experts.down_proj
+  rank_pattern:
+    experts.gate_up_proj: 1
+    experts.down_proj: 1
+
+training:
+  learning_rate: 0.00005
+  optimizer: paged_adamw_8bit
+  scheduler: cosine
+  warmup_ratio: 0.05
+  batch_size: 1
+  gradient_accumulation: 8
+  max_seq_length: 4096
+  epochs: 2
+  seed: 1337
+
+dataset:
+  version: enthusia-ai-dataset-2026.10.07-v1
+  train_path: ""
+  validation_path: ""
+
+budget:
+  # Example incremental rental estimate; replace with the actual A100 rate.
+  price_per_hour_usd: 0.90
+  estimated_hours: 8
+  storage_usd: 2.00
+
+output:
+  adapter_dir: runs/a100-qwen3-30b-a3b/adapter
+  gguf_path: runs/a100-qwen3-30b-a3b/enthusia-ai-qwen3-30b-a3b.Q4_K_M.gguf
+  quant: Q4_K_M
+
+eval:
+  w20_checkout: ""

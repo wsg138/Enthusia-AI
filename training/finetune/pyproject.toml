@@ -11,6 +11,16 @@ dependencies = ["pyyaml>=6.0"]
 
 [project.optional-dependencies]
 test = ["pytest>=8"]
+# PyTorch is intentionally host-managed so the CUDA wheel matches the rented
+# GPU image. These user-space packages are pinned for reproducible W19 runs.
+gpu = [
+  "transformers==5.19.0",
+  "peft==0.21.2",
+  "trl==1.14.2",
+  "datasets==5.1.0",
+  "accelerate==1.15.0",
+  "bitsandbytes==0.50.2",
+]
 
 [project.scripts]
 finetune = "enthusia_finetune.pipeline:main"

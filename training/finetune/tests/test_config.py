@@ -41,7 +41,7 @@ def _base():
     }
 
 
-@pytest.mark.parametrize("name", ["smoke.yaml", "small-adapter.yaml", "full-run.yaml"])
+@pytest.mark.parametrize("name", ["smoke.yaml", "small-adapter.yaml", "full-run.yaml", "a100-qwen3-30b-a3b.yaml"])
 def test_shipped_configs_validate(name):
     cfg = load_and_validate(os.path.join(CONFIGS, name))
     assert cfg.name
@@ -82,6 +82,46 @@ def test_unknown_key_rejected():
     bad["surprise"] = 1
     with pytest.raises(ConfigError, match="unknown"):
         config_mod.validate_config(bad)
+
+
+def test_all_linear_qlora_targets_are_supported():
+    cfg = _base()
+    cfg["lora"] = copy.deepcopy(cfg["lora"])
+    cfg["lora"]["target_modules"] = "all-linear"
+    validated = config_mod.validate_config(cfg)
+    assert validated.lora["target_modules"] == "all-linear"
+
+
+def test_invalid_lora_target_modules_rejected():
+    cfg = _base()
+    cfg["lora"] = copy.deepcopy(cfg["lora"])
+    cfg["lora"]["target_modules"] = []
+    with pytest.raises(ConfigError, match="target_modules"):
+        config_mod.validate_config(cfg)
+
+
+def test_qwen_moe_target_parameters_and_rank_pattern_validate():
+    cfg = _base()
+    cfg["lora"] = copy.deepcopy(cfg["lora"])
+    cfg["lora"].update(
+        {
+            "target_modules": ["q_proj", "k_proj", "v_proj", "o_proj"],
+            "target_parameters": [
+                "mlp.experts.gate_up_proj",
+                "mlp.experts.down_proj",
+            ],
+            "rank_pattern": {
+                "experts.gate_up_proj": 1,
+                "experts.down_proj": 1,
+            },
+        }
+    )
+    validated = config_mod.validate_config(cfg)
+    assert validated.lora["target_parameters"] == [
+        "mlp.experts.gate_up_proj",
+        "mlp.experts.down_proj",
+    ]
+    assert validated.lora["rank_pattern"]["experts.down_proj"] == 1
 
 
 def test_lora_r_must_be_positive():
