@@ -4,10 +4,7 @@ import type {
   TicketEvidenceClient,
   TicketVideoEvidence,
 } from '@enthusia/integration-ticket-bot';
-import type {
-  RunImageEvidenceInput,
-  RunImageEvidenceResult,
-} from '@enthusia/openai-gateway';
+import type { RunImageEvidenceInput } from '@enthusia/openai-gateway';
 import {
   createDefaultTicketImageAssessmentRunner,
   type TicketImageAssessmentRunner,
