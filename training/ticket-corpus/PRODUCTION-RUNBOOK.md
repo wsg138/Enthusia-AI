@@ -134,10 +134,10 @@ Expected review-only artifacts:
 - `rejected.jsonl` containing IDs/reasons only;
 - `manifest.json` with hashes, counts, provenance, source period, and run data.
 
-W18 excludes severe PII/doxxing-grade records before ordinary redaction, scans
-and removes secret shapes, rejects residual secrets, pseudonymizes/redacts
-ordinary PII, labels stale facts, and partitions poor/outdated/incomplete
-responses away from positive examples.
+W18 excludes severe PII/doxxing-grade records before ordinary redaction,
+screens for credential-pattern material and excludes anything that cannot be
+cleaned safely, pseudonymizes/redacts ordinary PII, labels stale facts, and
+partitions poor/outdated/incomplete responses away from positive examples.
 
 ## Phase 5 — manual pilot review
 
