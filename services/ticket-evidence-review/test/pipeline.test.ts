@@ -16,6 +16,7 @@ import type {
   AuthoritativeModerationState,
   EvidencePolicyConcern,
 } from '../src/types.js';
+import type { TicketVideoSample } from '../src/video-media.js';
 
 const IMAGE_SHA =
   '9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a';
@@ -133,6 +134,37 @@ function imageResult(
   };
 }
 
+function videoSample(): TicketVideoSample {
+  return {
+    videoSha256: 'b'.repeat(64),
+    metadata: {
+      durationSeconds: 2,
+      width: 1280,
+      height: 720,
+      codec: 'h264',
+      format: 'mov,mp4,m4a,3gp,3g2,mj2',
+    },
+    frames: [
+      {
+        index: 0,
+        timestampSeconds: 0,
+        contentType: 'image/png',
+        bytes: new Uint8Array([1]),
+        sha256: 'c'.repeat(64),
+      },
+      {
+        index: 1,
+        timestampSeconds: 1.95,
+        contentType: 'image/png',
+        bytes: new Uint8Array([2]),
+        sha256: 'd'.repeat(64),
+      },
+    ],
+    limitation:
+      'Video was sampled at 2 deterministic timestamps; events between sampled frames may not be visible.',
+  };
+}
+
 function acceptedAction(ticketId: string): ActionRequestResult {
   return {
     requestId: 'ar-1',
@@ -198,6 +230,65 @@ describe('runTicketEvidencePipeline', () => {
     expect(result.collection.assessments).toHaveLength(1);
     expect(state.getImageEvidence).toHaveBeenCalledTimes(1);
     expect(state.assess).toHaveBeenCalledTimes(1);
+    expect(state.requestAction).toHaveBeenCalledTimes(1);
+  });
+
+  it('routes bounded video evidence through the existing policy and staff-review path', async () => {
+    const state = input({
+      ticket: ticket(undefined, 'video/mp4'),
+    });
+    const getVideoEvidence = vi.fn(async (
+      ticketId: string,
+      messageId: string,
+      attachmentId: string,
+    ) => ({
+      ticketId,
+      messageId,
+      attachmentId,
+      contentType: 'video/mp4' as const,
+      size: 8,
+      sha256: 'b'.repeat(64),
+      bytes: new Uint8Array([0, 0, 0, 1, 2, 3, 4, 5]),
+    }));
+    state.value.evidenceClient = {
+      getImageEvidence: state.getImageEvidence,
+      getVideoEvidence,
+    };
+    state.value.sampleVideo = async () => videoSample();
+    state.value.policyAssessor = {
+      assess: vi.fn(async (assessmentInput) => {
+        const ref = assessmentInput.imageEvidence[0]?.evidenceRef;
+        if (ref === undefined) throw new Error('missing visual evidence');
+        return {
+          concerns: [{
+            ...concern(),
+            evidenceRefs: [ref],
+          }],
+          needsMoreContext: false,
+          model: 'qwen-test',
+          usage: {
+            promptTokens: 300,
+            completionTokens: 80,
+            totalTokens: 380,
+          },
+          policyVersion: '2026-10-06.1',
+          policyFileVersion: 'sha256:' + 'a'.repeat(64),
+        };
+      }),
+    };
+
+    const result = await runTicketEvidencePipeline(state.value);
+
+    expect(result.status).toBe('staff_escalation_submitted');
+    expect(result.collection.videoAssessmentCount).toBe(1);
+    expect(result.collection.imageAssessmentCount).toBe(0);
+    expect(result.collection.assessments).toHaveLength(1);
+    expect(result.collection.assessments[0]).toMatchObject({
+      mediaKind: 'video',
+      evidenceRef: 'ticket:42:message:m1:attachment:1001:video',
+    });
+    expect(getVideoEvidence).toHaveBeenCalledTimes(1);
+    expect(state.getImageEvidence).not.toHaveBeenCalled();
     expect(state.requestAction).toHaveBeenCalledTimes(1);
   });
 
