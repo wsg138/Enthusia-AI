@@ -169,6 +169,32 @@ def test_build_training_plan_supports_all_linear_qlora(tmp_path):
     assert plan["validation"]["quality_counts"] == {"IDEAL": 1}
 
 
+def test_training_plan_carries_fused_moe_targets(tmp_path):
+    train = tmp_path / "train.jsonl"
+    _write(train, [_record()])
+    raw = dict(_config().raw)
+    raw["lora"] = dict(raw["lora"])
+    raw["lora"].update(
+        {
+            "target_modules": ["q_proj", "v_proj"],
+            "target_parameters": [
+                "mlp.experts.gate_up_proj",
+                "mlp.experts.down_proj",
+            ],
+            "rank_pattern": {
+                "experts.gate_up_proj": 1,
+                "experts.down_proj": 1,
+            },
+        }
+    )
+    cfg = config_mod.validate_config(raw)
+    plan = trainer.build_training_plan(
+        cfg, train_json=str(train), validation_json=None
+    )
+    assert plan["target_modules"] == ["q_proj", "v_proj"]
+    assert cfg.lora["target_parameters"][0] == "mlp.experts.gate_up_proj"
+
+
 def test_cli_dry_run_never_imports_gpu_stack(tmp_path, capsys):
     train = tmp_path / "train.jsonl"
     config_path = tmp_path / "config.json"
