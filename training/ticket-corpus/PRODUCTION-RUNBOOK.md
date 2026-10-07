@@ -107,6 +107,45 @@ The exporter must:
 - write a new restricted raw file rather than overwriting;
 - refuse raw output inside Git.
 
+### Phase 3b — archived Discord fallback for missing DB mirrors
+
+Use this only when the production coverage review proves that a closed first-pass
+ticket exists but its structured `ticket_messages` relation is empty. MySQL remains
+the primary source; do not re-fetch Discord history for tickets that already have a
+structured message mirror.
+
+The Support Bot recovery command is:
+
+```bash
+npm run export:training-tickets-discord-recovery -- \\
+  --max-tickets 25 \\
+  --max-messages-per-ticket 500 \\
+  --deletion-exclusions-file /secure/private/ticket-deletion-exclusions.tsv \\
+  --out /secure/private/w18-discord-recovery-raw.jsonl \\
+  --ack-governance
+```
+
+The recovery path is deliberately read-only and bounded:
+
+- it selects only closed `GENERAL_SUPPORT` / `BUG_REPORT` rows with zero mirrored
+  DB messages and a database-recorded archived channel ID;
+- callers cannot provide arbitrary Discord channel IDs or URLs;
+- deleted Discord messages are absent from the recovered history;
+- Discord `editedAt` is converted into `MESSAGE_EDITED` provenance so the existing
+  exporter excludes edited messages;
+- tickets whose surviving channel history exceeds the configured bound fail closed;
+- deletion-exclusion checks run against both database participants and recovered
+  message authors/text;
+- output uses the same pseudonymized W18 transcript contract as the MySQL exporter;
+- the command never writes recovered messages back into MySQL.
+
+Treat this as fallback evidence, not as proof that the archive is complete. Archived
+channels may have been deleted by retention limits or may be unavailable. Record
+aggregate recovery counts and exclusions, never raw identities/content, in issue #65.
+
+Recovered output then follows the exact same Phase 4 W18 sanitization and manual
+review gates below. It is never admitted directly to W16.
+
 ## Phase 4 — immediate W18 sanitization
 
 Run the W18 sanitizer with both the raw file and output directory outside Git:
