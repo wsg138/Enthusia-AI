@@ -78,7 +78,7 @@ interface VideoCandidate {
   contentType: TicketVideoEvidence['contentType'];
 }
 
-export interface VideoVideoFrameObservation {
+export interface VideoFrameObservation {
   frameIndex: number;
   timestampSeconds: number;
   result: RunImageEvidenceResult;
