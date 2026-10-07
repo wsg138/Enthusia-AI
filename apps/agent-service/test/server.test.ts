@@ -20,7 +20,7 @@ import {
   emptyMetricsSnapshot,
   type InferenceClient,
 } from '@enthusia/inference-adapter';
-import { createLogger } from '@enthusia/logging';
+import { createLogger, type EnthusiaLogger } from '@enthusia/logging';
 import type { AgentServiceConfig } from '../src/config.js';
 import { startAgentService, type RunningAgentService } from '../src/server.js';
 import type { TicketEvidenceReviewService } from '../src/ticket-evidence-review.js';
@@ -70,7 +70,7 @@ function config(): AgentServiceConfig {
   };
 }
 
-function silentLogger() {
+function silentLogger(): EnthusiaLogger {
   const sink = new Writable({
     write(_chunk, _encoding, callback) {
       callback();
@@ -81,6 +81,27 @@ function silentLogger() {
     level: 'fatal',
     stream: sink,
   });
+}
+
+function capturedLogger(): {
+  logger: EnthusiaLogger;
+  lines: string[];
+} {
+  const lines: string[] = [];
+  const sink = new Writable({
+    write(chunk, _encoding, callback) {
+      lines.push(String(chunk));
+      callback();
+    },
+  });
+  return {
+    logger: createLogger({
+      name: 'agent-service-test',
+      level: 'error',
+      stream: sink,
+    }),
+    lines,
+  };
 }
 
 function inference(): Pick<InferenceClient, 'getModels' | 'getMetrics'> {
@@ -129,6 +150,7 @@ async function start(
     }>;
   },
   ticketEvidenceReview?: Pick<TicketEvidenceReviewService, 'review'>,
+  logger: EnthusiaLogger = silentLogger(),
 ): Promise<string> {
   const registry = new ToolRegistry();
   const orchestrator = new AgentOrchestrator({
@@ -137,7 +159,7 @@ async function start(
   });
   running = await startAgentService({
     config: config(),
-    logger: silentLogger(),
+    logger,
     orchestrator,
     registry,
     inference: inference(),
@@ -326,17 +348,24 @@ describe('agent service', () => {
     expect(invalid.status).toBe(400);
   });
 
-  it('does not expose internal evidence-review failure details', async () => {
-    const baseUrl = await start(undefined, {
-      async review() {
-        throw new Error('staff-secret signed-url private-policy-path');
+  it('logs evidence-review failures by trace without exposing internal details', async () => {
+    const captured = capturedLogger();
+    const baseUrl = await start(
+      undefined,
+      {
+        async review() {
+          throw new Error('staff-secret signed-url private-policy-path');
+        },
       },
-    });
+      captured.logger,
+    );
+    const inboundTrace = '123e4567-e89b-12d3-a456-426614174111';
     const response = await fetch(baseUrl + '/v1/ticket/evidence-review', {
       method: 'POST',
       headers: {
         authorization: 'Bearer agent-key',
         'content-type': 'application/json',
+        [TRACE_ID_HEADER]: inboundTrace,
       },
       body: JSON.stringify({ ticketId: '42' }),
     });
@@ -345,6 +374,14 @@ describe('agent service', () => {
     expect(body).not.toContain('staff-secret');
     expect(body).not.toContain('signed-url');
     expect(body).not.toContain('private-policy-path');
+
+    const logged = captured.lines.join('');
+    expect(logged).toContain(inboundTrace);
+    expect(logged).toContain('ticket evidence review failed');
+    expect(logged).toContain('"errorClass":"Error"');
+    expect(logged).not.toContain('staff-secret');
+    expect(logged).not.toContain('signed-url');
+    expect(logged).not.toContain('private-policy-path');
   });
 
   it('serves a validated stale ticket recommendation', async () => {
