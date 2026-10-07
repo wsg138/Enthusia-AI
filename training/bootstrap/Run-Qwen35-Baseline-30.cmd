@@ -17,7 +17,9 @@ ping 127.0.0.1 -n 2 >nul
 echo Starting baseline server in a separate minimized window...
 start "Enthusia Qwen Baseline" /min cmd /c call "%REPO%\training\bootstrap\Start-Qwen35-Baseline.cmd"
 
+set "ENTHUSIA_ALLOW_30=YES"
 call "%REPO%\training\bootstrap\Run-Baseline-Generation-Benchmark.cmd"
+set "ENTHUSIA_ALLOW_30="
 set "BENCH_RC=%ERRORLEVEL%"
 
 for /f "tokens=5" %%P in ('netstat -ano ^| findstr ":8091" ^| findstr "LISTENING"') do (
