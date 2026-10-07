@@ -13,27 +13,29 @@ jobs:
   codacy-annotations:
     runs-on: ubuntu-latest
     steps:
-      - name: Print completed Codacy annotation metadata
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          CHECK_ID: "112654913151"
+      - name: Print Codacy tool and pattern metadata
         shell: bash
         run: |
           set -euo pipefail
-          api="https://api.github.com/repos/${REPO}"
-          auth=(-H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json")
+          url="https://api.codacy.com/api/v3/analysis/organizations/gh/wsg138/repositories/Enthusia-AI/pull-requests/64/issues?status=new&limit=100"
+          payload="$(curl -fsSL "${url}")"
 
-          echo "Codacy check run: ${CHECK_ID}"
-          for page in 1 2; do
-            annotations="$(curl -fsSL "${auth[@]}" "${api}/check-runs/${CHECK_ID}/annotations?per_page=100&page=${page}")"
-            count="$(jq 'length' <<<"${annotations}")"
-            [[ "${count}" -eq 0 ]] && break
-            jq -r '.[] | [
-              .annotation_level,
-              .path,
-              (.start_line | tostring),
-              (.title // ""),
-              (.message // "" | gsub("[\\r\\n\\t]+"; " "))
-            ] | @tsv' <<<"${annotations}"
-          done
+          echo "Top-level keys:"
+          jq -r 'keys[]' <<<"${payload}"
+
+          echo "First issue keys:"
+          jq -r '(.data // .issues // .)[0] | keys[]' <<<"${payload}"
+
+          echo "Issue metadata:"
+          jq -r '
+            (.data // .issues // .)[] |
+            [
+              (.tool.name // .tool.uuid // .tool // ""),
+              (.patternInfo.id // .patternInfo.title // .patternId // .pattern // ""),
+              (.category // .patternInfo.category // ""),
+              (.level // .severity // ""),
+              (.filePath // .file.path // .path // ""),
+              ((.lineNumber // .line // .startLine // 0) | tostring),
+              (.message // .description // "")
+            ] | @tsv
+          ' <<<"${payload}" | head -n 120
