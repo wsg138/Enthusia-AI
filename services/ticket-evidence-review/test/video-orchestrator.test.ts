@@ -217,6 +217,71 @@ describe('collectTicketVideoAssessments', () => {
     expect(assessImage).toHaveBeenCalledTimes(2);
   });
 
+  it('does not require video or vision work when no video attachment exists', async () => {
+    const noVideo = ticket();
+    noVideo.messages = [{
+      id: 'm8',
+      ticketId: '42',
+      author: { id: 'reporter', kind: 'player' },
+      body: 'text only',
+      createdAt: '2026-10-06T12:05:00.000Z',
+      attachments: [attachment('x8', 'notes.txt', 'text/plain', 100)],
+    }];
+
+    const result = await collectTicketVideoAssessments({
+      ticket: noVideo,
+      evidenceClient: {
+        getVideoEvidence: async () => {
+          throw new Error('must not be called');
+        },
+      },
+      traceId: 'trace-no-video',
+      sampleVideo: async () => {
+        throw new Error('must not be called');
+      },
+    });
+
+    expect(result.assessments).toEqual([]);
+    expect(result.attemptedCount).toBe(0);
+    expect(result.issues).toEqual([]);
+  });
+
+  it('rejects sampler output that exceeds the hard frame bound', async () => {
+    const base = ticket();
+    base.messages = [{
+      id: 'm9',
+      ticketId: '42',
+      author: { id: 'reporter', kind: 'player' },
+      body: 'video',
+      createdAt: '2026-10-06T12:05:00.000Z',
+      attachments: [attachment('v9', 'clip.mp4', 'video/mp4', 1000)],
+    }];
+    const tooManyFrames = sample();
+    tooManyFrames.frames = Array.from({ length: 7 }, (_, index) => ({
+      index,
+      timestampSeconds: index * 0.5,
+      contentType: 'image/png' as const,
+      bytes: new Uint8Array([index]),
+      sha256: String(index).padStart(64, 'a').slice(-64),
+    }));
+
+    const result = await collectTicketVideoAssessments({
+      ticket: base,
+      evidenceClient: {
+        getVideoEvidence: async (ticketId, messageId, attachmentId) =>
+          evidence(ticketId, messageId, attachmentId, 'video/mp4'),
+      },
+      traceId: 'trace-overbound',
+      assessImage: async (input) => observed(input),
+      sampleVideo: async () => tooManyFrames,
+    });
+
+    expect(result.assessments).toEqual([]);
+    expect(result.issues).toEqual([
+      { messageId: 'm9', attachmentId: 'v9', reason: 'processing_failed' },
+    ]);
+  });
+
   it('records fetch, processing, and frame-assessment failures without exception text', async () => {
     const base = ticket();
     base.messages = [{
