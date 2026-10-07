@@ -153,6 +153,14 @@ Pinned by the `gpu` extra: Transformers 5.19.0, PEFT 0.21.2, TRL 1.14.2,
 Datasets 5.1.0, Accelerate 1.15.0, and bitsandbytes 0.50.2. PyTorch is left
 host-managed so its CUDA build matches the rented image.
 
+The package initializer is lazy: the standalone GPU runner does not import the
+W16 assembly stack just to start. Install `training/datasets` separately only
+when dataset assembly itself is being run on that host. The runner also
+translates the repository-level `warmup_ratio` into integer `warmup_steps`
+because the pinned Transformers 5.19.0 API removed `warmup_ratio`; this
+translation is computed after the real train-set size and effective batch are
+known and is regression-tested.
+
 The runner uses conversational prompt-completion records. Existing historical
 assistant turns may remain in the prompt as context, but the completion is
 always the reviewed `expected_answer`, so those historical responses do not
