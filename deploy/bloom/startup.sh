@@ -49,6 +49,11 @@ export LOG_LEVEL METRICS_PORT HEALTH_PORT ENTHUSIA_VERSION="${VERSION}"
 
 case "${ROLE}" in
   agent)
+    if command -v ffmpeg >/dev/null 2>&1 && command -v ffprobe >/dev/null 2>&1; then
+      log "Ticket video evidence media tools available: ffmpeg + ffprobe"
+    else
+      log "WARNING: ffmpeg/ffprobe unavailable; ticket video evidence will fail closed while image evidence remains available"
+    fi
     log "Starting W12 agent service"
     exec "${PIN_ARGS[@]}" node apps/agent-service/dist/main.js
     ;;

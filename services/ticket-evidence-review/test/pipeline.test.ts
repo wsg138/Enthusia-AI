@@ -16,6 +16,7 @@ import type {
   AuthoritativeModerationState,
   EvidencePolicyConcern,
 } from '../src/types.js';
+import type { TicketVideoSample } from '../src/video-media.js';
 
 const IMAGE_SHA =
   '9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a';
@@ -133,6 +134,37 @@ function imageResult(
   };
 }
 
+function videoSample(): TicketVideoSample {
+  return {
+    videoSha256: 'b'.repeat(64),
+    metadata: {
+      durationSeconds: 2,
+      width: 1280,
+      height: 720,
+      codec: 'h264',
+      format: 'mov,mp4,m4a,3gp,3g2,mj2',
+    },
+    frames: [
+      {
+        index: 0,
+        timestampSeconds: 0,
+        contentType: 'image/png',
+        bytes: new Uint8Array([1]),
+        sha256: 'c'.repeat(64),
+      },
+      {
+        index: 1,
+        timestampSeconds: 1.95,
+        contentType: 'image/png',
+        bytes: new Uint8Array([2]),
+        sha256: 'd'.repeat(64),
+      },
+    ],
+    limitation:
+      'Video was sampled at 2 deterministic timestamps; events between sampled frames may not be visible.',
+  };
+}
+
 function acceptedAction(ticketId: string): ActionRequestResult {
   return {
     requestId: 'ar-1',
@@ -187,6 +219,55 @@ function input(overrides: Partial<TicketEvidencePipelineInput> = {}) {
   return { value, getImageEvidence, assess, requestAction };
 }
 
+function videoPipelineState(
+  overrides: Partial<TicketEvidencePipelineInput> = {},
+) {
+  const state = input({
+    ticket: ticket(undefined, 'video/mp4'),
+    ...overrides,
+  });
+  const getVideoEvidence = vi.fn(async (
+    ticketId: string,
+    messageId: string,
+    attachmentId: string,
+  ) => ({
+    ticketId,
+    messageId,
+    attachmentId,
+    contentType: 'video/mp4' as const,
+    size: 8,
+    sha256: 'b'.repeat(64),
+    bytes: new Uint8Array([0, 0, 0, 1, 2, 3, 4, 5]),
+  }));
+  const sampleVideo = vi.fn(async () => videoSample());
+  const assess = vi.fn(async (assessmentInput) => {
+    const ref = assessmentInput.imageEvidence[0]?.evidenceRef;
+    if (ref === undefined) throw new Error('missing visual evidence');
+    return {
+      concerns: [{
+        ...concern(),
+        evidenceRefs: [ref],
+      }],
+      needsMoreContext: false,
+      model: 'qwen-test',
+      usage: {
+        promptTokens: 300,
+        completionTokens: 80,
+        totalTokens: 380,
+      },
+      policyVersion: '2026-10-06.1',
+      policyFileVersion: 'sha256:' + 'a'.repeat(64),
+    };
+  });
+  state.value.evidenceClient = {
+    getImageEvidence: state.getImageEvidence,
+    getVideoEvidence,
+  };
+  state.value.sampleVideo = sampleVideo;
+  state.value.policyAssessor = { assess };
+  return { ...state, getVideoEvidence, sampleVideo, videoAssess: assess };
+}
+
 describe('runTicketEvidencePipeline', () => {
   it('runs the verified path and submits exactly one staff escalation request', async () => {
     const state = input();
@@ -199,6 +280,155 @@ describe('runTicketEvidencePipeline', () => {
     expect(state.getImageEvidence).toHaveBeenCalledTimes(1);
     expect(state.assess).toHaveBeenCalledTimes(1);
     expect(state.requestAction).toHaveBeenCalledTimes(1);
+  });
+
+  it('routes bounded video evidence through the existing policy and staff-review path', async () => {
+    const state = input({
+      ticket: ticket(undefined, 'video/mp4'),
+    });
+    const getVideoEvidence = vi.fn(async (
+      ticketId: string,
+      messageId: string,
+      attachmentId: string,
+    ) => ({
+      ticketId,
+      messageId,
+      attachmentId,
+      contentType: 'video/mp4' as const,
+      size: 8,
+      sha256: 'b'.repeat(64),
+      bytes: new Uint8Array([0, 0, 0, 1, 2, 3, 4, 5]),
+    }));
+    state.value.evidenceClient = {
+      getImageEvidence: state.getImageEvidence,
+      getVideoEvidence,
+    };
+    state.value.sampleVideo = async () => videoSample();
+    state.value.policyAssessor = {
+      assess: vi.fn(async (assessmentInput) => {
+        const ref = assessmentInput.imageEvidence[0]?.evidenceRef;
+        if (ref === undefined) throw new Error('missing visual evidence');
+        return {
+          concerns: [{
+            ...concern(),
+            evidenceRefs: [ref],
+          }],
+          needsMoreContext: false,
+          model: 'qwen-test',
+          usage: {
+            promptTokens: 300,
+            completionTokens: 80,
+            totalTokens: 380,
+          },
+          policyVersion: '2026-10-06.1',
+          policyFileVersion: 'sha256:' + 'a'.repeat(64),
+        };
+      }),
+    };
+
+    const result = await runTicketEvidencePipeline(state.value);
+
+    expect(result.status).toBe('staff_escalation_submitted');
+    expect(result.collection.videoAssessmentCount).toBe(1);
+    expect(result.collection.imageAssessmentCount).toBe(0);
+    expect(result.collection.assessments).toHaveLength(1);
+    expect(result.collection.assessments[0]).toMatchObject({
+      mediaKind: 'video',
+      evidenceRef: 'ticket:42:message:m1:attachment:1001:video',
+    });
+    expect(getVideoEvidence).toHaveBeenCalledTimes(1);
+    expect(state.getImageEvidence).not.toHaveBeenCalled();
+    expect(state.requestAction).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not escalate benign video when current policy finds no concern', async () => {
+    const state = videoPipelineState();
+    state.value.policyAssessor = {
+      assess: vi.fn(async () => ({
+        concerns: [],
+        needsMoreContext: false,
+        model: 'qwen-test',
+        usage: {
+          promptTokens: 250,
+          completionTokens: 30,
+          totalTokens: 280,
+        },
+        policyVersion: '2026-10-06.1',
+        policyFileVersion: 'sha256:' + 'a'.repeat(64),
+      })),
+    };
+
+    const result = await runTicketEvidencePipeline(state.value);
+
+    expect(result.status).toBe('no_escalation');
+    expect(result.review?.disposition).toBe('no_escalation');
+    expect(result.collection.videoAssessmentCount).toBe(1);
+    expect(state.requestAction).not.toHaveBeenCalled();
+  });
+
+  it('lets authoritative current moderation state override a video concern', async () => {
+    const state = videoPipelineState({
+      moderationState: moderation('unavailable'),
+    });
+    const resolver = vi.fn(async () => ({
+      ...moderation('verified'),
+      duplicateStatus: 'actioned' as const,
+    }));
+    state.value.moderationStateResolver = resolver;
+
+    const result = await runTicketEvidencePipeline(state.value);
+
+    expect(result.status).toBe('already_actioned');
+    expect(result.review?.disposition).toBe('already_actioned');
+    expect(resolver).toHaveBeenCalledTimes(1);
+    expect(state.requestAction).not.toHaveBeenCalled();
+  });
+
+  it('does not let an unrelated active sanction suppress a video concern', async () => {
+    const state = videoPipelineState({
+      moderationState: moderation('unavailable'),
+    });
+    state.value.moderationStateResolver = vi.fn(async () => ({
+      ...moderation('verified'),
+      activeSanctions: [{
+        id: 'old-sanction',
+        type: 'MUTE',
+        status: 'ACTIVE',
+        reason: 'Unrelated older case',
+      }],
+    }));
+
+    const result = await runTicketEvidencePipeline(state.value);
+
+    expect(result.status).toBe('staff_escalation_submitted');
+    expect(result.review?.disposition).toBe('staff_review');
+    expect(state.requestAction).toHaveBeenCalledTimes(1);
+  });
+
+  it('short-circuits a repeated video report already escalated by Ticket Bot', async () => {
+    const state = videoPipelineState({
+      ticket: ticket({
+        reportTarget: {
+          kind: 'minecraft_username',
+          value: 'Bad_Player',
+        },
+        recentActionRequests: [{
+          requestId: 'ar-video-existing',
+          action: 'escalate',
+          status: 'accepted',
+          createdAt: '2026-10-06T12:04:00.000Z',
+          updatedAt: '2026-10-06T12:04:01.000Z',
+        }],
+      }, 'video/mp4'),
+    });
+
+    const result = await runTicketEvidencePipeline(state.value);
+
+    expect(result.status).toBe('already_actioned');
+    expect(state.getVideoEvidence).not.toHaveBeenCalled();
+    expect(state.sampleVideo).not.toHaveBeenCalled();
+    expect(state.videoAssess).not.toHaveBeenCalled();
+    expect(state.requestAction).not.toHaveBeenCalled();
   });
 
   it('short-circuits an existing Ticket Bot escalation before image or model work', async () => {

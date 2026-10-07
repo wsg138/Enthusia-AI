@@ -2,18 +2,19 @@ import type {
   ActionRequestResult,
   TicketBotClient,
   TicketContextBundle,
-  TicketEvidenceClient,
 } from '@enthusia/integration-ticket-bot';
 import type { LocalPolicyConcernAssessor } from './policy-assessor.js';
 import type {
   PolicyConcernAssessmentResult,
 } from './policy-assessor.js';
 import type { VerifiedPolicyCatalog } from './policy-catalog.js';
+import type { TicketImageAssessmentRunner } from './orchestrator.js';
 import {
-  collectTicketImageAssessments,
-  type TicketImageAssessmentRunner,
-  type TicketImageCollectionResult,
-} from './orchestrator.js';
+  collectTicketVisualAssessments,
+  type TicketVisualCollectionResult,
+  type TicketVisualEvidenceClient,
+} from './visual-orchestrator.js';
+import type { CollectTicketVideoAssessmentsInput } from './video-orchestrator.js';
 import { reviewTicketEvidence } from './review.js';
 import { deliverTicketEvidenceReview } from './delivery.js';
 import type {
@@ -34,7 +35,7 @@ export type TicketEvidencePipelineStatus =
 export interface TicketEvidencePipelineInput {
   ticket: TicketContextBundle;
   traceId: string;
-  evidenceClient: Pick<TicketEvidenceClient, 'getImageEvidence'>;
+  evidenceClient: TicketVisualEvidenceClient;
   policyCatalog: VerifiedPolicyCatalog;
   policyAssessor: Pick<LocalPolicyConcernAssessor, 'assess'>;
   moderationState: AuthoritativeModerationState;
@@ -45,21 +46,24 @@ export interface TicketEvidencePipelineInput {
   ticketClient: Pick<TicketBotClient, 'requestAction'>;
   maxImages?: number;
   assessImage?: TicketImageAssessmentRunner;
+  sampleVideo?: CollectTicketVideoAssessmentsInput['sampleVideo'];
 }
 
 export interface TicketEvidencePipelineResult {
   status: TicketEvidencePipelineStatus;
-  collection: TicketImageCollectionResult;
+  collection: TicketVisualCollectionResult;
   policyAssessment: PolicyConcernAssessmentResult | null;
   review: TicketEvidenceReviewResult | null;
   delivery: ActionRequestResult | null;
 }
 
-const EMPTY_COLLECTION: TicketImageCollectionResult = {
+const EMPTY_COLLECTION: TicketVisualCollectionResult = {
   assessments: [],
   issues: [],
   eligibleAttachmentCount: 0,
   attemptedCount: 0,
+  imageAssessmentCount: 0,
+  videoAssessmentCount: 0,
 };
 
 export async function runTicketEvidencePipeline(
@@ -69,7 +73,7 @@ export async function runTicketEvidencePipeline(
   const preflightResult = earlyResult(preflight);
   if (preflightResult !== null) return preflightResult;
 
-  const collection = await collectImages(input);
+  const collection = await collectVisuals(input);
   if (collection.assessments.length === 0) {
     return noUsableEvidenceResult(input, collection);
   }
@@ -173,10 +177,10 @@ function completedWithoutWork(
   };
 }
 
-function collectImages(
+function collectVisuals(
   input: TicketEvidencePipelineInput,
-): Promise<TicketImageCollectionResult> {
-  return collectTicketImageAssessments({
+): Promise<TicketVisualCollectionResult> {
+  return collectTicketVisualAssessments({
     ticket: input.ticket,
     evidenceClient: input.evidenceClient,
     traceId: input.traceId,
@@ -184,12 +188,15 @@ function collectImages(
     ...(input.assessImage !== undefined
       ? { assessImage: input.assessImage }
       : {}),
+    ...(input.sampleVideo !== undefined
+      ? { sampleVideo: input.sampleVideo }
+      : {}),
   });
 }
 
 function noUsableEvidenceResult(
   input: TicketEvidencePipelineInput,
-  collection: TicketImageCollectionResult,
+  collection: TicketVisualCollectionResult,
 ): TicketEvidencePipelineResult {
   const review = reviewTicketEvidence({
     ticket: input.ticket,
@@ -208,7 +215,7 @@ function noUsableEvidenceResult(
 
 async function assessPolicy(
   input: TicketEvidencePipelineInput,
-  collection: TicketImageCollectionResult,
+  collection: TicketVisualCollectionResult,
   target: string,
 ): Promise<PolicyConcernAssessmentResult | null> {
   try {
@@ -243,7 +250,7 @@ async function resolveModerationState(
 
 async function finishReview(
   input: TicketEvidencePipelineInput,
-  collection: TicketImageCollectionResult,
+  collection: TicketVisualCollectionResult,
   policyAssessment: PolicyConcernAssessmentResult,
   review: TicketEvidenceReviewResult,
   moderationState: AuthoritativeModerationState,
@@ -287,7 +294,7 @@ function nonEscalationStatus(
 
 async function submitStaffEscalation(
   input: TicketEvidencePipelineInput,
-  collection: TicketImageCollectionResult,
+  collection: TicketVisualCollectionResult,
   policyAssessment: PolicyConcernAssessmentResult,
   review: TicketEvidenceReviewResult,
 ): Promise<TicketEvidencePipelineResult> {

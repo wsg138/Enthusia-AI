@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import {
   TicketBotClient,
-  TicketEvidenceClient,
   activeTicketEscalation,
   ticketReportTarget,
   type ActionRequestResult,
@@ -23,6 +22,7 @@ import {
   type TicketEvidencePipelineResult,
   type TicketEvidencePipelineStatus,
   type TicketImageAssessmentRunner,
+  type TicketVisualEvidenceClient,
   type VerifiedPolicyCatalog,
 } from '@enthusia/ticket-evidence-review';
 
@@ -149,7 +149,7 @@ export interface TicketEvidenceReviewServiceDeps {
     TicketBotClient,
     'getTicketContext' | 'requestAction'
   >;
-  evidenceClient: Pick<TicketEvidenceClient, 'getImageEvidence'>;
+  evidenceClient: TicketVisualEvidenceClient;
   policyReader: Pick<LivePolicyCatalogReader, 'read'>;
   moderationClient: Pick<StaffModerationStateClient, 'getState'>;
   inference: Pick<InferenceClient, 'complete'>;

@@ -299,17 +299,17 @@ function validateEvidenceProvenance(
   for (const item of evidence) {
     if (!/^[a-f0-9]{64}$/.test(item.evidenceSha256)) {
       throw new EvidenceReviewValidationError(
-        'Image evidence requires a canonical SHA-256 provenance hash.',
+        'Visual evidence requires a canonical SHA-256 provenance hash.',
       );
     }
     if (!attachments.has(attachmentKey(item.messageId, item.attachmentId))) {
       throw new EvidenceReviewValidationError(
-        'Image evidence is not linked to an attachment in this ticket context.',
+        'Visual evidence is not linked to an attachment in this ticket context.',
       );
     }
     if (refs.has(item.evidenceRef)) {
       throw new EvidenceReviewValidationError(
-        'Duplicate image evidence reference.',
+        'Duplicate visual evidence reference.',
       );
     }
     refs.add(item.evidenceRef);

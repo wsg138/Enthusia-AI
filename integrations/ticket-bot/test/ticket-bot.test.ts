@@ -132,9 +132,10 @@ const server = createServer((req, res) => {
       return json(res, 200, {
         service: 'enthusia-support-bot',
         api: 'ticket-evidence',
-        contractVersion: 'evidence-v1',
-        reads: ['attachment.image'],
+        contractVersion: 'evidence-v2',
+        reads: ['attachment.image', 'attachment.video'],
         maxImageBytes: 8 * 1024 * 1024,
+        maxVideoBytes: 25 * 1024 * 1024,
       });
     }
     if (
@@ -153,6 +154,25 @@ const server = createServer((req, res) => {
         'X-Enthusia-Attachment-Id': '120000000000000001',
         'X-Enthusia-Content-Sha256':
           '0f4636c78f65d3639ece5a064b5ae753e3408614a14fb18ab4d7540d2c248543',
+      });
+      return res.end(bytes);
+    }
+    if (
+      url.pathname ===
+        '/v1/tickets/T-1234/messages/m-1/attachments/120000000000000002/video' &&
+      req.method === 'GET'
+    ) {
+      const bytes = Buffer.from([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70]);
+      res.writeHead(200, {
+        'Content-Type': 'video/mp4',
+        'Content-Length': String(bytes.length),
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Enthusia-Ticket-Id': '1234',
+        'X-Enthusia-Message-Id': 'm-1',
+        'X-Enthusia-Attachment-Id': '120000000000000002',
+        'X-Enthusia-Content-Sha256':
+          'd9f1cb99ee21291800d5e62bd9bca07850461d7d8096afc4150a52dc8554d49f',
       });
       return res.end(bytes);
     }
@@ -259,9 +279,10 @@ describe('TicketBotClient evidence capabilities', () => {
     expect(capabilities).toEqual({
       service: 'enthusia-support-bot',
       api: 'ticket-evidence',
-      contractVersion: 'evidence-v1',
-      reads: ['attachment.image'],
+      contractVersion: 'evidence-v2',
+      reads: ['attachment.image', 'attachment.video'],
       maxImageBytes: 8 * 1024 * 1024,
+      maxVideoBytes: 25 * 1024 * 1024,
     });
   });
 
@@ -283,7 +304,77 @@ describe('TicketBotClient evidence capabilities', () => {
     expect([...evidence.bytes]).toEqual([0x89, 0x50, 0x4e, 0x47]);
   });
 
-  it('rejects image evidence when the provenance hash does not match the bytes', async () => {
+  it('fetches video bytes only through ticket/message/attachment provenance ids', async () => {
+    const evidence = await makeEvidenceClient().getVideoEvidence(
+      'T-1234',
+      'm-1',
+      '120000000000000002',
+    );
+    expect(evidence).toMatchObject({
+      ticketId: 'T-1234',
+      messageId: 'm-1',
+      attachmentId: '120000000000000002',
+      contentType: 'video/mp4',
+      size: 8,
+      sha256:
+        'd9f1cb99ee21291800d5e62bd9bca07850461d7d8096afc4150a52dc8554d49f',
+    });
+    expect([...evidence.bytes]).toEqual([
+      0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70,
+    ]);
+  });
+
+  it('aborts video evidence streaming once actual bytes exceed the hard limit', async () => {
+    const client = new TicketEvidenceClient({
+      baseUrl,
+      apiKey: API_KEY,
+      timeoutMs: 5_000,
+      fetchImpl: async (input: Parameters<typeof fetch>[0]) => {
+        const url = String(input);
+        if (url.endsWith('/v1/evidence/capabilities')) {
+          return new Response(JSON.stringify({
+            service: 'enthusia-support-bot',
+            api: 'ticket-evidence',
+            contractVersion: 'evidence-v2',
+            reads: ['attachment.image', 'attachment.video'],
+            maxImageBytes: 1024,
+            maxVideoBytes: 5,
+          }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new Uint8Array([1, 2, 3, 4]));
+            controller.enqueue(new Uint8Array([5, 6, 7, 8]));
+            controller.close();
+          },
+        });
+        return new Response(body, {
+          status: 200,
+          headers: {
+            'Content-Type': 'video/mp4',
+            'X-Enthusia-Ticket-Id': '1234',
+            'X-Enthusia-Message-Id': 'm-1',
+            'X-Enthusia-Attachment-Id': '120000000000000002',
+            'X-Enthusia-Content-Sha256':
+              'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          },
+        });
+      },
+    });
+
+    await expect(
+      client.getVideoEvidence(
+        'T-1234',
+        'm-1',
+        '120000000000000002',
+      ),
+    ).rejects.toThrow(/exceeded the advertised size limit/);
+  });
+
+  it('keeps v1 image reads compatible but refuses video until v2 is deployed', async () => {
     const client = new TicketEvidenceClient({
       baseUrl,
       apiKey: API_KEY,
@@ -297,6 +388,62 @@ describe('TicketBotClient evidence capabilities', () => {
             contractVersion: 'evidence-v1',
             reads: ['attachment.image'],
             maxImageBytes: 1024,
+          }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        if (url.endsWith('/image')) {
+          const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+          return new Response(bytes, {
+            status: 200,
+            headers: {
+              'Content-Type': 'image/png',
+              'Content-Length': String(bytes.byteLength),
+              'X-Enthusia-Ticket-Id': '1234',
+              'X-Enthusia-Message-Id': 'm-1',
+              'X-Enthusia-Attachment-Id': '120000000000000001',
+              'X-Enthusia-Content-Sha256':
+                '0f4636c78f65d3639ece5a064b5ae753e3408614a14fb18ab4d7540d2c248543',
+            },
+          });
+        }
+        throw new Error('unexpected request');
+      },
+    });
+
+    await expect(
+      client.getImageEvidence(
+        'T-1234',
+        'm-1',
+        '120000000000000001',
+      ),
+    ).resolves.toMatchObject({ contentType: 'image/png', size: 4 });
+
+    await expect(
+      client.getVideoEvidence(
+        'T-1234',
+        'm-1',
+        '120000000000000002',
+      ),
+    ).rejects.toThrow(/does not advertise video evidence reads/);
+  });
+
+  it('rejects image evidence when the provenance hash does not match the bytes', async () => {
+    const client = new TicketEvidenceClient({
+      baseUrl,
+      apiKey: API_KEY,
+      timeoutMs: 5_000,
+      fetchImpl: async (input: Parameters<typeof fetch>[0]) => {
+        const url = String(input);
+        if (url.endsWith('/v1/evidence/capabilities')) {
+          return new Response(JSON.stringify({
+            service: 'enthusia-support-bot',
+            api: 'ticket-evidence',
+            contractVersion: 'evidence-v2',
+            reads: ['attachment.image', 'attachment.video'],
+            maxImageBytes: 1024,
+            maxVideoBytes: 2048,
           }), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
@@ -654,7 +801,7 @@ describe('no-mutation invariant', () => {
 
 describe('ticket evidence read-only invariant', () => {
   it('allowlist contains GET-only bounded evidence targets', () => {
-    expect(TICKET_EVIDENCE_REQUEST_ALLOWLIST).toHaveLength(2);
+    expect(TICKET_EVIDENCE_REQUEST_ALLOWLIST).toHaveLength(3);
     for (const target of TICKET_EVIDENCE_REQUEST_ALLOWLIST) {
       expect(target.method).toBe('GET');
     }
@@ -665,6 +812,12 @@ describe('ticket evidence read-only invariant', () => {
       assertAllowedEvidenceRequest(
         'GET',
         '/v1/tickets/T-1234/messages/m-1/attachments/120000000000000001/image',
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertAllowedEvidenceRequest(
+        'GET',
+        '/v1/tickets/T-1234/messages/m-1/attachments/120000000000000002/video',
       ),
     ).not.toThrow();
   });
@@ -689,6 +842,11 @@ describe('ticket evidence read-only invariant', () => {
       'T-1234',
       'm-1',
       '120000000000000001',
+    );
+    await client.getVideoEvidence(
+      'T-1234',
+      'm-1',
+      '120000000000000002',
     );
     expect(recorded.length).toBeGreaterThan(0);
     for (const request of recorded) {

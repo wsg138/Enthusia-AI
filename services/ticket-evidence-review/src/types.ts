@@ -24,6 +24,31 @@ export interface TicketImageAssessmentRecord {
   assessment: ImageEvidenceAssessment;
 }
 
+export interface TicketVideoFrameProvenance {
+  index: number;
+  timestampSeconds: number;
+  evidenceRef: string;
+  sha256: string;
+}
+
+export interface TicketVideoAssessmentRecord extends TicketImageAssessmentRecord {
+  mediaKind: 'video';
+  video: {
+    ticketId: string;
+    source: 'discord';
+    submitterId: string;
+    submitterKind: 'player' | 'staff' | 'system';
+    submittedAt: string;
+    contentType: 'video/mp4' | 'video/webm' | 'video/quicktime';
+    durationSeconds: number;
+    width: number;
+    height: number;
+    codec: string;
+    format: string;
+    frames: TicketVideoFrameProvenance[];
+  };
+}
+
 export interface EvidencePolicyConcern {
   /** Stable rule/policy identifier when available. */
   code: string;

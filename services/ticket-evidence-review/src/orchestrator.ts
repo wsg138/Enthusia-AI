@@ -72,7 +72,7 @@ export async function collectTicketImageAssessments(
   let runner = input.assessImage;
 
   for (const candidate of selection.selected) {
-    runner ??= defaultAssessmentRunner();
+    runner ??= createDefaultTicketImageAssessmentRunner();
     const outcome = await assessCandidate(input, candidate, runner);
     if ('record' in outcome) assessments.push(outcome.record);
     else issues.push(outcome.issue);
@@ -86,7 +86,7 @@ export async function collectTicketImageAssessments(
   };
 }
 
-function defaultAssessmentRunner(): TicketImageAssessmentRunner {
+export function createDefaultTicketImageAssessmentRunner(): TicketImageAssessmentRunner {
   const config = loadConfig();
   const tracker = new CostTracker(config.budget, config.modelPrices);
   return (request) =>
@@ -95,7 +95,7 @@ function defaultAssessmentRunner(): TicketImageAssessmentRunner {
 
 function boundedMaxImages(value: number | undefined): number {
   if (value === undefined) return MAX_TICKET_IMAGE_ASSESSMENTS;
-  if (!Number.isInteger(value) || value < 1) return 1;
+  if (!Number.isInteger(value) || value <= 0) return 0;
   return Math.min(value, MAX_TICKET_IMAGE_ASSESSMENTS);
 }
 
@@ -118,8 +118,9 @@ function selectImageCandidates(
     }
   }
 
-  const selected = candidates.slice(-maxImages);
-  for (const omitted of candidates.slice(0, Math.max(0, candidates.length - maxImages))) {
+  const selected = maxImages === 0 ? [] : candidates.slice(-maxImages);
+  const omittedCount = candidates.length - selected.length;
+  for (const omitted of candidates.slice(0, omittedCount)) {
     issues.push(issue(omitted.messageId, omitted.attachment.id, 'limit_exceeded'));
   }
   return {

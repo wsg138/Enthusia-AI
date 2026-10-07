@@ -123,7 +123,7 @@ export const ACTION_REQUEST_KINDS: readonly ActionRequestKind[] = [
   'transition',
 ] as const;
 
-export interface TicketEvidenceCapabilities {
+export interface TicketEvidenceCapabilitiesV1 {
   service: 'enthusia-support-bot';
   api: 'ticket-evidence';
   contractVersion: 'evidence-v1';
@@ -131,11 +131,34 @@ export interface TicketEvidenceCapabilities {
   maxImageBytes: number;
 }
 
+export interface TicketEvidenceCapabilitiesV2 {
+  service: 'enthusia-support-bot';
+  api: 'ticket-evidence';
+  contractVersion: 'evidence-v2';
+  reads: Array<'attachment.image' | 'attachment.video'>;
+  maxImageBytes: number;
+  maxVideoBytes: number;
+}
+
+export type TicketEvidenceCapabilities =
+  | TicketEvidenceCapabilitiesV1
+  | TicketEvidenceCapabilitiesV2;
+
 export interface TicketImageEvidence {
   ticketId: string;
   messageId: string;
   attachmentId: string;
   contentType: string;
+  size: number;
+  sha256: string;
+  bytes: Uint8Array;
+}
+
+export interface TicketVideoEvidence {
+  ticketId: string;
+  messageId: string;
+  attachmentId: string;
+  contentType: 'video/mp4' | 'video/webm' | 'video/quicktime';
   size: number;
   sha256: string;
   bytes: Uint8Array;

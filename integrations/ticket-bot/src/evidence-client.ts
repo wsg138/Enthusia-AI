@@ -14,15 +14,36 @@ import {
 import type {
   TicketEvidenceCapabilities,
   TicketImageEvidence,
+  TicketVideoEvidence,
 } from './types.js';
 
-const evidenceCapabilitiesSchema = z.strictObject({
+const evidenceCapabilitiesV1Schema = z.strictObject({
   service: z.literal('enthusia-support-bot'),
   api: z.literal('ticket-evidence'),
   contractVersion: z.literal('evidence-v1'),
   reads: z.array(z.literal('attachment.image')),
   maxImageBytes: z.number().int().positive().max(8 * 1024 * 1024),
 });
+
+const evidenceCapabilitiesV2Schema = z.strictObject({
+  service: z.literal('enthusia-support-bot'),
+  api: z.literal('ticket-evidence'),
+  contractVersion: z.literal('evidence-v2'),
+  reads: z.array(z.enum(['attachment.image', 'attachment.video'])),
+  maxImageBytes: z.number().int().positive().max(8 * 1024 * 1024),
+  maxVideoBytes: z.number().int().positive().max(25 * 1024 * 1024),
+});
+
+const evidenceCapabilitiesSchema = z.union([
+  evidenceCapabilitiesV1Schema,
+  evidenceCapabilitiesV2Schema,
+]);
+
+const SUPPORTED_VIDEO_TYPES = new Set<TicketVideoEvidence['contentType']>([
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+]);
 
 type EvidenceMethod = 'GET';
 
@@ -36,6 +57,10 @@ export const TICKET_EVIDENCE_REQUEST_ALLOWLIST: readonly EvidenceTarget[] = [
   {
     method: 'GET',
     path: /^\/v1\/tickets\/[^/]+\/messages\/[^/]+\/attachments\/[^/]+\/image$/,
+  },
+  {
+    method: 'GET',
+    path: /^\/v1\/tickets\/[^/]+\/messages\/[^/]+\/attachments\/[^/]+\/video$/,
   },
 ] as const;
 
@@ -78,7 +103,7 @@ export class TicketEvidenceClient {
       (globalThis.fetch.bind(globalThis) as typeof fetch);
     this.timeoutMs = config.timeoutMs ?? 10_000;
     this.userAgent =
-      config.userAgent ?? 'enthusia-ai/ticket-evidence (+evidence-v1)';
+      config.userAgent ?? 'enthusia-ai/ticket-evidence (+evidence-v2)';
   }
 
   async getCapabilities(): Promise<TicketEvidenceCapabilities> {
@@ -105,11 +130,37 @@ export class TicketEvidenceClient {
       `/v1/tickets/${encodeURIComponent(ticketId)}` +
       `/messages/${encodeURIComponent(messageId)}` +
       `/attachments/${encodeURIComponent(attachmentId)}/image`;
-    const response = await this.getRaw(path);
+    const response = await this.getRaw(
+      path,
+      'application/octet-stream, image/*',
+    );
     return readImageEvidenceResponse(
       response,
       { ticketId, messageId, attachmentId },
       capabilities.maxImageBytes,
+    );
+  }
+
+  async getVideoEvidence(
+    ticketId: string,
+    messageId: string,
+    attachmentId: string,
+  ): Promise<TicketVideoEvidence> {
+    const capabilities = await this.getCapabilities();
+    requireVideoReadCapability(capabilities);
+
+    const path =
+      `/v1/tickets/${encodeURIComponent(ticketId)}` +
+      `/messages/${encodeURIComponent(messageId)}` +
+      `/attachments/${encodeURIComponent(attachmentId)}/video`;
+    const response = await this.getRaw(
+      path,
+      'application/octet-stream, video/mp4, video/webm, video/quicktime',
+    );
+    return readVideoEvidenceResponse(
+      response,
+      { ticketId, messageId, attachmentId },
+      videoByteLimit(capabilities),
     );
   }
 
@@ -119,11 +170,8 @@ export class TicketEvidenceClient {
     return response.json();
   }
 
-  private async getRaw(path: string): Promise<Response> {
-    const response = await this.request(
-      path,
-      'application/octet-stream, image/*',
-    );
+  private async getRaw(path: string, accept: string): Promise<Response> {
+    const response = await this.request(path, accept);
     if (!response.ok) throw await evidenceResponseError(response, path);
     return response;
   }
@@ -155,11 +203,38 @@ async function readImageEvidenceResponse(
   expected: { ticketId: string; messageId: string; attachmentId: string },
   maximumBytes: number,
 ): Promise<TicketImageEvidence> {
-  const contentType = evidenceContentType(response);
+  const contentType = imageContentType(response);
+  const common = await readEvidenceResponse(
+    response,
+    expected,
+    maximumBytes,
+  );
+  return { ...common, contentType };
+}
+
+async function readVideoEvidenceResponse(
+  response: Response,
+  expected: { ticketId: string; messageId: string; attachmentId: string },
+  maximumBytes: number,
+): Promise<TicketVideoEvidence> {
+  const contentType = videoContentType(response);
+  const common = await readEvidenceResponse(
+    response,
+    expected,
+    maximumBytes,
+  );
+  return { ...common, contentType };
+}
+
+async function readEvidenceResponse(
+  response: Response,
+  expected: { ticketId: string; messageId: string; attachmentId: string },
+  maximumBytes: number,
+): Promise<Omit<TicketImageEvidence, 'contentType'>> {
   const sha256 = evidenceProvenance(response, expected);
   validateDeclaredEvidenceLength(response, maximumBytes);
 
-  const bytes = new Uint8Array(await response.arrayBuffer());
+  const bytes = await readBoundedEvidenceBytes(response, maximumBytes);
   validateEvidenceBytes(bytes, maximumBytes);
   validateEvidenceHash(bytes, sha256);
 
@@ -167,20 +242,34 @@ async function readImageEvidenceResponse(
     ticketId: expected.ticketId,
     messageId: expected.messageId,
     attachmentId: expected.attachmentId,
-    contentType,
     size: bytes.byteLength,
     sha256,
     bytes,
   };
 }
 
-function evidenceContentType(response: Response): string {
+function responseContentType(response: Response): string {
   const [rawType = ''] = (response.headers.get('content-type') ?? '').split(';');
-  const value = rawType.trim().toLowerCase();
+  return rawType.trim().toLowerCase();
+}
+
+function imageContentType(response: Response): string {
+  const value = responseContentType(response);
   if (value.startsWith('image/')) return value;
   throw new ExternalServiceError(
     TICKET_BOT_SERVICE,
     'Ticket evidence response was not an image.',
+  );
+}
+
+function videoContentType(response: Response): TicketVideoEvidence['contentType'] {
+  const value = responseContentType(response);
+  if (SUPPORTED_VIDEO_TYPES.has(value as TicketVideoEvidence['contentType'])) {
+    return value as TicketVideoEvidence['contentType'];
+  }
+  throw new ExternalServiceError(
+    TICKET_BOT_SERVICE,
+    'Ticket evidence response was not a supported video.',
   );
 }
 
@@ -256,6 +345,81 @@ function validateDeclaredEvidenceLength(
   );
 }
 
+async function readBoundedEvidenceBytes(
+  response: Response,
+  maximumBytes: number,
+): Promise<Uint8Array> {
+  const reader = evidenceBodyReader(response);
+  try {
+    const collected = await collectEvidenceChunks(reader, maximumBytes);
+    return concatenateEvidenceChunks(collected.chunks, collected.total);
+  } catch (error) {
+    await reader.cancel().catch(() => undefined);
+    throw evidenceReadError(error);
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function evidenceBodyReader(
+  response: Response,
+): ReadableStreamDefaultReader<Uint8Array> {
+  if (response.body !== null) return response.body.getReader();
+  throw new ExternalServiceError(
+    TICKET_BOT_SERVICE,
+    'Ticket evidence response did not include a readable body.',
+  );
+}
+
+async function collectEvidenceChunks(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  maximumBytes: number,
+): Promise<{ chunks: Uint8Array[]; total: number }> {
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) return { chunks, total };
+    if (value === undefined || value.byteLength === 0) continue;
+    total = boundedEvidenceTotal(total, value.byteLength, maximumBytes);
+    chunks.push(value);
+  }
+}
+
+function boundedEvidenceTotal(
+  current: number,
+  additional: number,
+  maximumBytes: number,
+): number {
+  const total = current + additional;
+  if (total <= maximumBytes) return total;
+  throw new ExternalServiceError(
+    TICKET_BOT_SERVICE,
+    'Ticket evidence response exceeded the advertised size limit.',
+  );
+}
+
+function concatenateEvidenceChunks(
+  chunks: Uint8Array[],
+  total: number,
+): Uint8Array {
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
+function evidenceReadError(error: unknown): ExternalServiceError {
+  if (error instanceof ExternalServiceError) return error;
+  return new ExternalServiceError(
+    TICKET_BOT_SERVICE,
+    'Ticket evidence response failed while reading bounded bytes.',
+  );
+}
+
 function validateEvidenceBytes(
   bytes: Uint8Array,
   maximumBytes: number,
@@ -310,6 +474,34 @@ function requireImageReadCapability(
     TICKET_BOT_SERVICE,
     'Deployed Ticket Bot does not advertise image evidence reads.',
   );
+}
+
+function requireVideoReadCapability(
+  capabilities: TicketEvidenceCapabilities,
+): void {
+  if (
+    capabilities.contractVersion === 'evidence-v2' &&
+    capabilities.reads.includes('attachment.video')
+  ) {
+    return;
+  }
+  throw new ExternalServiceError(
+    TICKET_BOT_SERVICE,
+    'Deployed Ticket Bot does not advertise video evidence reads.',
+  );
+}
+
+function videoByteLimit(
+  capabilities: TicketEvidenceCapabilities,
+): number {
+  requireVideoReadCapability(capabilities);
+  if (capabilities.contractVersion !== 'evidence-v2') {
+    throw new ExternalServiceError(
+      TICKET_BOT_SERVICE,
+      'Deployed Ticket Bot video evidence contract is unavailable.',
+    );
+  }
+  return capabilities.maxVideoBytes;
 }
 
 function evidenceTransportError(error: unknown): ExternalServiceError {
