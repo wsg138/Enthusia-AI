@@ -28,6 +28,7 @@ export {
   findConfiguredRoot,
   liveApprovedFileSchema,
   liveConfigDirectorySchema,
+  liveSafeConfigValueSchema,
   livePluginDirectorySchema,
   liveSourceSchema,
   sftpIndexerConfigSchema,
@@ -36,6 +37,7 @@ export {
   type CompiledSftpIndexerConfig,
   type LiveApprovedFileConfig,
   type LiveConfigDirectoryConfig,
+  type LiveSafeConfigValueConfig,
   type LivePluginDirectoryConfig,
   type LiveSourceConfig,
   type SftpIndexerConfig,
@@ -118,6 +120,7 @@ export {
 export {
   LiveServerSourceGateway,
   createConfiguredSftpClientFactory,
+  type ApprovedConfigValueResult,
   type ApprovedFileReadResult,
   type ConfigDiscoveryItem,
   type ConfigDiscoveryResult,
