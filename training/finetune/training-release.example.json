@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "approved_for_gpu_training": false,
+  "dataset_version": "enthusia-ai-dataset-2026.10.07-v1",
+  "train_sha256": "REPLACE_WITH_64_HEX",
+  "validation_sha256": "REPLACE_WITH_64_HEX",
+  "config_sha256": "REPLACE_WITH_64_HEX",
+  "w20_report_sha256": "REPLACE_WITH_64_HEX",
+  "owner_review": {
+    "exact_10_approved": false,
+    "exact_30_approved": false,
+    "approved_at": "",
+    "reference": ""
+  },
+  "w20": {
+    "baseline_passed": false
+  }
+}
