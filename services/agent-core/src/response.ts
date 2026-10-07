@@ -283,12 +283,41 @@ function renderAnswerPart(part: VerifiedAnswerPart): string {
   }
 }
 
+const PROPOSITION_WORDS = new Set([
+  'is',
+  'are',
+  'was',
+  'were',
+  'has',
+  'have',
+  'can',
+  'cannot',
+  'will',
+  'should',
+  'use',
+  'uses',
+  'allow',
+  'allows',
+  'require',
+  'requires',
+]);
+
+const LEADING_DETERMINERS = [
+  'the ',
+  'your ',
+  'my ',
+  'this ',
+  'that ',
+  'these ',
+  'those ',
+] as const;
+
 function renderSupportedFact(claim: string, value: string): string {
   const cleanClaim = trimSentencePunctuation(claim);
   const cleanValue = trimSentencePunctuation(value);
-  const meaning = cleanClaim.match(/^(.+?)\s+meaning$/i);
-  if (meaning?.[1]) {
-    return `${meaning[1]} means ${cleanValue}.`;
+  const meaning = meaningSubject(cleanClaim);
+  if (meaning !== undefined) {
+    return `${meaning} means ${cleanValue}.`;
   }
 
   if (looksLikeCompleteSentence(value)) {
@@ -299,40 +328,70 @@ function renderSupportedFact(claim: string, value: string): string {
     return `For “${cleanClaim},” current information says ${cleanValue}.`;
   }
 
-  const article =
-    /^(?:the|your|my|this|that|these|those)\b/i.test(cleanClaim) ? '' : 'The ';
-  return `${article}${cleanClaim} is ${cleanValue}.`;
+  const lowerClaim = cleanClaim.toLowerCase();
+  const hasDeterminer = LEADING_DETERMINERS.some((prefix) =>
+    lowerClaim.startsWith(prefix),
+  );
+  return `${hasDeterminer ? '' : 'The '}${cleanClaim} is ${cleanValue}.`;
 }
 
 function naturalClaim(claim: string): string {
   const clean = trimSentencePunctuation(claim);
-  const meaning = clean.match(/^(.+?)\s+meaning$/i);
-  if (meaning?.[1]) return `what ${meaning[1]} means`;
-  return clean;
+  const meaning = meaningSubject(clean);
+  return meaning === undefined ? clean : `what ${meaning} means`;
+}
+
+function meaningSubject(claim: string): string | undefined {
+  const suffix = ' meaning';
+  if (!claim.toLowerCase().endsWith(suffix)) return undefined;
+  const subject = claim.slice(0, -suffix.length).trim();
+  return subject.length === 0 ? undefined : subject;
+}
+
+function words(value: string): string[] {
+  return value
+    .toLowerCase()
+    .split(' ')
+    .map((word) => trimSentencePunctuation(word))
+    .filter(Boolean);
 }
 
 function looksLikeCompleteSentence(value: string): boolean {
   const clean = value.trim();
-  if (/[.!?]$/.test(clean)) return true;
-  return /\b(?:is|are|was|were|has|have|can|cannot|will|should|uses?|allows?|requires?)\b/i.test(
-    clean,
-  ) && clean.split(/\s+/).length >= 4;
-}
-
-function looksLikeProposition(claim: string): boolean {
-  return /\b(?:is|are|was|were|has|have|can|cannot|will|should|uses?|allows?|requires?)\b/i.test(
-    claim,
+  if (endsSentence(clean)) return true;
+  const tokens = words(clean);
+  return (
+    tokens.length >= 4 &&
+    tokens.some((word) => PROPOSITION_WORDS.has(word))
   );
 }
 
+function looksLikeProposition(claim: string): boolean {
+  return words(claim).some((word) => PROPOSITION_WORDS.has(word));
+}
+
 function trimSentencePunctuation(value: string): string {
-  return value.trim().replace(/[.!?]+$/u, '');
+  let end = value.trim().length;
+  const trimmed = value.trim();
+  while (end > 0 && isSentencePunctuation(trimmed[end - 1] as string)) {
+    end -= 1;
+  }
+  return trimmed.slice(0, end);
+}
+
+function isSentencePunctuation(value: string): boolean {
+  return value === '.' || value === '!' || value === '?';
+}
+
+function endsSentence(value: string): boolean {
+  if (value.length === 0) return false;
+  return isSentencePunctuation(value[value.length - 1] as string);
 }
 
 function ensureSentence(value: string): string {
   const clean = value.trim();
   if (clean.length === 0) return clean;
-  return /[.!?]$/.test(clean) ? clean : `${clean}.`;
+  return endsSentence(clean) ? clean : `${clean}.`;
 }
 
 function unique(values: string[]): string[] {
