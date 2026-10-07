@@ -2,6 +2,13 @@
 setlocal EnableExtensions
 cd /d C:\Dev\Enthusia\Enthusia-AI
 
+if /I not "%ENTHUSIA_ALLOW_30%"=="YES" (
+  echo ERROR: this legacy wrapper runs 30 examples.
+  echo The current owner gate must use Run-Qwen35-Owner-Review-10.cmd.
+  echo Use the explicitly named Run-Qwen35-Baseline-30.cmd only after owner approval.
+  exit /b 9
+)
+
 echo Waiting for local baseline server...
 set /a COUNT=0
 :wait_health
