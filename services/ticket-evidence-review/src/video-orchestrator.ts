@@ -320,6 +320,7 @@ function aggregateVideoAssessment(
     assessment,
     mediaKind: 'video',
     video: {
+      ticketId,
       source: candidate.attachment.source,
       submitterId: candidate.submitterId,
       submitterKind: candidate.submitterKind,
