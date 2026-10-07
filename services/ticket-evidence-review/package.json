@@ -12,8 +12,8 @@
   "dependencies": {
     "@enthusia/integration-ticket-bot": "^0.1.0",
     "@enthusia/openai-gateway": "^0.1.0",
-    "js-yaml": "^4.1.0",
-    "zod": "^4.0.0",
+    "js-yaml": "4.3.2",
+    "zod": "4.6.5",
     "@enthusia/inference-adapter": "^0.1.0",
     "@enthusia/integration-staff-moderation": "^0.1.0"
   },
@@ -21,6 +21,6 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "@types/js-yaml": "^4.0.9"
+    "@types/js-yaml": "4.0.9"
   }
 }
