@@ -130,7 +130,7 @@ def test_missing_evidence_needs_edit():
     assert "missing_evidence_request" in label.reasons
 
 
-def test_clean_ticket_is_good():
+def test_staff_action_claim_needs_manual_context():
     ctx = _ctx(
         ["I lost my netherite gear"],
         ["Can you send a screenshot?", "Refunded. Closing this ticket."],
@@ -139,7 +139,71 @@ def test_clean_ticket_is_good():
         staff_decisions=[{"decision": "refund"}],
     )
     label = label_quality(ctx)
+    assert label.label == "USABLE_WITH_EDIT"
+    assert "staff_action_claim_requires_context" in label.reasons
+
+
+def test_short_staff_answer_needs_edit():
+    label = label_quality(
+        _ctx(["Is this allowed?"], ["Not allowed either"])
+    )
+    assert label.label == "USABLE_WITH_EDIT"
+    assert "thin_staff_response" in label.reasons
+
+
+def test_medium_volatile_claim_needs_verification():
+    ctx = _ctx(
+        ["What command should I use?"],
+        ["Use /guild help and then choose the relevant subcommand from the menu."],
+        marked_claims=[
+            MarkedClaim(
+                "Use /guild help and then choose the relevant subcommand from the menu.",
+                "medium",
+                "command syntax",
+            )
+        ],
+    )
+    label = label_quality(ctx)
+    assert label.label == "USABLE_WITH_EDIT"
+    assert "volatile_claim_requires_verification" in label.reasons
+
+
+def test_current_state_claim_needs_verification():
+    label = label_quality(
+        _ctx(
+            ["Is this bug fixed?"],
+            ["This is a known bug and it is being worked on by the team right now."],
+        )
+    )
+    assert label.label == "USABLE_WITH_EDIT"
+    assert "current_state_claim_requires_verification" in label.reasons
+
+
+def test_punishment_language_needs_manual_edit_even_if_classifier_misses_it():
+    label = label_quality(
+        _ctx(
+            ["Why did this happen?"],
+            ["Your account is permanently banned for ban evasion."],
+            category="other",
+        )
+    )
+    assert label.label == "USABLE_WITH_EDIT"
+    assert "human_decision_like_content" in label.reasons
+
+
+def test_substantive_process_guidance_is_good():
+    ctx = _ctx(
+        ["I lost my netherite gear after a server issue."],
+        [
+            "Please send a screenshot of the missing items and the approximate time "
+            "they disappeared so staff can verify the incident before deciding next steps."
+        ],
+        category="lost-items",
+        evidence_requests=[{"evidence_type": "screenshot"}],
+    )
+    label = label_quality(ctx)
     assert label.label == "GOOD"
+    assert label.reasons == ("clean_conversation",)
 
 
 def test_ideal_never_auto_assigned():
