@@ -1,1 +1,35 @@
-{"name":"@enthusia/agent-service","version":"0.1.0","private":true,"type":"module","license":"UNLICENSED","description":"Production W12 agent runtime: local reasoner, orchestrator composition, typed tool registration, internal HTTP service","main":"./dist/main.js","types":"./dist/index.d.ts","exports":{".":{"default":"./dist/index.js","types":"./dist/index.d.ts"}},"scripts":{"build":"npm run build -w @enthusia/contracts -w @enthusia/logging -w @enthusia/config -w @enthusia/inference-adapter -w @enthusia/memory && tsc -p tsconfig.json","start":"node dist/main.js","typecheck":"npm run build -w @enthusia/contracts -w @enthusia/logging -w @enthusia/config -w @enthusia/inference-adapter -w @enthusia/memory && tsc --noEmit -p tsconfig.typecheck.json"},"dependencies":{"@enthusia/agent-core":"0.1.0","@enthusia/config":"0.1.0","@enthusia/contracts":"0.1.0","@enthusia/inference-adapter":"0.1.0","@enthusia/integration-sftp":"0.1.0","@enthusia/integration-ticket-bot":"0.1.0","@enthusia/logging":"0.1.0","zod":"4.6.5","@enthusia/memory":"0.1.0","@enthusia/player-identity":"0.1.0","@enthusia/integration-staff-moderation":"0.1.0","@enthusia/ticket-evidence-review":"0.1.0"}}
+{
+  "name": "@enthusia/agent-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "description": "Production W12 agent runtime: local reasoner, orchestrator composition, typed tool registration, internal HTTP service",
+  "main": "./dist/main.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "default": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "npm run build -w @enthusia/contracts -w @enthusia/logging -w @enthusia/config -w @enthusia/inference-adapter -w @enthusia/memory && tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "typecheck": "npm run build -w @enthusia/contracts -w @enthusia/logging -w @enthusia/config -w @enthusia/inference-adapter -w @enthusia/memory && tsc --noEmit -p tsconfig.typecheck.json"
+  },
+  "dependencies": {
+    "@enthusia/agent-core": "0.1.0",
+    "@enthusia/config": "0.1.0",
+    "@enthusia/contracts": "0.1.0",
+    "@enthusia/inference-adapter": "0.1.0",
+    "@enthusia/integration-sftp": "0.1.0",
+    "@enthusia/integration-ticket-bot": "0.1.0",
+    "@enthusia/logging": "0.1.0",
+    "zod": "4.6.5",
+    "@enthusia/memory": "0.1.0",
+    "@enthusia/player-identity": "0.1.0",
+    "@enthusia/integration-staff-moderation": "0.1.0",
+    "@enthusia/ticket-evidence-review": "0.1.0"
+  }
+}
