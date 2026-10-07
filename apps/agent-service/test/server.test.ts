@@ -169,6 +169,18 @@ async function start(
   return 'http://127.0.0.1:' + running.port;
 }
 
+function fetchEvidenceReview(
+  baseUrl: string,
+  init: RequestInit,
+): Promise<Response> {
+  const endpoint = new URL('/v1/ticket/evidence-review', baseUrl);
+  if (endpoint.protocol !== 'http:' || endpoint.hostname !== '127.0.0.1') {
+    throw new Error('Evidence-review tests only allow the local loopback server.');
+  }
+  // nosemgrep: Semgrep_rules_lgpl_javascript_ssrf_rule-node-ssrf -- endpoint is verified loopback test infrastructure.
+  return fetch(endpoint, init);
+}
+
 describe('agent service', () => {
   it('protects capabilities and reports the actual empty registry', async () => {
     const baseUrl = await start();
@@ -260,14 +272,14 @@ describe('agent service', () => {
   it('protects the ticket evidence review endpoint and fails safely when unavailable', async () => {
     const baseUrl = await start();
 
-    const denied = await fetch(baseUrl + '/v1/ticket/evidence-review', {
+    const denied = await fetchEvidenceReview(baseUrl, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ ticketId: '42' }),
     });
     expect(denied.status).toBe(401);
 
-    const unavailable = await fetch(baseUrl + '/v1/ticket/evidence-review', {
+    const unavailable = await fetchEvidenceReview(baseUrl, {
       method: 'POST',
       headers: {
         authorization: 'Bearer agent-key',
@@ -315,7 +327,7 @@ describe('agent service', () => {
     });
 
     const inboundTrace = '123e4567-e89b-12d3-a456-426614174000';
-    const response = await fetch(baseUrl + '/v1/ticket/evidence-review', {
+    const response = await fetchEvidenceReview(baseUrl, {
       method: 'POST',
       headers: {
         authorization: 'Bearer agent-key',
@@ -334,7 +346,7 @@ describe('agent service', () => {
       moderation: { verified: false },
     });
 
-    const invalid = await fetch(baseUrl + '/v1/ticket/evidence-review', {
+    const invalid = await fetchEvidenceReview(baseUrl, {
       method: 'POST',
       headers: {
         authorization: 'Bearer agent-key',
@@ -360,7 +372,7 @@ describe('agent service', () => {
       captured.logger,
     );
     const inboundTrace = '123e4567-e89b-12d3-a456-426614174111';
-    const response = await fetch(baseUrl + '/v1/ticket/evidence-review', {
+    const response = await fetchEvidenceReview(baseUrl, {
       method: 'POST',
       headers: {
         authorization: 'Bearer agent-key',
