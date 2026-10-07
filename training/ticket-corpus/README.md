@@ -106,6 +106,15 @@ retention policy. Only sanitized review artifacts proceed to the next gate.
 
 
 
+## Synthetic worker expansion
+
+The post-owner-review expansion plan is documented in
+[SYNTHETIC-WORKER-GENERATION-PLAN.md](SYNTHETIC-WORKER-GENERATION-PLAN.md).
+It uses 15 independent generation lanes to produce a private candidate pool,
+with player-visible dialogue separated from internal investigation and
+staff-only evidence. Generated candidates are not admitted to training without
+subsequent grounding, privacy, dedupe, review, and W16/W19 gates.
+
 ## Owner-reviewed behavior rubric
 
 Historical rewrites and future synthetic ticket generation must also follow
