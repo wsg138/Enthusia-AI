@@ -1,7 +1,9 @@
+import { JSON_SCHEMA, load } from 'js-yaml';
 import {
   findConfiguredRoot,
   type CompiledSftpIndexerConfig,
   type LiveApprovedFileConfig,
+  type LiveSafeConfigValueConfig,
   type SftpServerConfig,
 } from './config.js';
 import { parseDeploymentIdentity } from './deployment-identity.js';
@@ -13,19 +15,24 @@ import {
   liveServerIdentity,
 } from './live-provenance.js';
 import { prepareDocumentText } from './parsers.js';
+import { REDACTED_VALUE } from './redaction.js';
 import {
   DenyGuardSftpClient,
   type SftpClient,
 } from './sftp-client.js';
 import type {
+  ApprovedConfigValueResult,
   ApprovedFileReadResult,
   LiveFileIdentity,
+  SafeConfigScalar,
 } from './live-types.js';
 
 type PreparedText = Extract<
   ReturnType<typeof prepareDocumentText>,
   { ok: true }
 >;
+
+const MAX_SAFE_SCALAR_TEXT = 2_000;
 
 function requireLive(server: SftpServerConfig): NonNullable<SftpServerConfig['liveSource']> {
   if (server.liveSource === undefined) {
@@ -75,6 +82,47 @@ export class LiveApprovedFileReader {
     );
   }
 
+  async readConfigValue(
+    client: SftpClient,
+    server: SftpServerConfig,
+    sourceId: string,
+    valueKey: string,
+    observedAt: string,
+  ): Promise<ApprovedConfigValueResult> {
+    const source = this.source(server, sourceId);
+    const configured = this.safeValue(source, valueKey);
+    const approved = await this.read(client, server, sourceId, observedAt);
+    if (approved.content === undefined) {
+      throw new LiveBoundaryError('UNSUPPORTED_CONTENT', false);
+    }
+
+    const value = extractSafeScalar(
+      approved.content,
+      source.format,
+      configured.path,
+    );
+    rejectRedactedScalar(value);
+
+    const file = approved.provenance.file;
+    return {
+      sourceId,
+      valueKey,
+      value,
+      valueType: scalarType(value),
+      evidence: 'approved-config-scalar',
+      file: {
+        fileName: file.fileName,
+        sha256: file.sha256,
+        version: file.version,
+        modifiedAt: file.modifiedAt,
+      },
+      provenance: {
+        file: { version: file.version },
+        observedAt,
+      },
+    };
+  }
+
   private source(
     server: SftpServerConfig,
     sourceId: string,
@@ -82,6 +130,17 @@ export class LiveApprovedFileReader {
     const found = server.liveSource?.approvedFiles.find(
       (source) => source.id === sourceId,
     );
+    if (found === undefined) {
+      throw new LiveBoundaryError('SOURCE_NOT_CONFIGURED', false);
+    }
+    return found;
+  }
+
+  private safeValue(
+    source: LiveApprovedFileConfig,
+    valueKey: string,
+  ): LiveSafeConfigValueConfig {
+    const found = source.safeValues.find((value) => value.id === valueKey);
     if (found === undefined) {
       throw new LiveBoundaryError('SOURCE_NOT_CONFIGURED', false);
     }
@@ -115,4 +174,85 @@ export class LiveApprovedFileReader {
     }
     return result;
   }
+}
+
+function extractSafeScalar(
+  content: string,
+  format: LiveApprovedFileConfig['format'],
+  path: readonly string[],
+): SafeConfigScalar {
+  const raw = format === 'properties'
+    ? parseProperties(content)
+    : parseStructured(content, format);
+  const value = lookupOwnPath(raw, path);
+  return requireScalar(value);
+}
+
+function parseStructured(
+  content: string,
+  format: LiveApprovedFileConfig['format'],
+): unknown {
+  try {
+    if (format === 'json') return JSON.parse(content) as unknown;
+    if (format === 'yaml') return load(content, { schema: JSON_SCHEMA });
+  } catch {
+    throw new LiveBoundaryError('UNSUPPORTED_CONTENT', false);
+  }
+  throw new LiveBoundaryError('UNSUPPORTED_CONTENT', false);
+}
+
+function parseProperties(content: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const line of content.split(/\r?\n/)) {
+    const match = /^\s*([^#!\s][^:=]*?)\s*[:=]\s*(.*)$/.exec(line);
+    if (match === null) continue;
+    const key = match[1]?.trim();
+    if (key === undefined || key.length === 0) continue;
+    result[key] = match[2] ?? '';
+  }
+  return result;
+}
+
+function lookupOwnPath(root: unknown, path: readonly string[]): unknown {
+  let value = root;
+  for (const segment of path) {
+    const record = ownRecord(value);
+    if (
+      record === undefined ||
+      !Object.prototype.hasOwnProperty.call(record, segment)
+    ) {
+      throw new LiveBoundaryError('SOURCE_UNAVAILABLE', false);
+    }
+    value = record[segment];
+  }
+  return value;
+}
+
+function ownRecord(value: unknown): Record<string, unknown> | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+  return value as Record<string, unknown>;
+}
+
+function requireScalar(value: unknown): SafeConfigScalar {
+  if (value === null) return null;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.length <= MAX_SAFE_SCALAR_TEXT) {
+    return value;
+  }
+  throw new LiveBoundaryError('UNSUPPORTED_CONTENT', false);
+}
+
+function rejectRedactedScalar(value: SafeConfigScalar): void {
+  if (typeof value === 'string' && value.includes(REDACTED_VALUE)) {
+    throw new LiveBoundaryError('SECRET_CONTENT_DENIED', false);
+  }
+}
+
+function scalarType(
+  value: SafeConfigScalar,
+): ApprovedConfigValueResult['valueType'] {
+  return value === null ? 'null' : typeof value;
 }
