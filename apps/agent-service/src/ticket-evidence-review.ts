@@ -191,9 +191,7 @@ export class TicketEvidenceReviewService {
       );
     }
 
-    const moderationPromise = this.readModeration(target.value);
     const policyCatalog = await this.deps.policyReader.read();
-    const moderationSnapshot = await moderationPromise;
     const initialModeration = unavailableModerationState(target.value);
 
     const result = await runTicketEvidencePipeline({
@@ -204,6 +202,7 @@ export class TicketEvidenceReviewService {
       policyAssessor: this.policyAssessor,
       moderationState: initialModeration,
       moderationStateResolver: async ({ target: resolvedTarget, concerns }) => {
+        const moderationSnapshot = await this.readModeration(resolvedTarget);
         if (moderationSnapshot === null) {
           throw new Error('Authoritative moderation state is unavailable.');
         }
