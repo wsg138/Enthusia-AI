@@ -26,7 +26,7 @@ const DECISION: ModerationDecision = {
 
 function staffSnapshot(
   version: 'v1' | 'v2' = 'v2',
-  subjectId: string | undefined =
+  subjectId: string | null =
     '12345678-1234-4234-8234-123456789abc',
 ): StaffModerationStateSnapshot {
   return {
@@ -37,7 +37,7 @@ function staffSnapshot(
       requested: 'Bad_Player',
       playerId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
       username: 'Bad_Player',
-      ...(version === 'v2' && subjectId !== undefined
+      ...(version === 'v2' && subjectId !== null
         ? { moderationSubjectId: subjectId }
         : {}),
     },
@@ -157,7 +157,7 @@ describe('moderation.history', () => {
   });
 
   it('fails closed when Staff v2 has no current moderation subject', async () => {
-    const runtime = deps(staffSnapshot('v2', undefined));
+    const runtime = deps(staffSnapshot('v2', null));
     const tool = new StaffModerationHistoryTool(runtime);
 
     const result = await tool.execute(
