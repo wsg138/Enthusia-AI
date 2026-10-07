@@ -9,29 +9,35 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { TicketVideoEvidence } from '@enthusia/integration-ticket-bot';
+import {
+  MAX_VIDEO_DURATION_SECONDS,
+  MAX_VIDEO_FRAME_BYTES,
+  MAX_VIDEO_FRAMES,
+  MAX_VIDEO_PROCESSING_MS,
+  TicketVideoProcessingError,
+} from './video-constraints.js';
+import { parseVideoMetadata } from './video-metadata.js';
 
-export const MAX_VIDEO_DURATION_SECONDS = 120;
-export const MAX_VIDEO_FRAMES = 3;
-export const MAX_VIDEO_FRAME_BYTES = 8 * 1024 * 1024;
-export const MAX_VIDEO_PIXELS = 2560 * 1440;
-export const MAX_VIDEO_DIMENSION = 4096;
-export const MAX_VIDEO_PROCESSING_MS = 30_000;
+export {
+  MAX_VIDEO_DIMENSION,
+  MAX_VIDEO_DURATION_SECONDS,
+  MAX_VIDEO_FRAME_BYTES,
+  MAX_VIDEO_FRAMES,
+  MAX_VIDEO_PIXELS,
+  MAX_VIDEO_PROCESSING_MS,
+  TicketVideoProcessingError,
+} from './video-constraints.js';
+export { parseVideoMetadata } from './video-metadata.js';
+
 const FFPROBE_TIMEOUT_MS = 5_000;
 const FFMPEG_FRAME_TIMEOUT_MS = 8_000;
 const MAX_COMMAND_OUTPUT_BYTES = 64 * 1024;
+const MAX_VIDEO_SOURCE_BYTES = 25 * 1024 * 1024;
 
 const SUPPORTED_VIDEO_TYPES = new Set<TicketVideoEvidence['contentType']>([
   'video/mp4',
   'video/webm',
   'video/quicktime',
-]);
-
-const SUPPORTED_CODECS = new Set([
-  'h264',
-  'hevc',
-  'vp8',
-  'vp9',
-  'av1',
 ]);
 
 export interface TicketVideoMetadata {
@@ -79,11 +85,18 @@ export interface SampleTicketVideoDeps {
   ffmpegPath?: string;
 }
 
-export class TicketVideoProcessingError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'TicketVideoProcessingError';
-  }
+interface ResolvedSamplingDeps {
+  runner: MediaCommandRunner;
+  now: () => number;
+  ffprobePath: string;
+  ffmpegPath: string;
+}
+
+interface SamplingContext extends ResolvedSamplingDeps {
+  evidence: TicketVideoEvidence;
+  deadline: number;
+  directory: string;
+  inputPath: string;
 }
 
 export async function sampleTicketVideo(
@@ -100,32 +113,30 @@ export async function sampleTicketVideo(
   }
 }
 
-interface SamplingContext {
-  evidence: TicketVideoEvidence;
-  runner: MediaCommandRunner;
-  now: () => number;
-  deadline: number;
-  directory: string;
-  inputPath: string;
-  ffprobePath: string;
-  ffmpegPath: string;
-}
-
 async function createSamplingContext(
   evidence: TicketVideoEvidence,
   deps: SampleTicketVideoDeps,
 ): Promise<SamplingContext> {
-  const now = deps.now ?? Date.now;
+  const resolved = resolveSamplingDeps(deps);
   const directory = await mkdtemp(join(tmpdir(), 'enthusia-ticket-video-'));
   const inputPath = join(directory, 'input-video');
   await writeFile(inputPath, evidence.bytes, { mode: 0o600 });
   return {
+    ...resolved,
     evidence,
-    runner: deps.runner ?? nodeMediaCommandRunner(),
-    now,
-    deadline: now() + MAX_VIDEO_PROCESSING_MS,
+    deadline: resolved.now() + MAX_VIDEO_PROCESSING_MS,
     directory,
     inputPath,
+  };
+}
+
+function resolveSamplingDeps(
+  deps: SampleTicketVideoDeps,
+): ResolvedSamplingDeps {
+  const now = deps.now ?? Date.now;
+  return {
+    runner: deps.runner ?? nodeMediaCommandRunner(),
+    now,
     ffprobePath: deps.ffprobePath ?? 'ffprobe',
     ffmpegPath: deps.ffmpegPath ?? 'ffmpeg',
   };
@@ -161,12 +172,10 @@ async function sampleFrames(
   for (const [index, timestampSeconds] of timestamps.entries()) {
     frames.push(await sampleFrame(context, index, timestampSeconds));
   }
-  if (frames.length === 0) {
-    throw new TicketVideoProcessingError(
-      'Video sampling produced no usable frames.',
-    );
-  }
-  return frames;
+  if (frames.length > 0) return frames;
+  throw new TicketVideoProcessingError(
+    'Video sampling produced no usable frames.',
+  );
 }
 
 async function sampleFrame(
@@ -205,11 +214,27 @@ function buildVideoSample(
   };
 }
 
-
 export function planVideoFrameTimestamps(
   durationSeconds: number,
   maximumFrames = MAX_VIDEO_FRAMES,
 ): number[] {
+  validateTimestampPlanInput(durationSeconds, maximumFrames);
+  const frameCount = Math.min(
+    maximumFrames,
+    Math.max(1, Math.ceil(durationSeconds)),
+  );
+  if (frameCount === 1) return [0];
+
+  const finalTimestamp = Math.max(0, durationSeconds - 0.05);
+  return Array.from({ length: frameCount }, (_, index) =>
+    roundedTimestamp((finalTimestamp * index) / (frameCount - 1)),
+  );
+}
+
+function validateTimestampPlanInput(
+  durationSeconds: number,
+  maximumFrames: number,
+): void {
   if (
     !Number.isFinite(durationSeconds) ||
     durationSeconds <= 0 ||
@@ -224,23 +249,16 @@ export function planVideoFrameTimestamps(
       'Video frame limit must be a positive integer.',
     );
   }
-  const frameCount = Math.min(
-    maximumFrames,
-    Math.max(1, Math.ceil(durationSeconds)),
-  );
-  if (frameCount === 1) return [0];
-
-  const finalTimestamp = Math.max(0, durationSeconds - 0.05);
-  return Array.from({ length: frameCount }, (_, index) =>
-    roundedTimestamp((finalTimestamp * index) / (frameCount - 1)),
-  );
 }
 
 function validateSourceEvidence(evidence: TicketVideoEvidence): void {
   if (!SUPPORTED_VIDEO_TYPES.has(evidence.contentType)) {
     throw new TicketVideoProcessingError('Unsupported ticket video MIME type.');
   }
-  if (evidence.bytes.byteLength < 1 || evidence.bytes.byteLength > 25 * 1024 * 1024) {
+  if (
+    evidence.bytes.byteLength < 1 ||
+    evidence.bytes.byteLength > MAX_VIDEO_SOURCE_BYTES
+  ) {
     throw new TicketVideoProcessingError('Ticket video exceeds the byte limit.');
   }
   const expected = evidence.sha256.trim().toLowerCase();
@@ -268,17 +286,7 @@ async function inspectVideo(
   try {
     result = await runner.run(
       ffprobePath,
-      [
-        '-v',
-        'error',
-        '-select_streams',
-        'v:0',
-        '-show_entries',
-        'stream=codec_name,width,height,duration:format=duration,format_name',
-        '-of',
-        'json',
-        inputPath,
-      ],
+      ffprobeArgs(inputPath),
       { timeoutMs, maxOutputBytes: MAX_COMMAND_OUTPUT_BYTES },
     );
   } catch {
@@ -289,118 +297,18 @@ async function inspectVideo(
   return parseVideoMetadata(result.stdout, contentType);
 }
 
-export function parseVideoMetadata(
-  text: string,
-  contentType: TicketVideoEvidence['contentType'],
-): TicketVideoMetadata {
-  const { stream, format } = parseProbeOutput(text);
-  const durationSeconds = requireDuration(stream, format);
-  const { width, height } = requireDimensions(stream);
-  const codec = requireCodec(stream);
-  const formatName = requireFormatName(format);
-  requireMatchingContainer(contentType, formatName);
-  return {
-    durationSeconds,
-    width,
-    height,
-    codec,
-    format: formatName,
-  };
-}
-
-function parseProbeOutput(text: string): {
-  stream: Record<string, unknown>;
-  format: Record<string, unknown>;
-} {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch {
-    throw new TicketVideoProcessingError(
-      'Video metadata output was not valid JSON.',
-    );
-  }
-  if (!isRecord(raw)) {
-    throw new TicketVideoProcessingError('Video metadata shape is invalid.');
-  }
-  const streams = Array.isArray(raw.streams) ? raw.streams : [];
-  const stream = streams[0];
-  const format = raw.format;
-  if (!isRecord(stream) || !isRecord(format)) {
-    throw new TicketVideoProcessingError(
-      'Video metadata did not expose a primary video stream.',
-    );
-  }
-  return { stream, format };
-}
-
-function requireDuration(
-  stream: Record<string, unknown>,
-  format: Record<string, unknown>,
-): number {
-  const duration = firstFinitePositive(stream.duration, format.duration);
-  if (
-    duration === null ||
-    duration > MAX_VIDEO_DURATION_SECONDS
-  ) {
-    throw new TicketVideoProcessingError(
-      'Video duration is missing, invalid, or exceeds the processing limit.',
-    );
-  }
-  return duration;
-}
-
-function requireDimensions(
-  stream: Record<string, unknown>,
-): { width: number; height: number } {
-  const width = finitePositiveInteger(stream.width);
-  const height = finitePositiveInteger(stream.height);
-  if (width === null || height === null) {
-    throw new TicketVideoProcessingError(
-      'Video dimensions exceed the processing limit.',
-    );
-  }
-  if (
-    width > MAX_VIDEO_DIMENSION ||
-    height > MAX_VIDEO_DIMENSION ||
-    width * height > MAX_VIDEO_PIXELS
-  ) {
-    throw new TicketVideoProcessingError(
-      'Video dimensions exceed the processing limit.',
-    );
-  }
-  return { width, height };
-}
-
-function requireCodec(stream: Record<string, unknown>): string {
-  const value = stream.codec_name;
-  const codec = typeof value === 'string'
-    ? value.trim().toLowerCase()
-    : '';
-  if (!SUPPORTED_CODECS.has(codec)) {
-    throw new TicketVideoProcessingError('Video codec is unsupported.');
-  }
-  return codec;
-}
-
-function requireFormatName(format: Record<string, unknown>): string {
-  const value = format.format_name;
-  if (typeof value !== 'string' || value.trim().length === 0) {
-    throw new TicketVideoProcessingError(
-      'Video metadata did not expose a container format.',
-    );
-  }
-  return value.trim().toLowerCase();
-}
-
-function requireMatchingContainer(
-  contentType: TicketVideoEvidence['contentType'],
-  formatName: string,
-): void {
-  if (containerMatches(contentType, formatName)) return;
-  throw new TicketVideoProcessingError(
-    'Video container does not match the verified MIME type.',
-  );
+function ffprobeArgs(inputPath: string): string[] {
+  return [
+    '-v',
+    'error',
+    '-select_streams',
+    'v:0',
+    '-show_entries',
+    'stream=codec_name,width,height,duration:format=duration,format_name',
+    '-of',
+    'json',
+    inputPath,
+  ];
 }
 
 async function extractFrame(
@@ -414,30 +322,7 @@ async function extractFrame(
   try {
     await runner.run(
       ffmpegPath,
-      [
-        '-v',
-        'error',
-        '-nostdin',
-        '-ss',
-        timestampSeconds.toFixed(3),
-        '-i',
-        inputPath,
-        '-map',
-        '0:v:0',
-        '-frames:v',
-        '1',
-        '-an',
-        '-sn',
-        '-dn',
-        '-threads',
-        '1',
-        '-f',
-        'image2',
-        '-vcodec',
-        'png',
-        '-y',
-        outputPath,
-      ],
+      ffmpegFrameArgs(inputPath, outputPath, timestampSeconds),
       { timeoutMs, maxOutputBytes: MAX_COMMAND_OUTPUT_BYTES },
     );
   } catch {
@@ -447,28 +332,44 @@ async function extractFrame(
   }
 }
 
+function ffmpegFrameArgs(
+  inputPath: string,
+  outputPath: string,
+  timestampSeconds: number,
+): string[] {
+  return [
+    '-v',
+    'error',
+    '-nostdin',
+    '-ss',
+    timestampSeconds.toFixed(3),
+    '-i',
+    inputPath,
+    '-map',
+    '0:v:0',
+    '-frames:v',
+    '1',
+    '-an',
+    '-sn',
+    '-dn',
+    '-threads',
+    '1',
+    '-f',
+    'image2',
+    '-vcodec',
+    'png',
+    '-y',
+    outputPath,
+  ];
+}
+
 async function readFrame(
   outputPath: string,
   index: number,
   timestampSeconds: number,
 ): Promise<TicketVideoFrame> {
-  let bytes: Uint8Array;
-  try {
-    bytes = new Uint8Array(await readFile(outputPath));
-  } catch {
-    throw new TicketVideoProcessingError(
-      'Video frame extraction did not produce an output frame.',
-    );
-  }
-  if (
-    bytes.byteLength < 8 ||
-    bytes.byteLength > MAX_VIDEO_FRAME_BYTES ||
-    !hasPngSignature(bytes)
-  ) {
-    throw new TicketVideoProcessingError(
-      'Derived video frame is invalid or exceeds the frame byte limit.',
-    );
-  }
+  const bytes = await readFrameBytes(outputPath);
+  validateFrameBytes(bytes);
   return {
     index,
     timestampSeconds,
@@ -476,6 +377,29 @@ async function readFrame(
     bytes,
     sha256: createHash('sha256').update(bytes).digest('hex'),
   };
+}
+
+async function readFrameBytes(outputPath: string): Promise<Uint8Array> {
+  try {
+    return new Uint8Array(await readFile(outputPath));
+  } catch {
+    throw new TicketVideoProcessingError(
+      'Video frame extraction did not produce an output frame.',
+    );
+  }
+}
+
+function validateFrameBytes(bytes: Uint8Array): void {
+  if (
+    bytes.byteLength >= 8 &&
+    bytes.byteLength <= MAX_VIDEO_FRAME_BYTES &&
+    hasPngSignature(bytes)
+  ) {
+    return;
+  }
+  throw new TicketVideoProcessingError(
+    'Derived video frame is invalid or exceeds the frame byte limit.',
+  );
 }
 
 function remainingTimeout(
@@ -518,37 +442,6 @@ function nodeMediaCommandRunner(): MediaCommandRunner {
   };
 }
 
-function containerMatches(
-  contentType: TicketVideoEvidence['contentType'],
-  formatName: string,
-): boolean {
-  const formats = new Set(formatName.split(',').map((item) => item.trim()));
-  if (contentType === 'video/webm') {
-    return formats.has('webm') || formats.has('matroska');
-  }
-  return formats.has('mov') || formats.has('mp4');
-}
-
-function firstFinitePositive(...values: unknown[]): number | null {
-  for (const value of values) {
-    const parsed =
-      typeof value === 'number'
-        ? value
-        : typeof value === 'string'
-          ? Number(value)
-          : Number.NaN;
-    if (Number.isFinite(parsed) && parsed > 0) return parsed;
-  }
-  return null;
-}
-
-function finitePositiveInteger(value: unknown): number | null {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
-    return null;
-  }
-  return value;
-}
-
 function hasPngSignature(bytes: Uint8Array): boolean {
   const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
   return signature.every((value, index) => bytes[index] === value);
@@ -556,8 +449,4 @@ function hasPngSignature(bytes: Uint8Array): boolean {
 
 function roundedTimestamp(value: number): number {
   return Math.round(value * 1000) / 1000;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
