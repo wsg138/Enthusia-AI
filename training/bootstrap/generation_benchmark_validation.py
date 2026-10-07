@@ -90,6 +90,23 @@ TICK_RATE_EQUIVALENCE_RE = re.compile(
     r"(?:up to\s+)?\d+(?:\.\d+)?\s+"
     r"(?:attempts?|attacks?|times?)\s+per\s+second\b"
 )
+RESTRICTED_AUTHORITY_RE = re.compile(
+    r"(?i)(?:\|\s*(?:op|operator|admin|staff)\s*\||"
+    r"\b(?:op|operator|admin|staff)[ -]only\b|"
+    r"\b(?:permission|requires?|restricted)\b.{0,48}"
+    r"\b(?:op|operator|admin|staff)\b)"
+)
+PLAYER_ACCESS_CLAIM_RE = re.compile(
+    r"(?i)\b(?:you|players?|normal players?)\s+"
+    r"(?:can|may|are able to)\s+"
+    r"(?:use|run|type|apply|set|change|manage|access|execute)\b"
+)
+EXPLICIT_PLAYER_ACCESS_RE = re.compile(
+    r"(?i)\b(?:players?|normal players?)\s+"
+    r"(?:can|may|are able to|do not need|don't need)\b.{0,64}"
+    r"\b(?:use|run|type|apply|set|change|manage|access|execute|client mod)\b|"
+    r"\bworks? for (?:both )?(?:java|bedrock|players?)\b"
+)
 def _require_http_endpoint(parsed: urllib.parse.SplitResult) -> None:
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         raise ValueError("--endpoint must use http:// or https:// with a host")
@@ -371,6 +388,15 @@ def _mechanism_supported(assistant: str, support: str) -> bool:
     return earning_supported and effect_supported
 
 
+def _player_access_claim_supported(assistant: str, support: str) -> bool:
+    """Do not turn capability evidence into normal-player authorization."""
+    if not PLAYER_ACCESS_CLAIM_RE.search(assistant):
+        return True
+    if not RESTRICTED_AUTHORITY_RE.search(support):
+        return True
+    return bool(EXPLICIT_PLAYER_ACCESS_RE.search(support))
+
+
 def _teaches_staff_subcommand(
     assistant: str,
     user: str,
@@ -482,6 +508,11 @@ def _validate_semantic_grounding(
         problems.append("answer_not_fully_grounded")
     if not is_boundary and not _mechanism_supported(assistant, support):
         problems.append("unsupported_mechanism_claim")
+    if (
+        not is_boundary
+        and not _player_access_claim_supported(assistant, support)
+    ):
+        problems.append("unsupported_player_authorization")
     if TICK_RATE_EQUIVALENCE_RE.search(assistant):
         problems.append("invalid_tick_rate_equivalence")
 
