@@ -130,7 +130,7 @@ and eval checkout):
 | `smoke.yaml` | 10-step local CPU smoke; catches config/assembly errors | $0.00 |
 | `small-adapter.yaml` | QLoRA 3B on the owner's RTX 4060 Ti 8 GB; end-to-end proof | $0.00 |
 | `full-run.yaml` | Legacy dense 8B QLoRA reference config | **$23.60** (example pricing) |
-| `a100-qwen3-30b-a3b.yaml` | Qwen3 30B-A3B MoE QLoRA on one A100 80 GB | **$9.20** (example pricing; replace with actual rate) |
+| `a100-qwen3-30b-a3b.yaml` | Qwen3 30B-A3B MoE QLoRA on one A100 80 GB | **$9.20** (example pricing; replace with actual rate) |\n| `a100-qwen3-30b-a3b-ticket-smoke.yaml` | Two-step Qwen3 A100 path proof on reviewed ticket data | **$0.80** estimate at the observed $1.59/hr rate |
 
 `full-run.yaml` uses *example* rental pricing (24 h × $0.90 + $2
 storage). **Replace with the actual rental quote** and re-run
