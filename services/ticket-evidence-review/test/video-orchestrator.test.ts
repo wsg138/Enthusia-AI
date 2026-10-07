@@ -264,6 +264,43 @@ describe('collectTicketVideoAssessments', () => {
     expect(result.issues).toEqual([]);
   });
 
+  it('rejects declared oversized video before any evidence fetch or vision work', async () => {
+    const oversized = ticket();
+    oversized.messages = [{
+      id: 'm9',
+      ticketId: '42',
+      author: { id: 'reporter', kind: 'player' },
+      body: 'oversized video',
+      createdAt: '2026-10-06T12:05:00.000Z',
+      attachments: [
+        attachment(
+          'v9',
+          'oversized.mp4',
+          'video/mp4',
+          25 * 1024 * 1024 + 1,
+        ),
+      ],
+    }];
+    const getVideoEvidence = vi.fn();
+
+    const result = await collectTicketVideoAssessments({
+      ticket: oversized,
+      evidenceClient: { getVideoEvidence },
+      traceId: 'trace-oversized',
+      assessImage: async (input) => observed(input),
+      sampleVideo: async () => sample(),
+    });
+
+    expect(result.assessments).toEqual([]);
+    expect(result.attemptedCount).toBe(0);
+    expect(result.issues).toContainEqual({
+      messageId: 'm9',
+      attachmentId: 'v9',
+      reason: 'declared_too_large',
+    });
+    expect(getVideoEvidence).not.toHaveBeenCalled();
+  });
+
   it('rejects sampler output that exceeds the hard frame bound', async () => {
     const base = ticket();
     base.messages = [{
@@ -479,5 +516,51 @@ describe('aggregateFrameAssessments', () => {
       [0],
       [1],
     ]);
+  });
+
+  it('preserves contradictory frames and overlay limitations instead of resolving them', () => {
+    const first = observed({
+      traceId: 't',
+      evidenceRef: 'frame-0',
+      image: {
+        bytes: new Uint8Array([1]),
+        contentType: 'image/png',
+        sha256: FRAME_ONE_SHA,
+      },
+    });
+    first.assessment.observations[0]!.text =
+      'The reported player appears next to the disputed structure.';
+
+    const second = observed({
+      traceId: 't',
+      evidenceRef: 'frame-1',
+      image: {
+        bytes: new Uint8Array([2]),
+        contentType: 'image/png',
+        sha256: FRAME_TWO_SHA,
+      },
+    });
+    second.assessment.observations[0]!.text =
+      'The reported player is not visible in this sampled frame.';
+    second.assessment.limitations = [
+      'A large edited overlay obscures part of the gameplay view.',
+    ];
+    second.assessment.needsMoreContext = true;
+
+    const assessment = aggregateFrameAssessments(sample(), [
+      { frameIndex: 0, timestampSeconds: 0, result: first },
+      { frameIndex: 1, timestampSeconds: 3.95, result: second },
+    ]);
+
+    expect(assessment.observations.map((item) => item.text)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('appears next to the disputed structure'),
+        expect.stringContaining('is not visible'),
+      ]),
+    );
+    expect(assessment.limitations).toContain(
+      'A large edited overlay obscures part of the gameplay view.',
+    );
+    expect(assessment.needsMoreContext).toBe(true);
   });
 });
