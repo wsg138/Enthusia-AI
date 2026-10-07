@@ -24,6 +24,7 @@ from .extract import (
 )
 from .outdated import markOutdated
 from .patterns import extract_evidence_requests, extract_staff_decisions
+from .privacy import severe_pii_exclusion_reason
 from .quality import TicketContext, label_quality
 from .redact import RedactionConfig, Redactor
 from .schema import validate_candidate
@@ -141,6 +142,15 @@ def run_pipeline(tickets: list[dict], config: PipelineConfig) -> CorpusResult:
         excluded, reason = ticket.is_excluded_source()
         if excluded:
             rejected.append({"ticket_id": tid, "reason": "source_excluded", "detail": reason})
+            continue
+
+        severe_pii = severe_pii_exclusion_reason(ticket)
+        if severe_pii:
+            rejected.append({
+                "ticket_id": tid,
+                "reason": "source_excluded",
+                "detail": f"severe_pii:{severe_pii}",
+            })
             continue
 
         # Stages 3: secrets -> 2/privacy: redaction.
