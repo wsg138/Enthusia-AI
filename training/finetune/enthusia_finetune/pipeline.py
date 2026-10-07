@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import sys
 from dataclasses import dataclass, field
 
@@ -70,27 +71,24 @@ def _default_out_dir(config_name: str) -> str:
     return os.path.join("runs", config_name)
 
 
-def _training_command(cfg: config_mod.TrainingConfig) -> str:
-    t = cfg.training
-    lora = cfg.lora
+def _training_command(
+    *,
+    config_path: str,
+    train_path: str,
+    validation_path: str | None,
+) -> str:
     args = [
-        "python -m transformers + peft + trl (SFTTrainer)",
-        f"--model_name_or_path {cfg.base_model}",
-        f"--dataset {cfg.dataset['train_path'] or '<train.jsonl from assembly>'}",
-        f"--lora_r {lora['r']} --lora_alpha {lora['alpha']} --lora_dropout {lora['dropout']}",
-        f"--target_modules {','.join(lora['target_modules'])}",
-        f"--learning_rate {t['learning_rate']} --optimizer {t['optimizer']}",
-        f"--per_device_train_batch_size {t['batch_size']}",
-        f"--gradient_accumulation_steps {t['gradient_accumulation']}",
-        f"--max_seq_length {t['max_seq_length']} --lr_scheduler_type {t['scheduler']}",
-        f"--seed {t['seed']}",
+        "python",
+        "-m",
+        "enthusia_finetune.trainer",
+        "--config",
+        config_path,
+        "--train-json",
+        train_path,
     ]
-    if t["epochs"] is not None:
-        args.append(f"--num_train_epochs {t['epochs']}")
-    if t["max_steps"] is not None:
-        args.append(f"--max_steps {t['max_steps']}")
-    args.append(f"--output_dir {cfg.output['adapter_dir']}")
-    return " ".join(args)
+    if validation_path:
+        args.extend(["--validation-json", validation_path])
+    return " ".join(shlex.quote(str(arg)) for arg in args)
 
 
 def prepare(
@@ -134,6 +132,24 @@ def prepare(
         "outputs": manifest["outputs"],
     }
 
+    train_path = os.path.join(dataset_dir, manifest["outputs"]["train"]["path"])
+    validation_path = os.path.join(
+        dataset_dir, manifest["outputs"]["validation"]["path"]
+    )
+    resolved_raw = dict(cfg.raw)
+    resolved_raw["dataset"] = {
+        "version": dataset_version,
+        "train_path": train_path,
+        "validation_path": validation_path,
+    }
+    resolved_config_path = os.path.join(out_dir, "resolved-training-config.json")
+    os.makedirs(out_dir, exist_ok=True)
+    with open(resolved_config_path, "w", encoding="utf-8") as handle:
+        json.dump(resolved_raw, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+    # Validate the exact persisted config that the GPU host will consume.
+    config_mod.validate_config(resolved_raw)
+
     # 3. Eval-before (golden suite against the baseline).
     eval_dir = (cfg.eval or {}).get("w20_checkout", "")
     eval_out = os.path.join(out_dir, "evals", "before.json")
@@ -148,12 +164,19 @@ def prepare(
             "reason": "config[eval.w20_checkout] not set; point it at the built W20 package",
         }
 
-    # 4. Training command to run on the GPU host (not executed here).
+    # 4. Real executable training command for the approved GPU host.
     result.training = {
         "executed": False,
-        "command": _training_command(cfg),
-        "note": "Execute on the approved GPU host AFTER the budget check above passes. "
-        "This pipeline never starts training itself.",
+        "command": _training_command(
+            config_path=resolved_config_path,
+            train_path=train_path,
+            validation_path=validation_path,
+        ),
+        "config_path": resolved_config_path,
+        "train_path": train_path,
+        "validation_path": validation_path,
+        "note": "Execute this command on the approved GPU host AFTER the budget "
+        "and dataset gates above pass. The prepare pipeline itself never consumes GPU.",
     }
 
     # 5. Export plan (dry-run).
@@ -182,9 +205,8 @@ def train(cfg: config_mod.TrainingConfig, *, ledger_path: str) -> PipelineResult
         "This pipeline never starts training itself.\n"
         f"Budget check for reference: {check.reason}\n"
         "To train: run `finetune pipeline --stage prepare` to validate everything, "
-        "then execute the printed training command on the owner's PC or the "
-        "approved rented GPU host.\n"
-        f"Training command:\n  {_training_command(cfg)}"
+        "then execute the concrete `python -m enthusia_finetune.trainer ...` "
+        "command recorded in prepare.json on the approved GPU host."
     )
 
 
