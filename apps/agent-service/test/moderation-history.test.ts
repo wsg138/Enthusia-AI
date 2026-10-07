@@ -74,6 +74,7 @@ function deps(
     moderation: {
       enrichContext: vi.fn(async () => result),
     },
+    enrichmentTimeoutMs: 5_000,
   };
 }
 
@@ -102,7 +103,7 @@ describe('moderation.history', () => {
         supportSubjectId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
         moderationSubjectId: '12345678-1234-4234-8234-123456789abc',
       },
-      { limit: 5 },
+      { limit: 5, enrichmentTimeoutMs: 5_000 },
     );
     expect(result.visibility).toBe(Visibility.STAFF);
     expect(result.result).toEqual({
