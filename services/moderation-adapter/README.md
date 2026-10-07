@@ -1,77 +1,134 @@
 # @enthusia/moderation-adapter (W15)
 
-Integrates with the **separate moderation AI** without coupling availability.
+Direct, failure-isolated integration with the **separate AI-Moderation-API**
+service. Moderation remains a sibling process/model with independent health and
+release lineage.
 
-## Design (spec §10.1, §21)
+## Live cross-repo contract
 
-Moderation is a *sibling system*: separate process, separate model, independent
-health. This adapter:
+This package now targets the reviewed Policy-v1 support-enrichment boundary in
+`wsg138/AI-Moderation-API`, introduced on `main` by commit
+`9e4e83416eb21f4bfa7a8b9a5f646adbda14778a` (service version 0.2.0,
+SQLite schema v3):
 
-- owns an **HTTP client** to the moderation API (`client.ts`) — direct
-  connection, **never** routed through the AI Gateway or the support LLM;
-- reads **recent moderation decisions** as *optional support context*
-  (`adapter.ts`) — never as real-time verdicts, and never gating a support
-  response;
-- carries **shared identity metadata** (`types.ts`) — opaque mapping between
-  support-side and moderation-side identities, forwarded verbatim;
-- isolates failures with a **circuit breaker** (`circuit-breaker.ts`).
+- `GET /health/ready` — unauthenticated readiness;
+- `GET /v1/support-context/{subject_id}?limit=N` — authenticated,
+  privacy-minimized effective moderation history;
+- authenticated `/v1/*` requests require both:
+  - `X-Client-Id: <AI_MOD client id>`
+  - `Authorization: Bearer <runtime secret>`;
+- the support-context client must have the dedicated `support:context`
+  permission.
 
-## Key guarantees
+The support-context endpoint is introduced alongside moderation SQLite schema
+v3 (the authoritative-identity/time lookup index). Future additive schema
+versions are allowed, but deployments must expose the support-context endpoint
+and permission described above.
 
-1. **Fire-and-forget enrichment.** `ModerationAdapter.enrichContext()` never
-   throws and never blocks support. Moderation down →
-   `{ context: null, moderationAvailable: false }`; the support pipeline
-   proceeds exactly as if no moderation history existed.
-2. **Circuit breaker.** After `failureThreshold` consecutive failures the
-   circuit opens and calls short-circuit locally (no network I/O) until a
-   half-open probe succeeds after `cooldownMs`. A downed moderation service
-   costs support zero blocking time once the circuit opens.
-3. **Timeouts everywhere.** Per-request AbortController timeouts plus an
-   outer enrichment timeout; a hanging moderation service degrades to
-   "no context", never to a stalled support response.
-4. **Independent health.** Status is queried directly (`GET /health`);
-   `moderationDependencyHealth()` maps it into the shared `@enthusia/contracts`
-   `DependencyHealth` shape for §36 observability (W21). Nothing here
-   consults or requires AI Gateway availability.
-5. **No secrets in logs.** The optional Bearer token is sent only to the
-   configured `baseUrl`; error messages never include it (§5.5).
+There is no `POST /v1/decisions/context` dependency and no Bearer-only
+authentication assumption.
 
-## Wire API (expected of the external moderation service)
+## Identity boundary
 
-- `GET /health` → `{ status: 'ok' | 'degraded' | 'down', version? }`
-- `POST /v1/decisions/context` with `{ subjectId, limit }` →
-  `{ subjectId, decisions: [{ id, subjectId, verdict: 'clean'|'flagged'|'blocked', categories, summary, decidedAt, appealed? }] }`
+`SharedIdentityMetadata.moderationSubjectId` must be an **authoritative
+canonical identity ID** previously sent to AI-Moderation-API as
+`sender_identity_id` by a trusted integration.
 
-The fetch implementation is injected (`client.fetchFn`; defaults to
-`globalThis.fetch` when configured, mock in tests). **There is no real
-moderation service connection in tests or in this package** — tests use
-`test/mocks.ts`.
+Do not substitute:
 
-## Usage
+- usernames;
+- display names;
+- unlinked Minecraft UUID/name guesses;
+- raw Discord IDs unless the authoritative linking system defines that exact
+  value as the canonical identity.
+
+The moderation service does not fall back from canonical identity to raw
+platform sender IDs.
+
+## Data minimization
+
+The adapter allowlists only the fields returned by the reviewed support-context
+contract:
+
+- event ID/time and platform;
+- semantic label;
+- message action;
+- review priority;
+- strike recommendation;
+- containment;
+- support flow;
+- bounded reason codes;
+- decision source (`AI` or `ACCEPTED_CORRECTION`).
+
+Raw message text, neighboring chat, channel/scope IDs, raw platform sender IDs,
+review notes, scores, and arbitrary moderation database rows are not represented
+in `ModerationDecision`. Unknown response fields are discarded.
+
+Accepted staff corrections are already applied by AI-Moderation-API before the
+effective decision reaches this adapter.
+
+## Failure isolation
+
+`ModerationAdapter.enrichContext()` is optional support enrichment:
+
+- it never throws to the support pipeline;
+- network/timeout/malformed-response failures become
+  `{ context: null, moderationAvailable: false }`;
+- the circuit breaker stops repeated calls to a down moderation service;
+- moderation history never gates whether support may answer;
+- this package never performs live moderation or punishment actions.
+
+The reverse dependency also does not exist: AI-Moderation-API never calls this
+adapter or depends on the support LLM.
+
+## Readiness semantics
+
+AI-Moderation-API returns:
+
+- HTTP 200 + `{ status: "ready", ready: true, ... }` when ready;
+- HTTP 503 + `{ status: "not_ready", ready: false, ... }` when the process is
+  reachable but not ready.
+
+The client treats the structured 503 as **degraded/reachable**. Network errors,
+timeouts, unexpected HTTP failures, and malformed readiness payloads are
+unreachable failures.
+
+Credentials are not sent to the unauthenticated health endpoint.
+
+## Example
 
 ```ts
 import { ModerationAdapter } from '@enthusia/moderation-adapter';
 
 const adapter = new ModerationAdapter({
-  client: { baseUrl: 'http://moderation:8080', apiKey: process.env.MODERATION_API_KEY, fetchFn: globalThis.fetch },
+  client: {
+    baseUrl: 'http://moderation:8080',
+    clientId: process.env.AI_MOD_SUPPORT_CLIENT_ID!,
+    apiKey: process.env.AI_MOD_SUPPORT_API_KEY!,
+  },
   circuitBreaker: { failureThreshold: 3, cooldownMs: 30_000 },
 });
 
-// Fire-and-forget: never throws, never blocks support.
-const { context, moderationAvailable } = await adapter.enrichContext({
+const { context } = await adapter.enrichContext({
   supportSubjectId: 'player-uuid-1234',
-  moderationSubjectId: 'mod-subject-42',
+  moderationSubjectId: 'canonical-identity-1234',
 });
-const reply = await supportPipeline(userMessage, context /* may be null */);
 
-// Observability (W21): independent status query.
-const status = await adapter.getModerationStatus(); // 'reachable' | 'degraded' | 'unreachable' | 'circuit-open'
-const dependency = await adapter.moderationDependencyHealth();
+// context may be null; support must continue either way.
 ```
 
 ## Tests
 
-33 unit tests with a mock moderation API (`test/`): client behavior
-(status query, decision normalization, error mapping), circuit-breaker state
-transitions, and failure isolation (moderation down → support continues,
-open-circuit short-circuits with zero network calls, recovery via half-open).
+The unit/contract fixtures mirror the reviewed live API shape and cover:
+
+- two-header `/v1/*` authentication;
+- no credentials on `/health/ready`;
+- 200 ready vs structured 503 not-ready behavior;
+- canonical-identity URL encoding and 1..25 limit;
+- subject-mismatch rejection;
+- allowlisted decision normalization / unknown-field dropping;
+- accepted-correction decision source;
+- malformed/down/hanging service fail-soft behavior;
+- circuit opening and recovery.
+
+No real moderation service is contacted by the test suite.

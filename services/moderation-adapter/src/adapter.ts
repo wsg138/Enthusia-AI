@@ -118,8 +118,7 @@ export class ModerationAdapter {
     if (this.breaker.currentState === 'open') return 'circuit-open';
     try {
       const health = await this.breaker.execute(() => this.client.queryStatus());
-      if (health.status === 'ok') return 'reachable';
-      return 'degraded';
+      return health.ready ? 'reachable' : 'degraded';
     } catch (err) {
       this.onLog('warn', 'moderation status query failed', {
         reason: err instanceof Error ? err.message : String(err),

@@ -1,137 +1,268 @@
 /**
- * @enthusia/moderation-adapter — moderation service client tests (W15).
+ * Contract tests for the direct AI-Moderation-API client.
  *
- * Unit tests with a mock moderation API (NO real service connection).
- * The client talks directly to the moderation API — never through the
- * support LLM or the AI Gateway (§10.1, §21).
+ * These fixtures mirror the actual Policy-v1 readiness and support-context
+ * endpoints. The AI Gateway/support LLM is never involved.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ExternalServiceError } from '@enthusia/contracts';
 import { ModerationServiceClient } from '../src/client.js';
-import { downApi, healthyApi, MockModerationApi, sampleDecisionBody } from './mocks.js';
+import {
+  downApi,
+  healthyApi,
+  MockModerationApi,
+  notReadyHealthBody,
+  readyHealthBody,
+  sampleDecisionBody,
+} from './mocks.js';
 
-const BASE = { baseUrl: 'http://moderation:8080' } as const;
+const BASE = {
+  baseUrl: 'http://moderation:8080',
+  clientId: 'enthusia-support',
+  apiKey: 'runtime-test-token',
+} as const;
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 describe('ModerationServiceClient', () => {
-  it('rejects a non-http(s) baseUrl', () => {
-    expect(() => new ModerationServiceClient({ baseUrl: 'moderation:8080' })).toThrow();
-    expect(() => new ModerationServiceClient({ baseUrl: '' })).toThrow();
+  it('rejects invalid base URLs and missing AI_MOD credential parts', () => {
+    expect(() => new ModerationServiceClient({ ...BASE, baseUrl: 'moderation:8080' })).toThrow();
+    expect(() => new ModerationServiceClient({ ...BASE, baseUrl: '' })).toThrow();
+    expect(() => new ModerationServiceClient({ ...BASE, clientId: '' })).toThrow('clientId');
+    expect(() => new ModerationServiceClient({ ...BASE, apiKey: '' })).toThrow('apiKey');
   });
 
-  it('defaults to global fetch when no fetch implementation is injected', async () => {
+  it('defaults to global fetch and uses the real readiness endpoint', async () => {
     const api = healthyApi();
     vi.stubGlobal('fetch', api.fetch);
     const client = new ModerationServiceClient(BASE);
     const status = await client.queryStatus();
-    expect(status.status).toBe('ok');
-    expect(api.calls[0]?.url).toBe('http://moderation:8080/health');
+
+    expect(status).toEqual({
+      status: 'ready',
+      ready: true,
+      schema_version: 3,
+    });
+    expect(api.calls[0]?.url).toBe('http://moderation:8080/health/ready');
   });
 
-  it('queries moderation status (acceptance: client can query moderation status)', async () => {
-    const api = healthyApi();
+  it('treats structured HTTP 503 not-ready as degraded reachability data', async () => {
+    const api = new MockModerationApi({
+      status: 503,
+      body: notReadyHealthBody(),
+    });
     const client = new ModerationServiceClient({ ...BASE, fetchFn: api.fetch });
-    const status = await client.queryStatus();
-    expect(status.status).toBe('ok');
-    expect(status.version).toBe('mod-1.4.2');
-    expect(api.calls[0]?.url).toBe('http://moderation:8080/health');
+
+    await expect(client.queryStatus()).resolves.toEqual({
+      status: 'not_ready',
+      ready: false,
+      schema_version: 3,
+    });
   });
 
-  it('maps a self-reported degraded status through unchanged', async () => {
-    const api = new MockModerationApi({ body: { status: 'degraded' } });
+  it('does not send support credentials to the unauthenticated health endpoint', async () => {
+    let captured: Record<string, string> = {};
+    const api = new MockModerationApi({
+      body: readyHealthBody(),
+      assertRequest: (_input, init) => {
+        captured = (init?.headers ?? {}) as Record<string, string>;
+      },
+    });
     const client = new ModerationServiceClient({ ...BASE, fetchFn: api.fetch });
-    const status = await client.queryStatus();
-    expect(status.status).toBe('degraded');
+
+    await client.queryStatus();
+
+    expect(captured['Authorization']).toBeUndefined();
+    expect(captured['X-Client-Id']).toBeUndefined();
+    expect(captured['Accept']).toBe('application/json');
   });
 
-  it('throws ExternalServiceError on HTTP 500', async () => {
+  it('throws ExternalServiceError on an unexpected HTTP failure', async () => {
     const api = new MockModerationApi({ status: 500 });
     const client = new ModerationServiceClient({ ...BASE, fetchFn: api.fetch });
     await expect(client.queryStatus()).rejects.toBeInstanceOf(ExternalServiceError);
   });
 
-  it('throws ExternalServiceError on malformed /health payload', async () => {
-    const api = new MockModerationApi({ body: { status: 'everything-is-fine' } });
+  it('throws on malformed readiness payloads', async () => {
+    const api = new MockModerationApi({ body: { status: 'ready', ready: 'yes' } });
     const client = new ModerationServiceClient({ ...BASE, fetchFn: api.fetch });
     await expect(client.queryStatus()).rejects.toThrow('malformed');
   });
 
-  it('throws ExternalServiceError when the network is down', async () => {
-    const client = new ModerationServiceClient({ ...BASE, fetchFn: downApi().fetch });
-    await expect(client.queryStatus()).rejects.toBeInstanceOf(ExternalServiceError);
-  });
+  it('maps network and timeout failures to ExternalServiceError', async () => {
+    const down = new ModerationServiceClient({ ...BASE, fetchFn: downApi().fetch });
+    await expect(down.queryStatus()).rejects.toBeInstanceOf(ExternalServiceError);
 
-  it('times out instead of hanging forever (aborted request → ExternalServiceError)', async () => {
-    const api = new MockModerationApi({ hang: true });
-    const client = new ModerationServiceClient({ ...BASE, fetchFn: api.fetch, healthTimeoutMs: 50 });
-    await expect(client.queryStatus()).rejects.toThrow('timed out');
-  });
-
-  it('sends the Bearer token when configured, and never logs it', async () => {
-    const api = new MockModerationApi({ body: { status: 'ok' } });
-    const client = new ModerationServiceClient({
+    const hanging = new ModerationServiceClient({
       ...BASE,
-      apiKey: 'secret-token',
-      fetchFn: api.fetch,
+      fetchFn: new MockModerationApi({ hang: true }).fetch,
+      healthTimeoutMs: 50,
     });
+    await expect(hanging.queryStatus()).rejects.toThrow('timed out');
+  });
+
+  it('fetches the live support-context route with both required auth headers', async () => {
     let captured: Record<string, string> = {};
-    api.queue({
-      body: { status: 'ok' },
+    const api = new MockModerationApi({
+      body: sampleDecisionBody(),
       assertRequest: (_input, init) => {
         captured = (init?.headers ?? {}) as Record<string, string>;
       },
     });
-    await client.queryStatus();
-    expect(captured['Authorization']).toBe('Bearer secret-token');
-  });
-
-  it('fetches decision context and normalizes decisions', async () => {
-    const api = new MockModerationApi({ body: sampleDecisionBody() });
     const client = new ModerationServiceClient({ ...BASE, fetchFn: api.fetch });
-    const decisions = await client.fetchDecisionContext({ subjectId: 'mod-subject-42' });
+    const decisions = await client.fetchDecisionContext({
+      subjectId: 'canonical-player-42',
+    });
+
+    expect(api.calls[0]?.url).toBe(
+      'http://moderation:8080/v1/support-context/canonical-player-42?limit=10',
+    );
+    expect(api.calls[0]?.init?.method).toBe('GET');
+    expect(captured['X-Client-Id']).toBe('enthusia-support');
+    expect(captured['Authorization']).toBe('Bearer runtime-test-token');
     expect(decisions).toHaveLength(2);
-    expect(decisions[0]?.verdict).toBe('flagged');
-    expect(decisions[0]?.categories).toEqual(['spam']);
-    expect(decisions[1]?.appealed).toBeUndefined();
-    const call = api.calls[0];
-    expect(call?.url).toBe('http://moderation:8080/v1/decisions/context');
-    expect(JSON.parse(call?.init?.body as string)).toMatchObject({
-      subjectId: 'mod-subject-42',
-      limit: 10,
+    expect(decisions[0]).toMatchObject({
+      eventId: 'event-1',
+      semanticLabel: 'SEVERE_HARASSMENT',
+      messageAction: 'BLOCK',
+      strikeRecommendation: 'STRIKE',
+      decisionSource: 'AI',
+    });
+    expect(decisions[1]).toMatchObject({
+      eventId: 'event-2',
+      messageAction: 'ALLOW',
+      strikeRecommendation: 'EVIDENCE',
+      decisionSource: 'ACCEPTED_CORRECTION',
     });
   });
 
-  it('drops malformed decisions individually instead of failing the whole response', async () => {
+  it('URL-encodes the canonical identity and clamps limits to the API ceiling', async () => {
+    const body = sampleDecisionBody();
+    body.subject_id = 'canonical/player 42';
+    const api = new MockModerationApi({ body });
+    const client = new ModerationServiceClient({ ...BASE, fetchFn: api.fetch });
+
+    await client.fetchDecisionContext({
+      subjectId: 'canonical/player 42',
+      limit: 999,
+    });
+
+    expect(api.calls[0]?.url).toBe(
+      'http://moderation:8080/v1/support-context/canonical%2Fplayer%2042?limit=25',
+    );
+  });
+
+  it('drops malformed decisions without exposing unknown/raw fields', async () => {
     const api = new MockModerationApi({
       body: {
-        subjectId: 'mod-subject-42',
+        subject_id: 'canonical-player-42',
         decisions: [
-          { id: 'good', verdict: 'clean', categories: [], summary: 'Fine.', decidedAt: '2026-09-01T00:00:00.000Z' },
-          { id: 'bad-verdict', verdict: 'maybe', summary: '???', decidedAt: '2026-09-01T00:00:00.000Z' },
-          { id: 'no-summary', verdict: 'flagged', decidedAt: '2026-09-01T00:00:00.000Z' },
-          'not-an-object',
+          sampleDecisionBody().decisions[0],
+          {
+            event_id: 'bad-label',
+            occurred_at: '2026-09-30T12:00:00Z',
+            platform: 'minecraft',
+            semantic_label: 'MADE_UP_LABEL',
+            message_action: 'BLOCK',
+            review_priority: 'NORMAL',
+            strike_recommendation: 'STRIKE',
+            containment: 'NONE',
+            support_flow: 'NONE',
+            reason_codes: [],
+            decision_source: 'AI',
+            text: 'must never enter support context',
+          },
         ],
       },
     });
     const client = new ModerationServiceClient({ ...BASE, fetchFn: api.fetch });
-    const decisions = await client.fetchDecisionContext({ subjectId: 'mod-subject-42' });
+
+    const decisions = await client.fetchDecisionContext({
+      subjectId: 'canonical-player-42',
+    });
+
     expect(decisions).toHaveLength(1);
-    expect(decisions[0]?.id).toBe('good');
+    expect(decisions[0]?.eventId).toBe('event-1');
+    expect(decisions[0]).not.toHaveProperty('text');
   });
 
-  it('throws ExternalServiceError on a malformed context payload', async () => {
-    const api = new MockModerationApi({ body: { decisions: 'nope' } });
-    const client = new ModerationServiceClient({ ...BASE, fetchFn: api.fetch });
-    await expect(client.fetchDecisionContext({ subjectId: 'x' })).rejects.toThrow('malformed');
+  it('keeps canonical identity and credentials out of HTTP failure diagnostics', async () => {
+    const api = new MockModerationApi({ status: 500 });
+    const client = new ModerationServiceClient({
+      ...BASE,
+      apiKey: 'very-sensitive-runtime-token',
+      fetchFn: api.fetch,
+    });
+
+    let message = '';
+    try {
+      await client.fetchDecisionContext({ subjectId: 'canonical-private-player-42' });
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+
+    expect(message).toContain('/v1/support-context/{subject_id}');
+    expect(message).not.toContain('canonical-private-player-42');
+    expect(message).not.toContain('very-sensitive-runtime-token');
   });
 
-  it('never touches the AI Gateway: requests go only to baseUrl', async () => {
+  it('redacts canonical identity and credentials from transport error details', async () => {
+    const client = new ModerationServiceClient({
+      ...BASE,
+      apiKey: 'very-sensitive-runtime-token',
+      fetchFn: async () => {
+        throw new Error(
+          'socket failed for http://moderation:8080/v1/support-context/' +
+          'canonical-private-player-42?token=very-sensitive-runtime-token',
+        );
+      },
+    });
+
+    let message = '';
+    try {
+      await client.fetchDecisionContext({
+        subjectId: 'canonical-private-player-42',
+      });
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+
+    expect(message).toContain('/v1/support-context/{subject_id}');
+    expect(message).not.toContain('canonical-private-player-42');
+    expect(message).not.toContain('very-sensitive-runtime-token');
+    expect(message).not.toContain('socket failed');
+  });
+
+  it('rejects a mismatched subject response instead of attaching history to the wrong player', async () => {
+    const body = sampleDecisionBody();
+    body.subject_id = 'different-player';
+    const client = new ModerationServiceClient({
+      ...BASE,
+      fetchFn: new MockModerationApi({ body }).fetch,
+    });
+
+    await expect(
+      client.fetchDecisionContext({ subjectId: 'canonical-player-42' }),
+    ).rejects.toThrow('mismatched');
+  });
+
+  it('rejects invalid canonical identity values before making a request', async () => {
     const api = new MockModerationApi({ body: sampleDecisionBody() });
     const client = new ModerationServiceClient({ ...BASE, fetchFn: api.fetch });
-    await client.fetchDecisionContext({ subjectId: 'mod-subject-42' });
+
+    await expect(client.fetchDecisionContext({ subjectId: '' })).rejects.toThrow(
+      'invalid moderation subject identity',
+    );
+    expect(api.calls).toHaveLength(0);
+  });
+
+  it('never touches the AI Gateway: every request stays on the configured moderation base URL', async () => {
+    const api = new MockModerationApi({ body: sampleDecisionBody() });
+    const client = new ModerationServiceClient({ ...BASE, fetchFn: api.fetch });
+    await client.fetchDecisionContext({ subjectId: 'canonical-player-42' });
+
     for (const call of api.calls) {
       expect(call.url.startsWith('http://moderation:8080/')).toBe(true);
     }
