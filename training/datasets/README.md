@@ -74,7 +74,11 @@ Output: `train.jsonl`, `validation.jsonl`, `test.jsonl`,
 `test` and `owner_golden` are **frozen**: tuning on them is forbidden.
 `assert_not_frozen()` / `tune_guard()` raise `FrozenPartitionError` if a tuning
 operation targets them (spec §7: do not tune on frozen test data).
-`PRIVATE_EXCLUDE` and `BAD_RESPONSE` records never enter train/validation.
+Only reviewed `IDEAL` and `GOOD` records enter the ordinary train/validation/test split.
+`USABLE_WITH_EDIT`, `BAD_RESPONSE`, `OUTDATED`, `INCOMPLETE`, and
+`PRIVATE_EXCLUDE` remain review/evaluation-only until corrected and explicitly
+relabeled. This prevents historical or partially curated material from silently
+becoming imitation targets.
 
 ## Secret policy
 

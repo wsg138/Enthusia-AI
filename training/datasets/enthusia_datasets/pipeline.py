@@ -68,8 +68,17 @@ class PipelineConfig:
     split: SplitConfig = field(default_factory=SplitConfig)
     build_timestamp: str | None = None  # fixed for deterministic re-runs
     similarity_threshold: float = 0.85
-    # Quality labels excluded from train/validation (kept in eval partitions).
-    exclude_from_train: tuple[str, ...] = ("PRIVATE_EXCLUDE", "BAD_RESPONSE")
+    # Only reviewed GOOD/IDEAL examples may enter ordinary train/validation/test.
+    # Everything else remains review/evaluation-only until it is corrected and
+    # explicitly relabeled; this prevents stale, incomplete, unsafe, or still-
+    # editable historical material from becoming imitation targets.
+    exclude_from_train: tuple[str, ...] = (
+        "PRIVATE_EXCLUDE",
+        "BAD_RESPONSE",
+        "OUTDATED",
+        "INCOMPLETE",
+        "USABLE_WITH_EDIT",
+    )
 
 
 @dataclass

@@ -115,6 +115,54 @@ def test_private_exclude_kept_out_of_train(tmp_path):
     assert "syn-0015" not in train_ids  # curated BAD_RESPONSE
 
 
+def test_only_good_and_ideal_quality_enter_standard_splits(tmp_path):
+    qualities = [
+        "IDEAL",
+        "GOOD",
+        "USABLE_WITH_EDIT",
+        "BAD_RESPONSE",
+        "OUTDATED",
+        "INCOMPLETE",
+        "PRIVATE_EXCLUDE",
+    ]
+    records = [
+        {
+            "id": f"quality-{quality.lower()}",
+            "source_type": "ticket",
+            "visibility": "staff",
+            "scenario": f"quality gate case {quality}",
+            "messages": [{"role": "user", "content": f"question {quality}"}],
+            "expected_answer": f"answer {quality}",
+            "quality": quality,
+        }
+        for quality in qualities
+    ]
+    inp = tmp_path / "quality-gate.jsonl"
+    inp.write_text(
+        "\n".join(json.dumps(record) for record in records) + "\n",
+        encoding="utf-8",
+    )
+
+    result = build_dataset(
+        _cfg(str(tmp_path / "out"), str(tmp_path / "man"), inputs=[str(inp)])
+    )
+    standard_ids = set()
+    for filename in ("train.jsonl", "validation.jsonl", "test.jsonl"):
+        standard_ids.update(
+            json.loads(line)["id"]
+            for line in open(tmp_path / "out" / filename, encoding="utf-8")
+        )
+
+    assert standard_ids == {"quality-ideal", "quality-good"}
+    assert set(result.manifest["exclusions"]["excluded_from_train_labels"]) == {
+        "PRIVATE_EXCLUDE",
+        "BAD_RESPONSE",
+        "OUTDATED",
+        "INCOMPLETE",
+        "USABLE_WITH_EDIT",
+    }
+
+
 def test_deterministic_byte_identical_output(tmp_path):
     out1, out2 = str(tmp_path / "out1"), str(tmp_path / "out2")
     man1, man2 = str(tmp_path / "man1"), str(tmp_path / "man2")
