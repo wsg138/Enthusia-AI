@@ -76,11 +76,31 @@ def validate_lora(lora: dict) -> dict:
         raise ConfigError(
             "config[lora.target_modules] must be 'all-linear' or a non-empty list of strings"
         )
+    target_parameters = lora.get("target_parameters", [])
+    if not isinstance(target_parameters, list) or not all(
+        isinstance(name, str) and name for name in target_parameters
+    ):
+        raise ConfigError(
+            "config[lora.target_parameters] must be a list of non-empty strings"
+        )
+    rank_pattern = lora.get("rank_pattern", {})
+    if not isinstance(rank_pattern, dict) or not all(
+        isinstance(name, str)
+        and name
+        and isinstance(rank, int)
+        and rank > 0
+        for name, rank in rank_pattern.items()
+    ):
+        raise ConfigError(
+            "config[lora.rank_pattern] must map non-empty strings to positive integers"
+        )
     return {
         "r": r,
         "alpha": alpha,
         "dropout": dropout,
         "target_modules": normalized_targets,
+        "target_parameters": list(target_parameters),
+        "rank_pattern": dict(rank_pattern),
     }
 
 
