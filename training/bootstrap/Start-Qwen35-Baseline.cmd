@@ -11,8 +11,9 @@ if not exist "%MODEL%" (
 )
 
 for /f "tokens=5" %%P in ('netstat -ano ^| findstr ":8091" ^| findstr "LISTENING"') do (
-  echo Stopping stale listener on port 8091 ^(PID %%P^)...
-  taskkill /PID %%P /F >nul 2>&1
+  echo ERROR: port 8091 is already in use by PID %%P.
+  echo Refusing to terminate an existing process from the model launcher.
+  exit /b 3
 )
 
 cd /d "%LLAMA_DIR%"
