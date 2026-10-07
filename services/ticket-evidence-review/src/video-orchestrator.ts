@@ -74,7 +74,7 @@ interface VideoCandidate {
   contentType: TicketVideoEvidence['contentType'];
 }
 
-interface FrameObservation {
+export interface VideoVideoFrameObservation {
   frameIndex: number;
   timestampSeconds: number;
   result: RunImageEvidenceResult;
@@ -202,7 +202,7 @@ async function assessVideoCandidate(
     return candidateFailure(candidate, 'processing_failed');
   }
 
-  let frameObservations: FrameObservation[];
+  let frameObservations: VideoFrameObservation[];
   try {
     frameObservations = await assessFrames(
       input,
@@ -230,8 +230,8 @@ async function assessFrames(
   candidate: VideoCandidate,
   sample: TicketVideoSample,
   runner: TicketImageAssessmentRunner,
-): Promise<FrameObservation[]> {
-  const observations: FrameObservation[] = [];
+): Promise<VideoFrameObservation[]> {
+  const observations: VideoFrameObservation[] = [];
   for (const frame of sample.frames) {
     const result = await runner(
       frameAssessmentRequest(input, candidate, sample, frame),
@@ -280,7 +280,7 @@ function aggregateVideoAssessment(
   candidate: VideoCandidate,
   evidence: TicketVideoEvidence,
   sample: TicketVideoSample,
-  frames: FrameObservation[],
+  frames: VideoFrameObservation[],
 ): TicketVideoAssessmentRecord {
   const assessment = aggregateFrameAssessments(sample, frames);
   const provenance: TicketVideoFrameProvenance[] = frames.map(
@@ -316,7 +316,7 @@ function aggregateVideoAssessment(
 
 export function aggregateFrameAssessments(
   sample: TicketVideoSample,
-  frames: FrameObservation[],
+  frames: VideoFrameObservation[],
 ): ImageEvidenceAssessment {
   const observations: ImageEvidenceAssessment['observations'] = [];
   const inferences: ImageEvidenceAssessment['inferences'] = [];
