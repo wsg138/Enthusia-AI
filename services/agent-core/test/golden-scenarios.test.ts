@@ -221,7 +221,7 @@ describe('W12 golden scenarios', () => {
     const orchestrator = new AgentOrchestrator({ reasoner, registry });
     const response = await orchestrator.handleChat(makeRequest('What is the server IP?'));
 
-    expect(response.text).toContain('conflicting evidence');
+    expect(response.text).toContain('conflicting current information');
     expect(response.text).toContain(IP);
     expect(response.text).toContain('mc.enthusia.gg');
     // Never picks a side randomly: escalated for human review.
