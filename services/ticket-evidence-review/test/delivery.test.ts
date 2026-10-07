@@ -39,6 +39,7 @@ function videoEvidence(): TicketVideoAssessmentRecord {
     evidenceSha256: 'd'.repeat(64),
     mediaKind: 'video',
     video: {
+      ticketId: '42',
       source: 'discord',
       submitterId: 'reporter',
       submitterKind: 'player',
@@ -173,6 +174,9 @@ describe('deliverTicketEvidenceReview', () => {
         kind: 'video',
         ref: item.evidenceRef,
         sha256: item.evidenceSha256,
+        ticketId: '42',
+        messageId: 'm1',
+        attachmentId: 'v1',
         source: 'discord',
         submitterId: 'reporter',
         submitterKind: 'player',
