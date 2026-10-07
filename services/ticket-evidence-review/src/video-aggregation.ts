@@ -47,7 +47,10 @@ function createAggregationState(
   return {
     observations: [],
     inferences: [],
-    limitations: [sample.limitation],
+    limitations: [
+      sample.limitation,
+      'Submitted video is historical evidence and does not establish authoritative current server state.',
+    ],
     indexMap: new Map<string, number>(),
     summaries: [],
     needsMoreContext: false,
