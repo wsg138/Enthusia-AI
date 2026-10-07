@@ -52,8 +52,25 @@ async function main(): Promise<void> {
       : {}),
     timeoutMs: config.ticketBotTimeoutMs,
   });
-  const moderationHistoryTools =
-    loadConfiguredModerationHistoryTools(config);
+  const moderationHistoryTools = loadConfiguredModerationHistoryTools({
+    ...(config.staffModerationBaseUrl !== undefined
+      ? { staffModerationBaseUrl: config.staffModerationBaseUrl }
+      : {}),
+    ...(config.staffModerationApiKey !== undefined
+      ? { staffModerationApiKey: config.staffModerationApiKey }
+      : {}),
+    staffModerationTimeoutMs: config.staffModerationTimeoutMs,
+    ...(config.aiModerationBaseUrl !== undefined
+      ? { aiModerationBaseUrl: config.aiModerationBaseUrl }
+      : {}),
+    ...(config.aiModerationClientId !== undefined
+      ? { aiModerationClientId: config.aiModerationClientId }
+      : {}),
+    ...(config.aiModerationApiKey !== undefined
+      ? { aiModerationApiKey: config.aiModerationApiKey }
+      : {}),
+    aiModerationTimeoutMs: config.aiModerationTimeoutMs,
+  });
   const ticketEvidenceReview = loadConfiguredTicketEvidenceReview(
     {
       ...(config.ticketBotBaseUrl !== undefined
