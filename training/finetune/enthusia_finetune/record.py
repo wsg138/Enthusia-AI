@@ -16,6 +16,11 @@ from enthusia_datasets.splits import SPECIAL_PARTITIONS
 
 TRAINABLE_QUALITIES = frozenset({"GOOD", "IDEAL"})
 EXCLUDED_VISIBILITIES = frozenset({"private", "owner"})
+# W17's checked-in sample corpus is deliberately generated from plausible
+# fixture facts, not authoritative Enthusia production truth. It exercises the
+# data/eval pipeline but must never become a production SFT source merely by
+# acquiring a GOOD/IDEAL quality label later.
+FIXTURE_ONLY_GENERATORS = frozenset({"enthusia-generation-v0.1.0"})
 
 
 def leak_group_key(rec: dict) -> str:
@@ -28,6 +33,12 @@ def leak_group_key(rec: dict) -> str:
 
 def quality_excluded(rec: dict) -> str | None:
     """Return why a canonical W16 record is ineligible for train/validation."""
+    generator = rec.get("generator")
+    if generator in FIXTURE_ONLY_GENERATORS:
+        return (
+            f"generator {generator!r} is fixture-only and excluded from "
+            "production training"
+        )
     visibility = rec.get("visibility")
     if visibility in EXCLUDED_VISIBILITIES:
         return f"visibility {visibility!r} excluded from training"

@@ -109,6 +109,30 @@ def test_finetune_assembly_only_admits_explicit_good_or_ideal(tmp_path):
     } <= excluded
 
 
+def test_fixture_only_w17_generator_never_enters_training(tmp_path):
+    record = {
+        "id": "fixture-only-good",
+        "source_type": "synthetic",
+        "visibility": "public",
+        "scenario": "plausible fixture fact",
+        "messages": [{"role": "user", "content": "What is the current command?"}],
+        "expected_answer": "Use /fixture-command.",
+        "facts": [],
+        "tags": [],
+        "quality": "GOOD",
+        "generator": "enthusia-generation-v0.1.0",
+    }
+    corpus = tmp_path / "fixture-only.jsonl"
+    corpus.write_text(json.dumps(record) + "\n", encoding="utf-8")
+    out = str(tmp_path / "out")
+    manifest = assembly.assemble([str(corpus)], out, dataset_version=VERSION)
+
+    assert manifest["counts"]["excluded"] == 1
+    assert manifest["counts"]["train"] == 0
+    assert manifest["counts"]["validation"] == 0
+    assert "fixture-only" in manifest["exclusions"][0]["reason"]
+
+
 def test_no_leak_group_crossing(tmp_path):
     out, _ = _assemble(tmp_path)
     train = _load_jsonl(os.path.join(out, "train.jsonl"))
