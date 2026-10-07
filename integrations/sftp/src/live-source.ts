@@ -44,6 +44,7 @@ import {
   type SftpCredentials,
 } from './sftp-client.js';
 import type {
+  ApprovedConfigValueResult,
   ApprovedFileReadResult,
   ConfigDiscoveryResult,
   LiveReadOptions,
@@ -57,6 +58,7 @@ import type {
 } from './live-types.js';
 
 export type {
+  ApprovedConfigValueResult,
   ApprovedFileReadResult,
   ConfigDiscoveryItem,
   ConfigDiscoveryResult,
@@ -288,6 +290,26 @@ export class LiveServerSourceGateway {
       options,
       (client, server, observedAt) =>
         this.approvedReader.read(client, server, sourceId, observedAt),
+    );
+  }
+
+  async readApprovedConfigValue(
+    serverId: string,
+    sourceId: string,
+    valueKey: string,
+    options: LiveReadOptions = {},
+  ): Promise<LiveSourceResult<ApprovedConfigValueResult>> {
+    return this.run(
+      serverId,
+      options,
+      (client, server, observedAt) =>
+        this.approvedReader.readConfigValue(
+          client,
+          server,
+          sourceId,
+          valueKey,
+          observedAt,
+        ),
     );
   }
 
