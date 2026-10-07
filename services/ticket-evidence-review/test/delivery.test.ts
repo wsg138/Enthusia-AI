@@ -7,6 +7,7 @@ import {
 import type {
   TicketEvidenceReviewResult,
   TicketImageAssessmentRecord,
+  TicketVideoAssessmentRecord,
 } from '../src/types.js';
 
 const SHA = 'b'.repeat(64);
@@ -27,6 +28,39 @@ function evidence(ref = 'ticket:42:message:m1:attachment:a1'): TicketImageAssess
       inferences: [],
       limitations: [],
       needsMoreContext: false,
+    },
+  };
+}
+
+function videoEvidence(): TicketVideoAssessmentRecord {
+  return {
+    ...evidence('ticket:42:message:m1:attachment:v1:video'),
+    attachmentId: 'v1',
+    evidenceSha256: 'd'.repeat(64),
+    mediaKind: 'video',
+    video: {
+      contentType: 'video/mp4',
+      durationSeconds: 4,
+      width: 1280,
+      height: 720,
+      codec: 'h264',
+      format: 'mov,mp4,m4a,3gp,3g2,mj2',
+      frames: [
+        {
+          index: 0,
+          timestampSeconds: 0,
+          evidenceRef:
+            'ticket:42:message:m1:attachment:v1:video:frame:0@0.000s',
+          sha256: 'e'.repeat(64),
+        },
+        {
+          index: 1,
+          timestampSeconds: 3.95,
+          evidenceRef:
+            'ticket:42:message:m1:attachment:v1:video:frame:1@3.950s',
+          sha256: 'f'.repeat(64),
+        },
+      ],
     },
   };
 }
@@ -105,6 +139,55 @@ describe('deliverTicketEvidenceReview', () => {
       },
     });
     expect(call?.[1].correlationId).toMatch(/^evidence-review:42:[a-f0-9]{32}$/);
+  });
+
+  it('persists bounded video and frame provenance in the Ticket Bot audit request', async () => {
+    const requestAction = vi.fn(async (
+      ticketId: string,
+      input: ActionRequestInput,
+    ) => ({
+      requestId: 'ar-video',
+      ticketId,
+      action: input.action,
+      status: 'accepted' as const,
+      createdAt: '2026-10-06T12:00:00.000Z',
+      updatedAt: '2026-10-06T12:00:01.000Z',
+    }));
+
+    const item = videoEvidence();
+    await deliverTicketEvidenceReview({
+      ticketId: '42',
+      review: review(true),
+      imageEvidence: [item],
+      ticketClient: { requestAction },
+    });
+
+    const extra = requestAction.mock.calls[0]?.[1].parameters?.extra;
+    expect(extra).toMatchObject({
+      evidenceRefs: [item.evidenceRef],
+      evidenceProvenance: [{
+        kind: 'video',
+        ref: item.evidenceRef,
+        sha256: item.evidenceSha256,
+        contentType: 'video/mp4',
+        durationSeconds: 4,
+        width: 1280,
+        height: 720,
+        codec: 'h264',
+        frames: [
+          {
+            index: 0,
+            timestampSeconds: 0,
+            sha256: 'e'.repeat(64),
+          },
+          {
+            index: 1,
+            timestampSeconds: 3.95,
+            sha256: 'f'.repeat(64),
+          },
+        ],
+      }],
+    });
   });
 
   it('uses the same correlation id for the same evidence regardless of order', () => {
