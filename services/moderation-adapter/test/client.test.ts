@@ -188,6 +188,26 @@ describe('ModerationServiceClient', () => {
     expect(decisions[0]).not.toHaveProperty('text');
   });
 
+  it('keeps canonical identity and credentials out of HTTP failure diagnostics', async () => {
+    const api = new MockModerationApi({ status: 500 });
+    const client = new ModerationServiceClient({
+      ...BASE,
+      apiKey: 'very-sensitive-runtime-token',
+      fetchFn: api.fetch,
+    });
+
+    let message = '';
+    try {
+      await client.fetchDecisionContext({ subjectId: 'canonical-private-player-42' });
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+
+    expect(message).toContain('/v1/support-context/{subject_id}');
+    expect(message).not.toContain('canonical-private-player-42');
+    expect(message).not.toContain('very-sensitive-runtime-token');
+  });
+
   it('rejects a mismatched subject response instead of attaching history to the wrong player', async () => {
     const body = sampleDecisionBody();
     body.subject_id = 'different-player';
