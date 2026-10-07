@@ -140,7 +140,7 @@ export function assembleResponse(args: AssembleArgs): AgentResponse {
   };
 }
 
-interface DisclosureOpts {
+export interface AnswerDisclosure {
   isSubject: boolean;
   isStaff: boolean;
 }
@@ -150,7 +150,7 @@ interface DisclosureOpts {
  * PLAYER_SELF evidence; anyone else may not (the orchestrator cannot prove
  * subject identity here — W11 owns that — so isSubject stays false).
  */
-function disclosureOpts(actor: Actor): DisclosureOpts {
+function disclosureOpts(actor: Actor): AnswerDisclosure {
   return {
     isSubject: false,
     isStaff: actor.type === 'staff',
@@ -225,7 +225,7 @@ function fallbackIfEmpty(
 export function buildVerifiedAnswerParts(
   assessments: ClaimAssessment[],
   ceiling: Visibility,
-  disclosure: DisclosureOpts,
+  disclosure: AnswerDisclosure,
 ): VerifiedAnswerPart[] {
   return assessments.map((assessment) => {
     if (assessment.verdict === 'supported') {
@@ -296,7 +296,7 @@ function renderSupportedFact(claim: string, value: string): string {
   }
 
   if (looksLikeProposition(cleanClaim)) {
-    return ensureSentence(capitalizeFirst(cleanClaim));
+    return `For “${cleanClaim},” current information says ${cleanValue}.`;
   }
 
   const article =
@@ -335,11 +335,6 @@ function ensureSentence(value: string): string {
   return /[.!?]$/.test(clean) ? clean : `${clean}.`;
 }
 
-function capitalizeFirst(value: string): string {
-  if (value.length === 0) return value;
-  return value[0]!.toUpperCase() + value.slice(1);
-}
-
 function unique(values: string[]): string[] {
   return [...new Set(values)];
 }
@@ -367,7 +362,7 @@ function escalationLine(escalation: EscalationDecision): string {
 function buildCitations(
   evidence: EvidenceItem[],
   ceiling: Visibility,
-  disclosure: DisclosureOpts,
+  disclosure: AnswerDisclosure,
   allowedClaims?: ReadonlySet<string>,
 ): ResponseSource[] {
   const seen = new Set<string>();
