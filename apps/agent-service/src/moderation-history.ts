@@ -28,6 +28,7 @@ const MAX_LIMIT = 25;
 export interface StaffModerationHistoryDeps {
   staff: Pick<StaffModerationStateClient, 'getState'>;
   moderation: Pick<ModerationAdapter, 'enrichContext'>;
+  enrichmentTimeoutMs: number;
 }
 
 export interface StaffModerationHistoryResult {
@@ -90,7 +91,10 @@ export class StaffModerationHistoryTool
           supportSubjectId: staff.target.playerId,
           moderationSubjectId,
         },
-        { limit },
+        {
+          limit,
+          enrichmentTimeoutMs: this.deps.enrichmentTimeoutMs,
+        },
       );
       const context = requireModerationContext(enrichment);
       return {
