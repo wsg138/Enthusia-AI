@@ -16,16 +16,27 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ModerationAdapter } from '../src/adapter.js';
 import type { SharedIdentityMetadata } from '../src/types.js';
-import { downApi, healthyApi, MockModerationApi, sampleDecisionBody } from './mocks.js';
+import {
+  downApi,
+  healthyApi,
+  MockModerationApi,
+  notReadyHealthBody,
+  sampleDecisionBody,
+} from './mocks.js';
 
 const IDENTITY: SharedIdentityMetadata = {
   supportSubjectId: 'player-uuid-1234',
-  moderationSubjectId: 'mod-subject-42',
+  moderationSubjectId: 'canonical-player-42',
 };
 
 function makeAdapter(api: MockModerationApi, overrides: { cooldownMs?: number } = {}) {
   return new ModerationAdapter({
-    client: { baseUrl: 'http://moderation:8080', fetchFn: api.fetch },
+    client: {
+      baseUrl: 'http://moderation:8080',
+      clientId: 'enthusia-support',
+      apiKey: 'runtime-test-token',
+      fetchFn: api.fetch,
+    },
     circuitBreaker: { failureThreshold: 2, cooldownMs: overrides.cooldownMs ?? 50 },
   });
 }
@@ -112,8 +123,10 @@ describe('failure isolation', () => {
     expect(dep).toMatchObject({ name: 'moderation', status: 'ok' });
   });
 
-  it('getModerationStatus reports degraded when the service self-reports degraded', async () => {
-    const adapter = makeAdapter(new MockModerationApi({ body: { status: 'degraded' } }));
+  it('getModerationStatus reports degraded when the service is reachable but not ready', async () => {
+    const adapter = makeAdapter(
+      new MockModerationApi({ status: 503, body: notReadyHealthBody() }),
+    );
     await expect(adapter.getModerationStatus()).resolves.toBe('degraded');
     const dep = await adapter.moderationDependencyHealth();
     expect(dep.status).toBe('degraded');
@@ -146,7 +159,12 @@ describe('failure isolation', () => {
   it('onLog receives warnings on failure but never breaks enrichment', async () => {
     const onLog = vi.fn();
     const adapter = new ModerationAdapter({
-      client: { baseUrl: 'http://moderation:8080', fetchFn: downApi().fetch },
+      client: {
+        baseUrl: 'http://moderation:8080',
+        clientId: 'enthusia-support',
+        apiKey: 'runtime-test-token',
+        fetchFn: downApi().fetch,
+      },
       circuitBreaker: { failureThreshold: 5, cooldownMs: 60_000 },
       onLog,
     });
