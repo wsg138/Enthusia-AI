@@ -14,6 +14,7 @@ import {
   type VideoFrameObservation,
 } from '../src/video-orchestrator.js';
 import type { TicketVideoSample } from '../src/video-media.js';
+import type { TicketVideoAssessmentRecord } from '../src/types.js';
 
 const VIDEO_SHA = 'b'.repeat(64);
 const FRAME_ONE_SHA = 'c'.repeat(64);
@@ -149,6 +150,46 @@ function observed(input: RunImageEvidenceInput): RunImageEvidenceResult {
   };
 }
 
+function expectCollectedVideoRecord(
+  record: TicketVideoAssessmentRecord,
+): void {
+  expect(record.evidenceRef).toBe(
+    'ticket:42:message:m2:attachment:v2:video',
+  );
+  expect(record.evidenceSha256).toBe(VIDEO_SHA);
+  expect(record.video).toMatchObject({
+    contentType: 'video/webm',
+    durationSeconds: 4,
+    width: 1280,
+    height: 720,
+    codec: 'vp9',
+  });
+  expect(record.video.frames).toEqual([
+    {
+      index: 0,
+      timestampSeconds: 0,
+      evidenceRef:
+        'ticket:42:message:m2:attachment:v2:video:frame:0@0.000s',
+      sha256: FRAME_ONE_SHA,
+    },
+    {
+      index: 1,
+      timestampSeconds: 3.95,
+      evidenceRef:
+        'ticket:42:message:m2:attachment:v2:video:frame:1@3.950s',
+      sha256: FRAME_TWO_SHA,
+    },
+  ]);
+  expect(record.assessment.observations[0]?.text).toContain('[0.000s]');
+  expect(record.assessment.observations[1]?.text).toContain('[3.950s]');
+  expect(record.assessment.inferences[0]?.observationIndexes).toEqual([0]);
+  expect(record.assessment.inferences[1]?.observationIndexes).toEqual([1]);
+  expect(record.assessment.limitations).toContain(
+    'Motion between frames is not visible.',
+  );
+  expect(record.assessment.limitations[0]).toContain('sampled at 2');
+}
+
 describe('collectTicketVideoAssessments', () => {
   it('assesses only the newest bounded supported ticket video', async () => {
     const reads: string[] = [];
@@ -182,38 +223,7 @@ describe('collectTicketVideoAssessments', () => {
       { messageId: 'm2', attachmentId: 'v3', reason: 'unsupported_type' },
     ]));
 
-    const record = result.assessments[0]!;
-    expect(record.evidenceRef).toBe('ticket:42:message:m2:attachment:v2:video');
-    expect(record.evidenceSha256).toBe(VIDEO_SHA);
-    expect(record.video).toMatchObject({
-      contentType: 'video/webm',
-      durationSeconds: 4,
-      width: 1280,
-      height: 720,
-      codec: 'vp9',
-    });
-    expect(record.video.frames).toEqual([
-      {
-        index: 0,
-        timestampSeconds: 0,
-        evidenceRef: 'ticket:42:message:m2:attachment:v2:video:frame:0@0.000s',
-        sha256: FRAME_ONE_SHA,
-      },
-      {
-        index: 1,
-        timestampSeconds: 3.95,
-        evidenceRef: 'ticket:42:message:m2:attachment:v2:video:frame:1@3.950s',
-        sha256: FRAME_TWO_SHA,
-      },
-    ]);
-    expect(record.assessment.observations[0]?.text).toContain('[0.000s]');
-    expect(record.assessment.observations[1]?.text).toContain('[3.950s]');
-    expect(record.assessment.inferences[0]?.observationIndexes).toEqual([0]);
-    expect(record.assessment.inferences[1]?.observationIndexes).toEqual([1]);
-    expect(record.assessment.limitations).toContain(
-      'Motion between frames is not visible.',
-    );
-    expect(record.assessment.limitations[0]).toContain('sampled at 2');
+    expectCollectedVideoRecord(result.assessments[0]!);
     expect(assessImage).toHaveBeenCalledTimes(2);
   });
 
