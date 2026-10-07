@@ -29,6 +29,26 @@ _PROFANITY_RE = re.compile(
     r"\b(fuck|shit|bitch|asshole|dickhead)\b", re.I
 )
 _CHATTER_RE = re.compile(r"\b(lol|lmao|xd|brb|omw)\b", re.I)
+_LOW_SIGNAL_STAFF_RE = re.compile(
+    r"^(?:given|done|fixed|resolved|closed|ok(?:ay)?|k|yes|yeah|yep|no|nope|"
+    r"thanks?|thank you|np|h+m+|ah that explains it|try (?:now|again))?[!. ]*$",
+    re.I,
+)
+_META_OR_DEFERRAL_RE = re.compile(
+    r"\b(?:did you mean to leave (?:the |this )?ticket open|"
+    r"someone will get to (?:this|it)|"
+    r"i(?:'|’)m off for (?:the )?night|"
+    r"wait for (?:the )?(?:owner|admin|staff|big dogs?)|"
+    r"we are just the goons|"
+    r"i(?:'|’)ll (?:look|check|get to) (?:this|it)|"
+    r"we(?:'|’)ll (?:look|check|get to) (?:this|it)|"
+    r"i can give you this in \d+ (?:minute|minutes|hour|hours))\b",
+    re.I,
+)
+_UNSAFE_ENCOURAGEMENT_RE = re.compile(
+    r"(?<!don(?:'|’)t )(?<!do not )\b(?:nah\s+)?(?:go ahead(?: and)?\s+|feel free to\s+)?(?:abuse|exploit)\s+(?:it|this|that)\b",
+    re.I,
+)
 
 
 @dataclass
@@ -58,6 +78,19 @@ def _all_text(ctx: TicketContext) -> str:
     return "\n".join(m.content for m in ctx.ticket.messages)
 
 
+def _meaningful_staff_messages(ctx: TicketContext) -> list[str]:
+    return [
+        m.content.strip()
+        for m in ctx.ticket.staff_messages()
+        if m.content.strip() and not _LOW_SIGNAL_STAFF_RE.fullmatch(m.content.strip())
+    ]
+
+
+def _staff_is_only_meta_or_deferral(ctx: TicketContext) -> bool:
+    meaningful = _meaningful_staff_messages(ctx)
+    return bool(meaningful) and all(_META_OR_DEFERRAL_RE.search(text) for text in meaningful)
+
+
 def label_quality(ctx: TicketContext) -> QualityLabel:
     """Assign a quality label to a processed ticket. Deterministic."""
     reasons: list[str] = []
@@ -80,14 +113,22 @@ def label_quality(ctx: TicketContext) -> QualityLabel:
         return QualityLabel("INCOMPLETE", ("no_problem_statement",))
     if len(ctx.ticket.messages) < 2:
         return QualityLabel("INCOMPLETE", ("single_message",))
+    meaningful_staff = _meaningful_staff_messages(ctx)
+    if not meaningful_staff:
+        return QualityLabel("INCOMPLETE", ("low_signal_staff_response",))
+    if _staff_is_only_meta_or_deferral(ctx):
+        return QualityLabel("INCOMPLETE", ("staff_only_deferred_or_managed_ticket",))
 
-    # 3. Bad staff response: abusive/dismissive, or wrong-info markers.
+    # 3. Bad staff response: abusive/dismissive/unsafe, or wrong-info markers.
     staff_text = _staff_text(ctx)
     if _PROFANITY_RE.search(staff_text):
         reasons.append("staff_profanity")
         return QualityLabel("BAD_RESPONSE", tuple(reasons))
     if _DISMISSIVE_RE.search(staff_text):
         reasons.append("staff_dismissive")
+        return QualityLabel("BAD_RESPONSE", tuple(reasons))
+    if _UNSAFE_ENCOURAGEMENT_RE.search(staff_text):
+        reasons.append("staff_encourages_abuse_or_exploit")
         return QualityLabel("BAD_RESPONSE", tuple(reasons))
 
     # 4. Outdated: a high-risk stale claim in the staff answer.
@@ -105,6 +146,10 @@ def label_quality(ctx: TicketContext) -> QualityLabel:
         reasons.append("secret_redacted")
     if ctx.category in ("lost-items", "grief-theft", "bug-report") and not ctx.evidence_requests:
         reasons.append("missing_evidence_request")
+    if ctx.category == "punishment-appeal":
+        reasons.append("human_decision_like_content")
+    if len(ctx.ticket.messages) > 80:
+        reasons.append("long_conversation_to_trim")
     if reasons:
         return QualityLabel("USABLE_WITH_EDIT", tuple(reasons))
 
