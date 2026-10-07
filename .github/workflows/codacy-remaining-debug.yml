@@ -1,0 +1,37 @@
+name: Temporary Codacy remaining-issue diagnostic
+
+on:
+  push:
+    branches:
+      - runtime/ticket-evidence-review-service
+
+permissions:
+  checks: read
+  contents: read
+
+jobs:
+  codacy-remaining:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print remaining Codacy annotation metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          CHECK_ID: "112657697614"
+        shell: bash
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/${REPO}"
+          auth=(-H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json")
+          for page in 1 2; do
+            annotations="$(curl -fsSL "${auth[@]}" "${api}/check-runs/${CHECK_ID}/annotations?per_page=100&page=${page}")"
+            count="$(jq 'length' <<<"${annotations}")"
+            [[ "${count}" -eq 0 ]] && break
+            jq -r '.[] | [
+              .annotation_level,
+              .path,
+              (.start_line | tostring),
+              (.title // ""),
+              (.message // "" | gsub("[\\r\\n\\t]+"; " "))
+            ] | @tsv' <<<"${annotations}"
+          done
