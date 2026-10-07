@@ -42,17 +42,29 @@ Current production-capable optional registration:
 
 - W09 live SFTP/current-state tools through
   `ENTHUSIA_AGENT_SFTP_CONFIG_PATH`;
-- W05/W11 topic-familiarity memory through `ENTHUSIA_AGENT_MEMORY_PATH`;
+- W05 current structured memory and W11 topic familiarity through
+  `ENTHUSIA_AGENT_MEMORY_PATH`;
 - W14 Ticket Bot tools through
   `ENTHUSIA_AGENT_TICKET_BOT_BASE_URL` +
   `ENTHUSIA_AGENT_TICKET_BOT_API_KEY`.
 
-Topic familiarity registers only `player.topic_familiarity`. Its memory is
-subject-bound and current-only. Raw ticket/chat text is never stored in the
-familiarity value. Automatic learning records only that a verified help
-interaction occurred, with bounded provenance; the first interaction remains
-below the familiarity confidence threshold, while repeated verified help may
-suppress repetitive background. It never auto-promotes a player to `EXPERT`.
+Memory configuration registers two bounded reads:
+
+- `player.topic_familiarity` — subject-bound, current-only familiarity hint;
+- `memory.current_fact` — exact `namespace + key + scope` lookup for
+  evidence-backed `CURRENT` records explicitly marked `PUBLIC`.
+
+`memory.current_fact` cannot search memory, read history, downgrade
+visibility, or expose `PLAYER_SELF`/`STAFF`/`MANAGEMENT`/
+`SYSTEM_INTERNAL`/`SECRET_DENY` records. Non-public, missing, stale,
+conflicted, unprovenanced, and oversized values all fail closed with the same
+public-unavailable result.
+
+Raw ticket/chat text is never stored in the familiarity value. Automatic
+learning records only that a verified help interaction occurred, with bounded
+provenance; the first interaction remains below the familiarity confidence
+threshold, while repeated verified help may suppress repetitive background.
+It never auto-promotes a player to `EXPERT`.
 
 Ticket Bot registration is fail-closed: the URL and API key must be configured
 together. When configured, only `ticket.capabilities`, `ticket.get_context`,
@@ -75,8 +87,9 @@ Unsupported or missing credential sources fail closed.
 
 Database tools are not falsely registered just because their library contracts
 exist. Player identity still has no general production profile backend here;
-the familiarity surface is the intentionally narrow exception and reads only
-its dedicated W05 memory namespace.
+the familiarity surface remains subject-bound. The general W05 read is
+deliberately limited to exact-key PUBLIC current facts and is not a database
+query or memory-search primitive.
 
 ## Ticket visual evidence
 
