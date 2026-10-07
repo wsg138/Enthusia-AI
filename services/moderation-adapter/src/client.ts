@@ -233,9 +233,51 @@ function normalizeDecision(raw: unknown): ModerationDecision | null {
   const record = objectRecord(raw);
   if (record === null) return null;
 
+  const identity = normalizeDecisionIdentity(record);
+  const policy = normalizePolicyDimensions(record);
+  const reasonCodes = stringArray(record['reason_codes']);
+  if (identity === null || policy === null || reasonCodes === null) return null;
+
+  return {
+    ...identity,
+    ...policy,
+    reasonCodes,
+  };
+}
+
+function normalizeDecisionIdentity(
+  record: Record<string, unknown>,
+): Pick<
+  ModerationDecision,
+  'eventId' | 'occurredAt' | 'platform' | 'decisionSource'
+> | null {
   const eventId = stringValue(record['event_id']);
   const occurredAt = isoDateValue(record['occurred_at']);
   const platform = enumValue(record['platform'], PLATFORMS);
+  const decisionSource = enumValue(record['decision_source'], DECISION_SOURCES);
+
+  if (
+    eventId === null ||
+    occurredAt === null ||
+    platform === null ||
+    decisionSource === null
+  ) {
+    return null;
+  }
+  return { eventId, occurredAt, platform, decisionSource };
+}
+
+function normalizePolicyDimensions(
+  record: Record<string, unknown>,
+): Pick<
+  ModerationDecision,
+  | 'semanticLabel'
+  | 'messageAction'
+  | 'reviewPriority'
+  | 'strikeRecommendation'
+  | 'containment'
+  | 'supportFlow'
+> | null {
   const semanticLabel = enumValue(record['semantic_label'], LABELS);
   const messageAction = enumValue(record['message_action'], ACTIONS);
   const reviewPriority = enumValue(record['review_priority'], REVIEW_PRIORITIES);
@@ -245,37 +287,24 @@ function normalizeDecision(raw: unknown): ModerationDecision | null {
   );
   const containment = enumValue(record['containment'], CONTAINMENTS);
   const supportFlow = enumValue(record['support_flow'], SUPPORT_FLOWS);
-  const decisionSource = enumValue(record['decision_source'], DECISION_SOURCES);
-  const reasonCodes = stringArray(record['reason_codes']);
 
   if (
-    eventId === null ||
-    occurredAt === null ||
-    platform === null ||
     semanticLabel === null ||
     messageAction === null ||
     reviewPriority === null ||
     strikeRecommendation === null ||
     containment === null ||
-    supportFlow === null ||
-    decisionSource === null ||
-    reasonCodes === null
+    supportFlow === null
   ) {
     return null;
   }
-
   return {
-    eventId,
-    occurredAt,
-    platform,
     semanticLabel,
     messageAction,
     reviewPriority,
     strikeRecommendation,
     containment,
     supportFlow,
-    reasonCodes,
-    decisionSource,
   };
 }
 
