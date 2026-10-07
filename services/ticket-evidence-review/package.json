@@ -1,1 +1,26 @@
-{"name":"@enthusia/ticket-evidence-review","version":"0.1.0","private":true,"description":"Deterministic multimodal ticket evidence sufficiency and staff-review coordinator","type":"module","license":"UNLICENSED","main":"./src/index.ts","exports":{".":"./src/index.ts"},"dependencies":{"@enthusia/integration-ticket-bot":"^0.1.0","@enthusia/openai-gateway":"^0.1.0","js-yaml":"^4.1.0","zod":"^4.0.0","@enthusia/inference-adapter":"^0.1.0","@enthusia/integration-staff-moderation":"^0.1.0"},"scripts":{"test":"vitest run"},"devDependencies":{"@types/js-yaml":"^4.0.9"}}
+{
+  "name": "@enthusia/ticket-evidence-review",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Deterministic multimodal ticket evidence sufficiency and staff-review coordinator",
+  "type": "module",
+  "license": "UNLICENSED",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@enthusia/integration-ticket-bot": "^0.1.0",
+    "@enthusia/openai-gateway": "^0.1.0",
+    "js-yaml": "^4.1.0",
+    "zod": "^4.0.0",
+    "@enthusia/inference-adapter": "^0.1.0",
+    "@enthusia/integration-staff-moderation": "^0.1.0"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9"
+  }
+}
