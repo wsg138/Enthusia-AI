@@ -13,36 +13,20 @@ jobs:
   codacy-annotations:
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for Codacy and print annotation metadata
+      - name: Print completed Codacy annotation metadata
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
+          CHECK_ID: "112654913151"
         shell: bash
         run: |
           set -euo pipefail
           api="https://api.github.com/repos/${REPO}"
           auth=(-H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json")
 
-          check_id=""
-          for attempt in $(seq 1 40); do
-            payload="$(curl -fsSL "${auth[@]}" "${api}/commits/${SHA}/check-runs?per_page=100")"
-            check_id="$(jq -r '.check_runs[] | select(.name == "Codacy Static Code Analysis") | .id' <<<"${payload}" | head -n 1)"
-            status="$(jq -r '.check_runs[] | select(.name == "Codacy Static Code Analysis") | .status' <<<"${payload}" | head -n 1)"
-            if [[ -n "${check_id}" && "${status}" == "completed" ]]; then
-              break
-            fi
-            sleep 5
-          done
-
-          if [[ -z "${check_id}" ]]; then
-            echo "Codacy check was not found for ${SHA}."
-            exit 1
-          fi
-
-          echo "Codacy check run: ${check_id}"
+          echo "Codacy check run: ${CHECK_ID}"
           for page in 1 2; do
-            annotations="$(curl -fsSL "${auth[@]}" "${api}/check-runs/${check_id}/annotations?per_page=100&page=${page}")"
+            annotations="$(curl -fsSL "${auth[@]}" "${api}/check-runs/${CHECK_ID}/annotations?per_page=100&page=${page}")"
             count="$(jq 'length' <<<"${annotations}")"
             [[ "${count}" -eq 0 ]] && break
             jq -r '.[] | [
