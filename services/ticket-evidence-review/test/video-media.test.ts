@@ -39,16 +39,24 @@ function probeJson(overrides: {
   codec?: unknown;
   format?: unknown;
 } = {}): string {
+  const values = {
+    duration: '10.0' as unknown,
+    width: 1280 as unknown,
+    height: 720 as unknown,
+    codec: 'h264' as unknown,
+    format: 'mov,mp4,m4a,3gp,3g2,mj2' as unknown,
+    ...overrides,
+  };
   return JSON.stringify({
     streams: [{
-      codec_name: overrides.codec ?? 'h264',
-      width: overrides.width ?? 1280,
-      height: overrides.height ?? 720,
-      duration: overrides.duration ?? '10.0',
+      codec_name: values.codec,
+      width: values.width,
+      height: values.height,
+      duration: values.duration,
     }],
     format: {
-      duration: overrides.duration ?? '10.0',
-      format_name: overrides.format ?? 'mov,mp4,m4a,3gp,3g2,mj2',
+      duration: values.duration,
+      format_name: values.format,
     },
   });
 }
