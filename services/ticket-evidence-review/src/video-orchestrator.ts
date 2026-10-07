@@ -71,6 +71,9 @@ export interface CollectTicketVideoAssessmentsInput {
 
 interface VideoCandidate {
   messageId: string;
+  submitterId: string;
+  submitterKind: 'player' | 'staff' | 'system';
+  submittedAt: string;
   attachment: TicketAttachment;
   contentType: TicketVideoEvidence['contentType'];
 }
@@ -124,7 +127,13 @@ function selectVideoCandidates(
 
   for (const message of ticket.messages) {
     for (const attachment of message.attachments ?? []) {
-      const candidate = videoCandidate(message.id, attachment);
+      const candidate = videoCandidate(
+        message.id,
+        message.author.id,
+        message.author.kind,
+        message.createdAt,
+        attachment,
+      );
       if ('candidate' in candidate) candidates.push(candidate.candidate);
       else if (candidate.issue !== null) issues.push(candidate.issue);
     }
@@ -148,6 +157,9 @@ function selectVideoCandidates(
 
 function videoCandidate(
   messageId: string,
+  submitterId: string,
+  submitterKind: 'player' | 'staff' | 'system',
+  submittedAt: string,
   attachment: TicketAttachment,
 ):
   | { candidate: VideoCandidate }
@@ -168,6 +180,9 @@ function videoCandidate(
   return {
     candidate: {
       messageId,
+      submitterId,
+      submitterKind,
+      submittedAt,
       attachment,
       contentType: normalized,
     },
@@ -305,6 +320,10 @@ function aggregateVideoAssessment(
     assessment,
     mediaKind: 'video',
     video: {
+      source: candidate.attachment.source,
+      submitterId: candidate.submitterId,
+      submitterKind: candidate.submitterKind,
+      submittedAt: candidate.submittedAt,
       contentType: evidence.contentType,
       durationSeconds: sample.metadata.durationSeconds,
       width: sample.metadata.width,
