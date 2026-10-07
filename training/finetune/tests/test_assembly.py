@@ -39,10 +39,10 @@ def test_assemble_counts(tmp_path):
     counts = manifest["counts"]
     assert counts["loaded"] == 17
     assert counts["invalid"] == 1          # fx-tk-07: no messages
-    assert counts["excluded"] == 5         # outdated, bad, owner, private-exclude, private
+    assert counts["excluded"] == 6         # + unreviewed/null quality
     assert counts["duplicates"] == 1       # fx-syn-06 exact dupe of fx-syn-01
     assert counts["special_partitions"] == 3  # golden, adversarial, stale-truth
-    assert counts["train"] + counts["validation"] == 7
+    assert counts["train"] + counts["validation"] == 6
 
 
 def test_exclusions_logged(tmp_path):
@@ -53,8 +53,60 @@ def test_exclusions_logged(tmp_path):
     assert "fx-syn-07" not in by_id  # mentioning api_key is not itself a credential
     assert "fx-syn-10" in by_id  # owner visibility
     assert "fx-tk-03" in by_id   # PRIVATE_EXCLUDE
+    assert "fx-tk-05" in by_id   # missing/unreviewed quality
     assert "fx-tk-06" in by_id   # private visibility
     assert "fx-tk-07" in by_id   # invalid
+
+
+def test_finetune_assembly_only_admits_explicit_good_or_ideal(tmp_path):
+    qualities = [
+        "IDEAL",
+        "GOOD",
+        "USABLE_WITH_EDIT",
+        "BAD_RESPONSE",
+        "OUTDATED",
+        "INCOMPLETE",
+        "PRIVATE_EXCLUDE",
+        None,
+    ]
+    records = [
+        {
+            "id": f"quality-{str(quality).lower()}",
+            "source_type": "ticket",
+            "visibility": "staff",
+            "scenario": f"quality gate case {quality}",
+            "messages": [{"role": "user", "content": f"question {quality}"}],
+            "expected_answer": f"answer {quality}",
+            "facts": [],
+            "tags": [],
+            "quality": quality,
+        }
+        for quality in qualities
+    ]
+    corpus = tmp_path / "quality-gate.jsonl"
+    corpus.write_text(
+        "\n".join(json.dumps(record) for record in records) + "\n",
+        encoding="utf-8",
+    )
+    out = str(tmp_path / "out")
+    manifest = assembly.assemble([str(corpus)], out, dataset_version=VERSION)
+
+    emitted = {
+        record["id"]
+        for filename in ("train.jsonl", "validation.jsonl")
+        for record in _load_jsonl(os.path.join(out, filename))
+    }
+    assert emitted == {"quality-ideal", "quality-good"}
+
+    excluded = {item["id"] for item in manifest["exclusions"]}
+    assert {
+        "quality-usable_with_edit",
+        "quality-bad_response",
+        "quality-outdated",
+        "quality-incomplete",
+        "quality-private_exclude",
+        "quality-none",
+    } <= excluded
 
 
 def test_no_leak_group_crossing(tmp_path):

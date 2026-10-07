@@ -5,8 +5,8 @@ Combines the W16/W17/W18 corpora into train/validation splits:
 1. Load each corpus JSONL (records follow the MASTER-SPEC section 27
    contract; see `record.py`).
 2. Validate records; invalid records are excluded with a logged reason.
-3. Quality/visibility filter: BAD_RESPONSE, OUTDATED, PRIVATE_EXCLUDE and
-   private/owner visibility never enter training data (spec sections 4/10).
+3. Quality/visibility filter: only explicitly reviewed GOOD/IDEAL records
+   with trainable visibility may enter training data (spec sections 4/10).
 4. Deduplicate by exact canonical text (keep earliest id), reporting dupes.
 5. Split by leak-group — records sharing a template_id / ticket_id /
    thread_id / scenario hash always land in the same partition, so
@@ -256,7 +256,7 @@ def assemble(
             "validation": stats.validation,
         },
         "filters": [
-            "quality in {BAD_RESPONSE, OUTDATED, PRIVATE_EXCLUDE} excluded",
+            "only explicit quality in {GOOD, IDEAL} admitted to training",
             "visibility in {private, owner} excluded",
             "W16 secret-scan findings excluded",
             "exact-text duplicates removed (keep lowest id)",

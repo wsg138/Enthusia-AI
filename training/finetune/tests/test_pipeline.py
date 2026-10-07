@@ -36,7 +36,7 @@ def test_prepare_runs_local_stages(tmp_path):
     assert result.budget["estimate"]["total_usd"] == 0.0
     assert result.budget["allowed"] is True
     counts = result.dataset["counts"]
-    assert counts["train"] + counts["validation"] == 7
+    assert counts["train"] + counts["validation"] == 6
     assert result.training["executed"] is False
     assert "--model_name_or_path" in result.training["command"]
     assert result.export["dry_run_plan"]
