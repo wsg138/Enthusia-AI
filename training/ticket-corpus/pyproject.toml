@@ -1,9 +1,12 @@
 [project]
 name = "enthusia-ticket-corpus"
 version = "0.1.0"
-description = "Enthusia AI ticket corpus pipeline (W18): fixture-driven ticket extraction, redaction, secret removal, quality labeling, outdated marking"
+description = "Enthusia AI ticket corpus pipeline (W18): governed ticket ingestion, redaction, secret removal, quality labeling, outdated marking"
 requires-python = ">=3.10"
 dependencies = []
+
+[project.scripts]
+enthusia-ticket-ingest = "enthusia_ticket_corpus.real_ingest:main"
 
 [project.optional-dependencies]
 test = ["pytest>=8"]

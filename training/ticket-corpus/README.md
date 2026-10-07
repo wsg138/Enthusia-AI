@@ -1,15 +1,22 @@
 # W18 — Historical Ticket Corpus Pipeline
 
-Fixture-driven implementation of TRAINING-AND-EVALUATION-SPEC §4 for support
-ticket transcripts. Emits MASTER-SPEC §27-conformant training candidates with
-`source_type: "ticket"`.
+Implementation of TRAINING-AND-EVALUATION-SPEC §4 for support ticket
+transcripts. Emits MASTER-SPEC §27-conformant review candidates with
+`source_type: "ticket"`. Synthetic fixtures remain the default test input;
+governed real-ticket ingestion is available only through the explicit gated
+command described below.
 
 ## ⚠️ Governance
 
-**Real ticket extraction is BLOCKED** until
-`training/datasets/GOVERNANCE-CHECKPOINT.md` is fully signed off (§9).
-This package only ever processes **synthetic fixture data**
-(`fixtures/tickets.jsonl`). Absolutely no real ticket data extraction.
+Owner authorization for the historical-ticket workstream is recorded in
+`training/datasets/GOVERNANCE-CHECKPOINT.md` and issue #65. A specific real
+content run is still **BLOCKED** until every run-specific §9 sign-off item is
+complete.
+
+The real-ingest command additionally refuses to run without
+`--ack-governance`, refuses raw/review artifacts inside Git worktrees, writes
+to a new restricted output directory, and emits review-only partitions. It
+does not admit records to W16 training partitions.
 
 ## Layout
 
@@ -26,6 +33,7 @@ training/ticket-corpus/
     quality.py    # IDEAL/GOOD/USABLE_WITH_EDIT/BAD_RESPONSE/OUTDATED/INCOMPLETE/PRIVATE_EXCLUDE
     patterns.py   # evidence-request + staff-decision pattern extraction
     pipeline.py   # 12-stage orchestration -> section-27 candidates
+    real_ingest.py # gated real-export -> review partitions + manifest
     schema.py     # local section-27 contract validator
   fixtures/tickets.jsonl         # SYNTHETIC fixture tickets (not real data)
   tests/                         # pytest suite
@@ -58,6 +66,42 @@ workstream:
 Run tests: `python3 -m pytest training/ticket-corpus/tests/`
 Cross-check against W16's validator when available:
 `W16_PACKAGE_DIR=~/workspace/enthusia-ai/w16-work/training/datasets python3 -m pytest`
+
+
+## Governed real-ticket ingestion
+
+The first direct-training pass is intentionally restricted to closed
+`GENERAL_SUPPORT` and `BUG_REPORT` tickets exported by the Support Bot's
+structured exporter. Human-decision ticket types such as appeals and player
+reports are not admitted by this first pass.
+
+After the run-specific governance block is signed, run the sanitizer from a
+controlled environment with both the raw export and output directory **outside
+Git worktrees**:
+
+```bash
+python -m enthusia_ticket_corpus.real_ingest \
+  --input /secure/tmp/enthusia-ticket-export.jsonl \
+  --output-dir /secure/tmp/w18-run-001 \
+  --dataset-version ticket-real-v1 \
+  --reference-date 2026-10-07T00:00:00Z \
+  --run-id w18-real-001 \
+  --operator "<authorized operator>" \
+  --ack-governance
+```
+
+Outputs:
+
+- `positive-review-candidates.jsonl` — `IDEAL`, `GOOD`, and
+  `USABLE_WITH_EDIT`; still requires manual/W16 review.
+- `negative-eval-candidates.jsonl` — `BAD_RESPONSE`, `OUTDATED`, and
+  `INCOMPLETE`; useful for evaluation/adversarial work, not positive SFT.
+- `rejected.jsonl` — ticket ID + rejection reason only; no rejected content.
+- `manifest.json` — hashes, counts, source period, operator/run provenance,
+  dataset version, and the next admission gate.
+
+The raw Support Bot export remains temporary and must follow the governance
+retention policy. Only sanitized review artifacts proceed to the next gate.
 
 
 ## Severe-PII exclusion
