@@ -72,7 +72,7 @@ export async function collectTicketImageAssessments(
   let runner = input.assessImage;
 
   for (const candidate of selection.selected) {
-    runner ??= defaultAssessmentRunner();
+    runner ??= createDefaultTicketImageAssessmentRunner();
     const outcome = await assessCandidate(input, candidate, runner);
     if ('record' in outcome) assessments.push(outcome.record);
     else issues.push(outcome.issue);
@@ -86,7 +86,7 @@ export async function collectTicketImageAssessments(
   };
 }
 
-function defaultAssessmentRunner(): TicketImageAssessmentRunner {
+export function createDefaultTicketImageAssessmentRunner(): TicketImageAssessmentRunner {
   const config = loadConfig();
   const tracker = new CostTracker(config.budget, config.modelPrices);
   return (request) =>
