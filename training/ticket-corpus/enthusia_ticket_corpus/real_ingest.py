@@ -21,6 +21,7 @@ import hashlib
 import json
 import os
 from collections import Counter
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -121,15 +122,22 @@ def run_real_ingest(
         raise ValueError("dataset_version must be non-empty")
     if not reference_date.strip():
         raise ValueError("reference_date must be non-empty")
+    try:
+        datetime.fromisoformat(reference_date.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("reference_date must be ISO-8601") from exc
     if not run_id.strip():
         raise ValueError("run_id must be non-empty")
     if not operator.strip():
         raise ValueError("operator must be non-empty")
 
-    source = Path(input_path).expanduser().resolve()
+    source_arg = Path(input_path).expanduser()
+    if source_arg.is_symlink():
+        raise ValueError("input must be a regular, non-symlink JSONL file")
+    source = source_arg.resolve()
     target = Path(output_dir).expanduser().resolve()
 
-    if not source.is_file() or source.is_symlink():
+    if not source.is_file():
         raise ValueError("input must be a regular, non-symlink JSONL file")
     if _inside_git_worktree(source):
         raise ValueError("refusing real-ticket input stored inside a Git worktree")
