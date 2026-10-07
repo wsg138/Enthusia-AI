@@ -66,11 +66,22 @@ def validate_lora(lora: dict) -> dict:
         raise ConfigError(f"config[lora.alpha] must be positive, got {alpha!r}")
     if not 0.0 <= dropout < 1.0:
         raise ConfigError(f"config[lora.dropout] must be in [0, 1), got {dropout!r}")
-    if not isinstance(targets, list) or not targets or not all(
+    if targets == "all-linear":
+        normalized_targets: str | list[str] = "all-linear"
+    elif isinstance(targets, list) and targets and all(
         isinstance(t, str) and t for t in targets
     ):
-        raise ConfigError("config[lora.target_modules] must be a non-empty list of strings")
-    return {"r": r, "alpha": alpha, "dropout": dropout, "target_modules": list(targets)}
+        normalized_targets = list(targets)
+    else:
+        raise ConfigError(
+            "config[lora.target_modules] must be 'all-linear' or a non-empty list of strings"
+        )
+    return {
+        "r": r,
+        "alpha": alpha,
+        "dropout": dropout,
+        "target_modules": normalized_targets,
+    }
 
 
 def validate_training(training: dict) -> dict:
