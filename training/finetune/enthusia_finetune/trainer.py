@@ -15,6 +15,7 @@ import argparse
 import hashlib
 import importlib.metadata
 import json
+import math
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -226,6 +227,75 @@ def build_training_plan(
     }
 
 
+def _runtime_training_kwargs(
+    cfg: config_mod.TrainingConfig,
+    *,
+    train_records: int,
+    has_eval: bool,
+    output_dir: str,
+    model_dtype: Any,
+) -> dict[str, Any]:
+    """Translate the stable Enthusia config into the pinned HF/TRL runtime API.
+
+    Transformers 5.19 removed warmup_ratio from TrainingArguments while
+    retaining warmup_steps. Preserve the configured ratio semantics by
+    computing the same ceiling-based warmup step count after the dataset size
+    and effective batch size are known.
+    """
+    training = cfg.training
+    effective_batch = max(
+        1,
+        training["batch_size"] * training["gradient_accumulation"],
+    )
+    optimizer_steps_per_epoch = max(
+        1, math.ceil(train_records / effective_batch)
+    )
+    checkpoint_steps = max(1, min(50, optimizer_steps_per_epoch))
+
+    if training["max_steps"] is not None:
+        planned_steps = training["max_steps"]
+    else:
+        planned_steps = max(
+            1,
+            math.ceil(optimizer_steps_per_epoch * float(training["epochs"])),
+        )
+    warmup_steps = math.ceil(planned_steps * training["warmup_ratio"])
+
+    args_kwargs: dict[str, Any] = {
+        "output_dir": output_dir,
+        "per_device_train_batch_size": training["batch_size"],
+        "per_device_eval_batch_size": max(1, training["batch_size"]),
+        "gradient_accumulation_steps": training["gradient_accumulation"],
+        "learning_rate": training["learning_rate"],
+        "optim": training["optimizer"],
+        "lr_scheduler_type": training["scheduler"],
+        "warmup_steps": warmup_steps,
+        "max_length": training["max_seq_length"],
+        "seed": training["seed"],
+        "data_seed": training["seed"],
+        "bf16": True,
+        "tf32": True,
+        "gradient_checkpointing": True,
+        "completion_only_loss": True,
+        "packing": False,
+        "report_to": "none",
+        "logging_steps": 1,
+        "save_strategy": "steps",
+        "save_steps": checkpoint_steps,
+        "save_total_limit": 2,
+        "eval_strategy": "steps" if has_eval else "no",
+        "eval_steps": checkpoint_steps if has_eval else None,
+        "load_best_model_at_end": has_eval,
+        "metric_for_best_model": "eval_loss" if has_eval else None,
+        "greater_is_better": False if has_eval else None,
+        "model_init_kwargs": {"dtype": model_dtype},
+    }
+    if training["epochs"] is not None:
+        args_kwargs["num_train_epochs"] = training["epochs"]
+    if training["max_steps"] is not None:
+        args_kwargs["max_steps"] = training["max_steps"]
+    return args_kwargs
+
 def _dependency_versions() -> dict[str, str]:
     versions: dict[str, str] = {}
     for package in (
@@ -287,6 +357,18 @@ def run_training(
         else None
     )
 
+    # Construct SFTConfig before tokenizer/model network access so runtime API
+    # drift fails cheaply before large downloads.
+    has_eval = eval_dataset is not None and len(eval_dataset) > 0
+    args_kwargs = _runtime_training_kwargs(
+        cfg,
+        train_records=len(train_dataset),
+        has_eval=has_eval,
+        output_dir=plan["output_dir"],
+        model_dtype=torch.bfloat16,
+    )
+    sft_args = SFTConfig(**args_kwargs)
+
     tokenizer = AutoTokenizer.from_pretrained(cfg.tokenizer, use_fast=True)
     if tokenizer.pad_token is None:
         if tokenizer.eos_token is None:
@@ -315,52 +397,6 @@ def run_training(
         task_type="CAUSAL_LM",
     )
 
-    training = cfg.training
-    has_eval = eval_dataset is not None and len(eval_dataset) > 0
-    effective_batch = max(
-        1,
-        training["batch_size"] * training["gradient_accumulation"],
-    )
-    optimizer_steps_per_epoch = max(
-        1, (len(train_dataset) + effective_batch - 1) // effective_batch
-    )
-    checkpoint_steps = max(1, min(50, optimizer_steps_per_epoch))
-
-    args_kwargs: dict[str, Any] = {
-        "output_dir": plan["output_dir"],
-        "per_device_train_batch_size": training["batch_size"],
-        "per_device_eval_batch_size": max(1, training["batch_size"]),
-        "gradient_accumulation_steps": training["gradient_accumulation"],
-        "learning_rate": training["learning_rate"],
-        "optim": training["optimizer"],
-        "lr_scheduler_type": training["scheduler"],
-        "warmup_ratio": training["warmup_ratio"],
-        "max_length": training["max_seq_length"],
-        "seed": training["seed"],
-        "data_seed": training["seed"],
-        "bf16": True,
-        "tf32": True,
-        "gradient_checkpointing": True,
-        "completion_only_loss": True,
-        "packing": False,
-        "report_to": "none",
-        "logging_steps": 1,
-        "save_strategy": "steps",
-        "save_steps": checkpoint_steps,
-        "save_total_limit": 2,
-        "eval_strategy": "steps" if has_eval else "no",
-        "eval_steps": checkpoint_steps if has_eval else None,
-        "load_best_model_at_end": has_eval,
-        "metric_for_best_model": "eval_loss" if has_eval else None,
-        "greater_is_better": False if has_eval else None,
-        "model_init_kwargs": {"dtype": torch.bfloat16},
-    }
-    if training["epochs"] is not None:
-        args_kwargs["num_train_epochs"] = training["epochs"]
-    if training["max_steps"] is not None:
-        args_kwargs["max_steps"] = training["max_steps"]
-
-    sft_args = SFTConfig(**args_kwargs)
     trainer = SFTTrainer(
         model=cfg.base_model,
         args=sft_args,
