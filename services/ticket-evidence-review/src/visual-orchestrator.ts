@@ -7,6 +7,7 @@ import {
   createDefaultTicketImageAssessmentRunner,
   type TicketImageAssessmentRunner,
   type TicketImageCollectionIssue,
+  type TicketImageCollectionResult,
 } from './orchestrator.js';
 import { MAX_POLICY_EVIDENCE_ITEMS } from './policy-assessor.js';
 import {
@@ -52,23 +53,19 @@ export interface CollectTicketVisualAssessmentsInput {
 export async function collectTicketVisualAssessments(
   input: CollectTicketVisualAssessmentsInput,
 ): Promise<TicketVisualCollectionResult> {
-  const assessImage = sharedLazyAssessmentRunner(input.assessImage);
-  const video = await collectVideos(input, assessImage);
-  const remainingPolicySlots = Math.max(
-    1,
-    MAX_POLICY_EVIDENCE_ITEMS - video.assessments.length,
+  const vision = sharedVisionBudget(input.assessImage);
+  const video = await collectVideos(input, vision.runner);
+  const requestedImages = allowedImageCalls(
+    input.maxImages,
+    video.assessments.length,
+    vision.remaining(),
   );
-  const requestedImages =
-    input.maxImages === undefined
-      ? remainingPolicySlots
-      : Math.min(input.maxImages, remainingPolicySlots);
-
   const images = await collectTicketImageAssessments({
     ticket: withoutVideoAttachments(input.ticket),
     evidenceClient: input.evidenceClient,
     traceId: input.traceId,
     maxImages: requestedImages,
-    assessImage,
+    assessImage: vision.runner,
   });
 
   return {
@@ -110,14 +107,43 @@ async function collectVideos(
   });
 }
 
-function sharedLazyAssessmentRunner(
+interface SharedVisionBudget {
+  runner: TicketImageAssessmentRunner;
+  remaining(): number;
+}
+
+function sharedVisionBudget(
   injected: TicketImageAssessmentRunner | undefined,
-): TicketImageAssessmentRunner {
+): SharedVisionBudget {
   let runner = injected;
-  return async (request) => {
-    runner ??= createDefaultTicketImageAssessmentRunner();
-    return runner(request);
+  let used = 0;
+  return {
+    remaining: () => Math.max(0, MAX_POLICY_EVIDENCE_ITEMS - used),
+    runner: async (request) => {
+      if (used >= MAX_POLICY_EVIDENCE_ITEMS) {
+        throw new Error('ticket visual assessment budget exhausted');
+      }
+      used += 1;
+      runner ??= createDefaultTicketImageAssessmentRunner();
+      return runner(request);
+    },
   };
+}
+
+function allowedImageCalls(
+  requested: number | undefined,
+  videoAssessments: number,
+  remainingVisionCalls: number,
+): number {
+  const remainingPolicySlots = Math.max(
+    0,
+    MAX_POLICY_EVIDENCE_ITEMS - videoAssessments,
+  );
+  const requestedLimit = requested ?? remainingPolicySlots;
+  return Math.max(
+    0,
+    Math.min(requestedLimit, remainingPolicySlots, remainingVisionCalls),
+  );
 }
 
 function withoutVideoAttachments(
