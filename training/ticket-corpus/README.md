@@ -106,6 +106,15 @@ retention policy. Only sanitized review artifacts proceed to the next gate.
 
 
 
+## Owner-reviewed behavior rubric
+
+Historical rewrites and future synthetic ticket generation must also follow
+[OWNER-REVIEW-RUBRIC.md](OWNER-REVIEW-RUBRIC.md). The key owner decision is
+that the assistant should investigate bugs/support cases with authoritative
+logs, databases, current server state, memory, and player context itself rather
+than acting as a passive intake form. Mutable procedures and current truth stay
+in tools/memory rather than being baked into model weights.
+
 ## Historical staff responses are reference-only
 
 Production dump review showed that even auto-`GOOD` historical tickets can
