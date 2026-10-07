@@ -7,7 +7,6 @@ import {
   createDefaultTicketImageAssessmentRunner,
   type TicketImageAssessmentRunner,
   type TicketImageCollectionIssue,
-  type TicketImageCollectionResult,
 } from './orchestrator.js';
 import { MAX_POLICY_EVIDENCE_ITEMS } from './policy-assessor.js';
 import {
