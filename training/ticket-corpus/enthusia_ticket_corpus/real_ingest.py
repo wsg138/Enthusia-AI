@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 from collections import Counter
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,14 @@ DIRECT_SCOPE = {"general_support", "bug_report"}
 POSITIVE_REVIEW_LABELS = {"IDEAL", "GOOD", "USABLE_WITH_EDIT"}
 NEGATIVE_EVAL_LABELS = {"BAD_RESPONSE", "OUTDATED", "INCOMPLETE"}
 GOVERNANCE_REF = "training/datasets/GOVERNANCE-CHECKPOINT.md"
+
+
+@dataclass(frozen=True)
+class IngestRun:
+    dataset_version: str
+    reference_date: str
+    run_id: str
+    operator: str
 
 
 def _sha256(path: Path) -> str:
@@ -89,29 +98,22 @@ def _source_period(raws: list[dict[str, Any]]) -> dict[str, str | None]:
     }
 
 
-def _validate_run_metadata(
-    *,
-    dataset_version: str,
-    reference_date: str,
-    run_id: str,
-    operator: str,
-    governance_acknowledged: bool,
-) -> None:
+def _validate_run_metadata(run: IngestRun, governance_acknowledged: bool) -> None:
     if not governance_acknowledged:
         raise ValueError(
             "Real ticket ingestion is blocked until the run-specific governance "
             "checkpoint is complete; pass --ack-governance only after that sign-off."
         )
     for name, value in (
-        ("dataset_version", dataset_version),
-        ("reference_date", reference_date),
-        ("run_id", run_id),
-        ("operator", operator),
+        ("dataset_version", run.dataset_version),
+        ("reference_date", run.reference_date),
+        ("run_id", run.run_id),
+        ("operator", run.operator),
     ):
         if not value.strip():
             raise ValueError(f"{name} must be non-empty")
     try:
-        datetime.fromisoformat(reference_date.replace("Z", "+00:00"))
+        datetime.fromisoformat(run.reference_date.replace("Z", "+00:00"))
     except ValueError as exc:
         raise ValueError("reference_date must be ISO-8601") from exc
 
@@ -195,10 +197,7 @@ def _build_manifest(
     positive: list[dict[str, Any]],
     negative: list[dict[str, Any]],
     rejections: list[dict[str, str]],
-    dataset_version: str,
-    reference_date: str,
-    run_id: str,
-    operator: str,
+    run: IngestRun,
 ) -> dict[str, Any]:
     all_candidates = positive + negative
     quality_counts = Counter(
@@ -207,10 +206,10 @@ def _build_manifest(
     return {
         "schema_version": 1,
         "status": "review_required_not_admitted",
-        "run_id": run_id,
-        "operator": operator,
-        "dataset_version": dataset_version,
-        "reference_date": reference_date,
+        "run_id": run.run_id,
+        "operator": run.operator,
+        "dataset_version": run.dataset_version,
+        "reference_date": run.reference_date,
         "governance_ref": GOVERNANCE_REF,
         "first_pass_ticket_types": sorted(DIRECT_SCOPE),
         "source_period": _source_period(in_scope),
@@ -249,13 +248,8 @@ def run_real_ingest(
     live_facts: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Process one governed real-ticket export into review-only artifacts."""
-    _validate_run_metadata(
-        dataset_version=dataset_version,
-        reference_date=reference_date,
-        run_id=run_id,
-        operator=operator,
-        governance_acknowledged=governance_acknowledged,
-    )
+    run = IngestRun(dataset_version, reference_date, run_id, operator)
+    _validate_run_metadata(run, governance_acknowledged)
     source, target = _prepare_paths(input_path, output_dir)
     raws = load_fixtures(str(source))
     in_scope, scope_rejections = _scope_filter(raws)
@@ -279,10 +273,7 @@ def run_real_ingest(
         positive=positive,
         negative=negative,
         rejections=rejections,
-        dataset_version=dataset_version,
-        reference_date=reference_date,
-        run_id=run_id,
-        operator=operator,
+        run=run,
     )
     _write_new_text(
         paths["manifest"],
