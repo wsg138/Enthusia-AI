@@ -94,12 +94,7 @@ export class PublicCurrentMemoryTool
         source: SOURCE,
         visibility: Visibility.PUBLIC,
         correlationId: ctx.traceId,
-        freshness: encodeFreshness({
-          version: current!.revision.id,
-          observedTime:
-            current!.revision.verifiedAt ?? current!.revision.createdAt,
-          sourceStatus: SourceStatus.CURRENT,
-        }),
+        freshness: currentMemoryFreshness(current!),
         result: payload,
       };
     } catch (error) {
@@ -141,48 +136,92 @@ function normalizeIdentityPart(value: unknown): string {
 function publicFactPayload(
   current: CurrentMemory | null,
 ): CurrentMemoryFactPayload {
-  if (
-    current === null ||
-    current.key.visibility !== Visibility.PUBLIC ||
-    current.revision.status !== SourceStatus.CURRENT ||
-    current.revision.evidence.length === 0
-  ) {
-    throw new Error('public_memory_unavailable');
-  }
-
+  const verified = requirePublicVerifiedCurrent(current);
   return {
-    value: boundedValue(current.revision.value),
-    excerpt: boundedText(current.revision.summary, MAX_SUMMARY_LENGTH),
+    value: boundedValue(verified.revision.value),
+    excerpt: boundedText(verified.revision.summary, MAX_SUMMARY_LENGTH),
     memory: {
-      keyId: current.key.id,
-      namespace: current.key.namespace,
-      key: current.key.key,
-      scope: current.key.scope,
+      keyId: verified.key.id,
+      namespace: verified.key.namespace,
+      key: verified.key.key,
+      scope: verified.key.scope,
       status: SourceStatus.CURRENT,
     },
   };
 }
 
-function boundedValue(value: unknown): string {
-  let rendered: string;
-  if (typeof value === 'string') {
-    rendered = value.trim();
-  } else if (typeof value === 'number' && Number.isFinite(value)) {
-    rendered = String(value);
-  } else if (typeof value === 'boolean') {
-    rendered = String(value);
-  } else {
-    try {
-      rendered = JSON.stringify(value) ?? '';
-    } catch {
-      throw new Error('public_memory_unavailable');
-    }
-  }
+function requirePublicVerifiedCurrent(
+  current: CurrentMemory | null,
+): CurrentMemory {
+  requirePresentCurrent(current);
+  requirePublicVisibility(current);
+  requireCurrentStatus(current);
+  requireEvidence(current);
+  return current;
+}
 
-  if (rendered.length < 1 || rendered.length > MAX_VALUE_LENGTH) {
+function requirePresentCurrent(
+  current: CurrentMemory | null,
+): asserts current is CurrentMemory {
+  if (current !== null) return;
+  throw new Error('public_memory_unavailable');
+}
+
+function requirePublicVisibility(current: CurrentMemory): void {
+  if (current.key.visibility === Visibility.PUBLIC) return;
+  throw new Error('public_memory_unavailable');
+}
+
+function requireCurrentStatus(current: CurrentMemory): void {
+  if (current.revision.status === SourceStatus.CURRENT) return;
+  throw new Error('public_memory_unavailable');
+}
+
+function requireEvidence(current: CurrentMemory): void {
+  if (current.revision.evidence.length > 0) return;
+  throw new Error('public_memory_unavailable');
+}
+
+function currentMemoryFreshness(current: CurrentMemory): string {
+  return encodeFreshness({
+    version: current.revision.id,
+    observedTime: memoryObservedTime(current),
+    sourceStatus: SourceStatus.CURRENT,
+  });
+}
+
+function memoryObservedTime(current: CurrentMemory): string {
+  return current.revision.verifiedAt ?? current.revision.createdAt;
+}
+
+function boundedValue(value: unknown): string {
+  const rendered = renderMemoryValue(value);
+  requireBoundedValue(rendered);
+  return rendered;
+}
+
+function renderMemoryValue(value: unknown): string {
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'boolean') return String(value);
+  if (isFiniteNumber(value)) return String(value);
+  return renderJsonValue(value);
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function renderJsonValue(value: unknown): string {
+  try {
+    return JSON.stringify(value) ?? '';
+  } catch {
     throw new Error('public_memory_unavailable');
   }
-  return rendered;
+}
+
+function requireBoundedValue(rendered: string): void {
+  if (rendered.length >= 1 && rendered.length <= MAX_VALUE_LENGTH) return;
+  throw new Error('public_memory_unavailable');
 }
 
 function boundedText(value: string, maximum: number): string {
