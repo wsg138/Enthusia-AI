@@ -208,6 +208,33 @@ describe('ModerationServiceClient', () => {
     expect(message).not.toContain('very-sensitive-runtime-token');
   });
 
+  it('redacts canonical identity and credentials from transport error details', async () => {
+    const client = new ModerationServiceClient({
+      ...BASE,
+      apiKey: 'very-sensitive-runtime-token',
+      fetchFn: async () => {
+        throw new Error(
+          'socket failed for http://moderation:8080/v1/support-context/' +
+          'canonical-private-player-42?token=very-sensitive-runtime-token',
+        );
+      },
+    });
+
+    let message = '';
+    try {
+      await client.fetchDecisionContext({
+        subjectId: 'canonical-private-player-42',
+      });
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+
+    expect(message).toContain('/v1/support-context/{subject_id}');
+    expect(message).not.toContain('canonical-private-player-42');
+    expect(message).not.toContain('very-sensitive-runtime-token');
+    expect(message).not.toContain('socket failed');
+  });
+
   it('rejects a mismatched subject response instead of attaching history to the wrong player', async () => {
     const body = sampleDecisionBody();
     body.subject_id = 'different-player';
