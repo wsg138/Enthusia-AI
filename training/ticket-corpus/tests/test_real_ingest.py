@@ -101,7 +101,7 @@ class RealIngestTests(unittest.TestCase):
             )
             rejected = (root / "out" / "rejected.jsonl").read_text(encoding="utf-8")
 
-            self.assertIn('"quality": "GOOD"', positive)
+            self.assertIn('"quality": "USABLE_WITH_EDIT"', positive)
             self.assertIn('"quality": "BAD_RESPONSE"', negative)
             self.assertEqual(
                 json.loads(rejected),
