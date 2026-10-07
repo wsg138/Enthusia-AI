@@ -158,6 +158,10 @@ function expectCollectedVideoRecord(
   );
   expect(record.evidenceSha256).toBe(VIDEO_SHA);
   expect(record.video).toMatchObject({
+    source: 'discord',
+    submitterId: 'reporter',
+    submitterKind: 'player',
+    submittedAt: '2026-10-06T12:05:00.000Z',
     contentType: 'video/webm',
     durationSeconds: 4,
     width: 1280,
@@ -188,6 +192,9 @@ function expectCollectedVideoRecord(
     'Motion between frames is not visible.',
   );
   expect(record.assessment.limitations[0]).toContain('sampled at 2');
+  expect(record.assessment.limitations).toContain(
+    'Submitted video is historical evidence and does not establish authoritative current server state.',
+  );
 }
 
 describe('collectTicketVideoAssessments', () => {
