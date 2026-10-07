@@ -34,6 +34,8 @@ export type {
   TicketStatus,
   TicketBotCapabilities,
   TicketEvidenceCapabilities,
+  TicketEvidenceCapabilitiesV1,
+  TicketEvidenceCapabilitiesV2,
   TicketImageEvidence,
   TicketVideoEvidence,
   ActionRequestInput,
