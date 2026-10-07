@@ -99,7 +99,7 @@ Current source-level video ceilings are:
 
 - producer byte limit: 25 MiB;
 - duration: at most 120 seconds;
-- derived frames: at most 6;
+- derived frames: at most 3 (aligned with the default per-request external vision-call cap);
 - decoded dimensions: at most 4096 on either axis and 2560×1440 total pixels;
 - derived PNG frame: at most 8 MiB;
 - total local media-processing wall clock: at most 30 seconds;
