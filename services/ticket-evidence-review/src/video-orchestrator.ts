@@ -198,6 +198,7 @@ async function assessVideoCandidate(
   let sample: TicketVideoSample;
   try {
     sample = await sampler(evidence);
+    validateSampleProvenance(evidence, sample);
   } catch {
     return candidateFailure(candidate, 'processing_failed');
   }
@@ -233,9 +234,14 @@ async function assessFrames(
 ): Promise<VideoFrameObservation[]> {
   const observations: VideoFrameObservation[] = [];
   for (const frame of sample.frames) {
-    const result = await runner(
-      frameAssessmentRequest(input, candidate, sample, frame),
-    );
+    const request = frameAssessmentRequest(input, candidate, sample, frame);
+    const result = await runner(request);
+    if (
+      result.evidenceRef !== request.evidenceRef ||
+      result.evidenceSha256.toLowerCase() !== frame.sha256.toLowerCase()
+    ) {
+      throw new Error('frame assessment provenance mismatch');
+    }
     observations.push({
       frameIndex: frame.index,
       timestampSeconds: frame.timestampSeconds,
@@ -283,14 +289,15 @@ function aggregateVideoAssessment(
   frames: VideoFrameObservation[],
 ): TicketVideoAssessmentRecord {
   const assessment = aggregateFrameAssessments(sample, frames);
-  const provenance: TicketVideoFrameProvenance[] = frames.map(
-    (item, index) => ({
-      index: item.frameIndex,
-      timestampSeconds: item.timestampSeconds,
-      evidenceRef: item.result.evidenceRef,
-      sha256: sample.frames[index]?.sha256 ?? '',
-    }),
+  const frameHashes = new Map(
+    sample.frames.map((frame) => [frame.index, frame.sha256]),
   );
+  const provenance: TicketVideoFrameProvenance[] = frames.map((item) => ({
+    index: item.frameIndex,
+    timestampSeconds: item.timestampSeconds,
+    evidenceRef: item.result.evidenceRef,
+    sha256: frameHashes.get(item.frameIndex) ?? '',
+  }));
   return {
     messageId: candidate.messageId,
     attachmentId: candidate.attachment.id,
@@ -383,6 +390,29 @@ export function aggregateFrameAssessments(
     limitations,
     needsMoreContext,
   };
+}
+
+function validateSampleProvenance(
+  evidence: TicketVideoEvidence,
+  sample: TicketVideoSample,
+): void {
+  if (sample.videoSha256.toLowerCase() !== evidence.sha256.toLowerCase()) {
+    throw new Error('sampled video provenance mismatch');
+  }
+  const indexes = new Set<number>();
+  for (const frame of sample.frames) {
+    if (
+      indexes.has(frame.index) ||
+      !Number.isInteger(frame.index) ||
+      frame.index < 0 ||
+      !Number.isFinite(frame.timestampSeconds) ||
+      frame.timestampSeconds < 0 ||
+      !/^[a-f0-9]{64}$/.test(frame.sha256.toLowerCase())
+    ) {
+      throw new Error('sampled frame provenance is invalid');
+    }
+    indexes.add(frame.index);
+  }
 }
 
 async function fetchVideoEvidence(
