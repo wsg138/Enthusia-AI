@@ -279,6 +279,67 @@ describe('collectTicketVideoAssessments', () => {
     expect(JSON.stringify(assessmentFailure)).not.toContain('private model detail');
   });
 
+  it('rejects sampler provenance drift as a processing failure', async () => {
+    const base = ticket();
+    base.messages = [{
+      id: 'm9',
+      ticketId: '42',
+      author: { id: 'reporter', kind: 'player' },
+      body: 'video',
+      createdAt: '2026-10-06T12:05:00.000Z',
+      attachments: [attachment('v9', 'clip.mp4', 'video/mp4', 1000)],
+    }];
+    const badSample = sample();
+    badSample.videoSha256 = 'e'.repeat(64);
+
+    const result = await collectTicketVideoAssessments({
+      ticket: base,
+      evidenceClient: {
+        getVideoEvidence: async (ticketId, messageId, attachmentId) =>
+          evidence(ticketId, messageId, attachmentId, 'video/mp4'),
+      },
+      traceId: 'trace-provenance',
+      assessImage: async (input) => observed(input),
+      sampleVideo: async () => badSample,
+    });
+
+    expect(result.assessments).toEqual([]);
+    expect(result.issues).toEqual([
+      { messageId: 'm9', attachmentId: 'v9', reason: 'processing_failed' },
+    ]);
+  });
+
+  it('rejects frame-observer provenance drift as an assessment failure', async () => {
+    const base = ticket();
+    base.messages = [{
+      id: 'm9',
+      ticketId: '42',
+      author: { id: 'reporter', kind: 'player' },
+      body: 'video',
+      createdAt: '2026-10-06T12:05:00.000Z',
+      attachments: [attachment('v9', 'clip.mp4', 'video/mp4', 1000)],
+    }];
+
+    const result = await collectTicketVideoAssessments({
+      ticket: base,
+      evidenceClient: {
+        getVideoEvidence: async (ticketId, messageId, attachmentId) =>
+          evidence(ticketId, messageId, attachmentId, 'video/mp4'),
+      },
+      traceId: 'trace-frame-provenance',
+      assessImage: async (input) => ({
+        ...observed(input),
+        evidenceRef: 'wrong-ref',
+      }),
+      sampleVideo: async () => sample(),
+    });
+
+    expect(result.assessments).toEqual([]);
+    expect(result.issues).toEqual([
+      { messageId: 'm9', attachmentId: 'v9', reason: 'assessment_failed' },
+    ]);
+  });
+
   it('refuses a fetched MIME type that does not match the ticket attachment', async () => {
     const result = await collectTicketVideoAssessments({
       ticket: ticket(),
