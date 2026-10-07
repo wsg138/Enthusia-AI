@@ -34,6 +34,7 @@ training/ticket-corpus/
     patterns.py   # evidence-request + staff-decision pattern extraction
     pipeline.py   # 12-stage orchestration -> section-27 candidates
     real_ingest.py # gated real-export -> review partitions + manifest
+    rewrite_queue.py # positive review candidates -> reference-only rewrite queue
     schema.py     # local section-27 contract validator
   fixtures/tickets.jsonl         # SYNTHETIC fixture tickets (not real data)
   tests/                         # pytest suite
@@ -103,6 +104,39 @@ Outputs:
 The raw Support Bot export remains temporary and must follow the governance
 retention policy. Only sanitized review artifacts proceed to the next gate.
 
+
+
+## Historical staff responses are reference-only
+
+Production dump review showed that even auto-`GOOD` historical tickets can
+contain staff shorthand, guesses, one-off actions, stale operational claims,
+or answers that only make sense with missing staff-side context. Real tickets
+are therefore treated primarily as **source cases**, not automatic imitation
+targets.
+
+After W18 produces `positive-review-candidates.jsonl`, build a separate
+rewrite queue outside Git:
+
+```bash
+python -m enthusia_ticket_corpus.rewrite_queue \
+  --input /secure/tmp/w18-run-001/positive-review-candidates.jsonl \
+  --output-dir /secure/tmp/w18-rewrite-001
+```
+
+The queue preserves the sanitized player context, historical transcript,
+evidence/decision metadata, and historical answer as **reference-only**.
+Every case is emitted with:
+
+- `target_answer: null`;
+- `target_quality: "UNREVIEWED"`;
+- `training_eligible: false`;
+- rewrite requirements derived from W18 quality reasons.
+
+The historical answer must never be copied directly into W16/W19 merely
+because W18 called the conversation `GOOD`. A later grounded rewrite/review
+must author a verified target and explicitly relabel the finished candidate
+`GOOD` or `IDEAL`. W16 and W19 independently fail closed on every other
+quality label.
 
 ## Severe-PII exclusion
 
