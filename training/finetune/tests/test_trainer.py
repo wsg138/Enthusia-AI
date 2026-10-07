@@ -195,6 +195,47 @@ def test_training_plan_carries_fused_moe_targets(tmp_path):
     assert cfg.lora["target_parameters"][0] == "mlp.experts.gate_up_proj"
 
 
+def test_runtime_training_kwargs_translate_warmup_ratio_to_steps():
+    raw = dict(_config().raw)
+    raw["training"] = dict(raw["training"])
+    raw["training"]["warmup_ratio"] = 0.2
+    raw["training"]["max_steps"] = 7
+    cfg = config_mod.validate_config(raw)
+
+    kwargs = trainer._runtime_training_kwargs(
+        cfg,
+        train_records=17,
+        has_eval=True,
+        output_dir="runs/test/adapter",
+        model_dtype="bf16-test-sentinel",
+    )
+
+    assert "warmup_ratio" not in kwargs
+    assert kwargs["warmup_steps"] == 2
+    assert kwargs["max_steps"] == 7
+    assert kwargs["eval_strategy"] == "steps"
+    assert kwargs["model_init_kwargs"]["dtype"] == "bf16-test-sentinel"
+
+
+def test_runtime_training_kwargs_epoch_schedule_uses_effective_batch():
+    raw = dict(_config().raw)
+    raw["training"] = dict(raw["training"])
+    raw["training"]["warmup_ratio"] = 0.25
+    cfg = config_mod.validate_config(raw)
+
+    # 17 records / effective batch 4 => 5 optimizer steps per epoch.
+    kwargs = trainer._runtime_training_kwargs(
+        cfg,
+        train_records=17,
+        has_eval=False,
+        output_dir="runs/test/adapter",
+        model_dtype="bf16-test-sentinel",
+    )
+
+    assert kwargs["warmup_steps"] == 2
+    assert kwargs["num_train_epochs"] == 1
+    assert kwargs["eval_strategy"] == "no"
+
 def test_cli_dry_run_never_imports_gpu_stack(tmp_path, capsys):
     train = tmp_path / "train.jsonl"
     config_path = tmp_path / "config.json"
