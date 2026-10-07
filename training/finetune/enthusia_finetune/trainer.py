@@ -308,6 +308,8 @@ def run_training(
         lora_alpha=cfg.lora["alpha"],
         lora_dropout=cfg.lora["dropout"],
         target_modules=_target_modules(cfg),
+        target_parameters=cfg.lora.get("target_parameters") or None,
+        rank_pattern=cfg.lora.get("rank_pattern") or {},
         bias="none",
         task_type="CAUSAL_LM",
     )
