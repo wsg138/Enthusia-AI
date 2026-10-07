@@ -1,0 +1,35 @@
+name: Temporary Codacy PR73 diagnostic
+
+on:
+  push:
+    branches:
+      - runtime/bounded-video-evidence
+
+permissions:
+  contents: read
+
+jobs:
+  codacy-pr73:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for and print PR73 Codacy issues
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://api.codacy.com/api/v3/analysis/organizations/gh/wsg138/repositories/Enthusia-AI/pull-requests/73/issues?status=new&limit=100"
+          payload='{"data":[]}'
+          for attempt in $(seq 1 40); do
+            payload="$(curl -fsSL "$url")"
+            count="$(jq '.data | length' <<<"$payload")"
+            if [[ "$count" -gt 0 ]]; then
+              break
+            fi
+            sleep 5
+          done
+          jq -r '.data[] | [
+            .commitIssue.patternInfo.category,
+            .commitIssue.filePath,
+            (.commitIssue.lineNumber | tostring),
+            .commitIssue.patternInfo.id,
+            .commitIssue.message
+          ] | @tsv' <<<"$payload"
