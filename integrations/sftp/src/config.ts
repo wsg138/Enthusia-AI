@@ -74,12 +74,41 @@ export const liveConfigDirectorySchema = z.strictObject({
   maxDepth: z.number().int().min(0).max(12).default(4),
 });
 
+export const liveSafeConfigValueSchema = z.strictObject({
+  id: sourceIdSchema,
+  path: z.array(z.string().min(1).max(128)).min(1).max(16),
+});
+
 export const liveApprovedFileSchema = z.strictObject({
   id: sourceIdSchema,
   path: absolutePosixPathSchema,
   kind: z.enum(['server-properties', 'config', 'deployment-identity']),
   format: z.enum(['properties', 'yaml', 'json', 'text']),
   visibility: modelVisibleVisibilitySchema.default(Visibility.STAFF),
+  safeValues: z.array(liveSafeConfigValueSchema).max(128).default([]),
+}).superRefine((source, ctx) => {
+  const ids = source.safeValues.map((value) => value.id);
+  if (new Set(ids).size !== ids.length) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['safeValues'],
+      message: 'safe config value ids must be unique within an approved file',
+    });
+  }
+  if (source.safeValues.length > 0 && source.format === 'text') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['safeValues'],
+      message: 'safe config values require properties, yaml, or json format',
+    });
+  }
+  if (source.safeValues.length > 0 && source.kind === 'deployment-identity') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['safeValues'],
+      message: 'deployment identity sources cannot expose safe config values',
+    });
+  }
 });
 
 export const liveSourceSchema = z.strictObject({
@@ -97,6 +126,7 @@ export const liveSourceSchema = z.strictObject({
 
 export type LivePluginDirectoryConfig = z.infer<typeof livePluginDirectorySchema>;
 export type LiveConfigDirectoryConfig = z.infer<typeof liveConfigDirectorySchema>;
+export type LiveSafeConfigValueConfig = z.infer<typeof liveSafeConfigValueSchema>;
 export type LiveApprovedFileConfig = z.infer<typeof liveApprovedFileSchema>;
 export type LiveSourceConfig = z.infer<typeof liveSourceSchema>;
 
