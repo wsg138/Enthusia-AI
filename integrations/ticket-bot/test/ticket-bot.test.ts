@@ -324,6 +324,61 @@ describe('TicketBotClient evidence capabilities', () => {
     ]);
   });
 
+  it('keeps v1 image reads compatible but refuses video until v2 is deployed', async () => {
+    const client = new TicketEvidenceClient({
+      baseUrl,
+      apiKey: API_KEY,
+      timeoutMs: 5_000,
+      fetchImpl: async (input: Parameters<typeof fetch>[0]) => {
+        const url = String(input);
+        if (url.endsWith('/v1/evidence/capabilities')) {
+          return new Response(JSON.stringify({
+            service: 'enthusia-support-bot',
+            api: 'ticket-evidence',
+            contractVersion: 'evidence-v1',
+            reads: ['attachment.image'],
+            maxImageBytes: 1024,
+          }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        if (url.endsWith('/image')) {
+          const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+          return new Response(bytes, {
+            status: 200,
+            headers: {
+              'Content-Type': 'image/png',
+              'Content-Length': String(bytes.byteLength),
+              'X-Enthusia-Ticket-Id': '1234',
+              'X-Enthusia-Message-Id': 'm-1',
+              'X-Enthusia-Attachment-Id': '120000000000000001',
+              'X-Enthusia-Content-Sha256':
+                '0f4636c78f65d3639ece5a064b5ae753e3408614a14fb18ab4d7540d2c248543',
+            },
+          });
+        }
+        throw new Error('unexpected request');
+      },
+    });
+
+    await expect(
+      client.getImageEvidence(
+        'T-1234',
+        'm-1',
+        '120000000000000001',
+      ),
+    ).resolves.toMatchObject({ contentType: 'image/png', size: 4 });
+
+    await expect(
+      client.getVideoEvidence(
+        'T-1234',
+        'm-1',
+        '120000000000000002',
+      ),
+    ).rejects.toThrow(/does not advertise video evidence reads/);
+  });
+
   it('rejects image evidence when the provenance hash does not match the bytes', async () => {
     const client = new TicketEvidenceClient({
       baseUrl,
