@@ -211,10 +211,11 @@ describe('familiarity runtime composition', () => {
     runtime.close();
   });
 
-  it('registers only the subject-bound familiarity tool when configured', () => {
+  it('registers bounded familiarity and public current-memory tools when configured', () => {
     const runtime = loadConfiguredFamiliarityRuntime(':memory:');
     expect(runtime.tools.map((tool) => tool.meta.name)).toEqual([
       'player.topic_familiarity',
+      'memory.current_fact',
     ]);
     expect(runtime.onVerifiedTopicHelp).toBeTypeOf('function');
     runtime.close();
