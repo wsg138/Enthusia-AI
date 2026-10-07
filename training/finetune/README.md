@@ -53,9 +53,15 @@ prepare  ->  budget gate -> dataset assembly -> eval-before -> [TRAIN on GPU hos
   runs W20's golden suite against the baseline ("before"), prints the
   exact training command for the GPU host, and prints the export plan in
   dry-run mode. Writes `runs/<name>/prepare.json`.
-- `finetune pipeline --stage train ...` — **always refuses** here
-  (`TrainingNotPermittedError`). Training happens only on the approved
-  GPU host with the printed command.
+- `finetune pipeline --stage train ...` — **always refuses** in the
+  preparation environment (`TrainingNotPermittedError`). `prepare` now
+  writes a resolved config and prints a real
+  `python -m enthusia_finetune.trainer ...` command for the approved GPU host.
+- `python -m enthusia_finetune.trainer --config ... --train-json ...` —
+  the explicit GPU-host runner. It re-validates every input record, refuses
+  anything not reviewed `GOOD`/`IDEAL`, converts the record into
+  conversational prompt-completion format, and trains only on
+  `expected_answer` rather than historical assistant context.
 - `finetune pipeline --stage export --adapter-dir ...` — plans (dry-run)
   or executes the GGUF export and writes `artifact-manifest.json`
   (base model, adapter, dataset version, hyperparameters, hashes,
@@ -110,13 +116,45 @@ and eval checkout):
 |---|---|---|
 | `smoke.yaml` | 10-step local CPU smoke; catches config/assembly errors | $0.00 |
 | `small-adapter.yaml` | QLoRA 3B on the owner's RTX 4060 Ti 8 GB; end-to-end proof | $0.00 |
-| `full-run.yaml` | QLoRA 8B on a rented GPU (2 epochs) | **$23.60** (example pricing) |
+| `full-run.yaml` | Legacy dense 8B QLoRA reference config | **$23.60** (example pricing) |
+| `a100-qwen3-30b-a3b.yaml` | Qwen3 30B-A3B MoE QLoRA on one A100 80 GB | **$9.20** (example pricing; replace with actual rate) |
 
 `full-run.yaml` uses *example* rental pricing (24 h × $0.90 + $2
 storage). **Replace with the actual rental quote** and re-run
 `finetune check-budget` before renting. Conservative LoRA defaults
 (LR 2e-4, cosine schedule) per spec §17; full-model training is out of
 scope for the initial budget.
+
+
+### GPU-host runner
+
+The executable runner deliberately lives outside `pipeline train` so normal
+CI/preparation cannot accidentally consume GPU time. Install a CUDA-compatible
+PyTorch build supplied by the GPU host, then install the pinned user-space stack:
+
+```bash
+python -m pip install -e 'training/finetune[gpu]'
+```
+
+Pinned by the `gpu` extra: Transformers 5.19.0, PEFT 0.21.2, TRL 1.14.2,
+Datasets 5.1.0, Accelerate 1.15.0, and bitsandbytes 0.50.2. PyTorch is left
+host-managed so its CUDA build matches the rented image.
+
+The runner uses conversational prompt-completion records. Existing historical
+assistant turns may remain in the prompt as context, but the completion is
+always the reviewed `expected_answer`, so those historical responses do not
+receive SFT loss. The runner independently rejects non-GOOD/IDEAL quality,
+private/owner visibility, and evaluation-only tags even if an upstream
+assembly mistake occurs.
+
+For Qwen3-MoE, routed experts are fused parameters rather than ordinary
+`nn.Linear` modules. The A100 config therefore combines attention
+`target_modules` with PEFT `target_parameters` for
+`mlp.experts.gate_up_proj` / `mlp.experts.down_proj`, using rank 1 for expert
+parameters to keep the adapter budget bounded.
+
+A no-CUDA validation pass is available with `--dry-run`; it validates the exact
+config and partitions without importing the GPU stack.
 
 ## Export (GGUF)
 
