@@ -12,6 +12,7 @@ import {
 export interface TicketEvidenceReviewHttpDeps {
   maxBodyBytes: number;
   service?: Pick<TicketEvidenceReviewService, 'review'>;
+  onFailure?: (error: unknown, traceId: string) => void;
 }
 
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8' };
@@ -148,7 +149,8 @@ export async function handleTicketEvidenceReviewHttp(
     const result = await deps.service.review(parsed.data, traceId);
     ticketEvidenceReviewResponseSchema.parse(result);
     sendJson(res, 200, result, traceId);
-  } catch {
+  } catch (error) {
+    deps.onFailure?.(error, traceId);
     sendJson(
       res,
       503,
