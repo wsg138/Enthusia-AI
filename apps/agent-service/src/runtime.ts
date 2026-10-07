@@ -86,7 +86,13 @@ export function loadConfiguredModerationHistoryTools(
       healthTimeoutMs: config.aiModerationTimeoutMs,
     },
   });
-  return [new StaffModerationHistoryTool({ staff, moderation })];
+  return [
+    new StaffModerationHistoryTool({
+      staff,
+      moderation,
+      enrichmentTimeoutMs: config.aiModerationTimeoutMs,
+    }),
+  ];
 }
 
 export interface TicketEvidenceReviewRuntimeConfig {
