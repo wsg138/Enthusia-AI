@@ -1,7 +1,7 @@
 import type http from 'node:http';
 import {
   TRACE_ID_HEADER,
-  newTraceId,
+  extractTraceId,
 } from '@enthusia/contracts';
 import {
   ticketEvidenceReviewRequestSchema,
@@ -143,7 +143,7 @@ export async function handleTicketEvidenceReviewHttp(
     return;
   }
 
-  const traceId = newTraceId();
+  const traceId = extractTraceId(req.headers);
   try {
     const result = await deps.service.review(parsed.data, traceId);
     ticketEvidenceReviewResponseSchema.parse(result);
