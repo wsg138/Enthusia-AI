@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import type { TicketVideoEvidence } from '@enthusia/integration-ticket-bot';
 
 export const MAX_VIDEO_DURATION_SECONDS = 120;
-export const MAX_VIDEO_FRAMES = 6;
+export const MAX_VIDEO_FRAMES = 3;
 export const MAX_VIDEO_FRAME_BYTES = 8 * 1024 * 1024;
 export const MAX_VIDEO_PIXELS = 2560 * 1440;
 export const MAX_VIDEO_DIMENSION = 4096;
