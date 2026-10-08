@@ -146,7 +146,13 @@ describe('InferenceReasoner', () => {
         claims: ['current server IP'],
         needsPrivateContext: false,
         securitySensitive: false,
-      }, []);
+      }, [{
+        name: 'knowledge.search',
+        description: 'search current evidence',
+        parameters: { type: 'object', properties: {} },
+        privacySensitive: false,
+        maxVisibility: Visibility.PUBLIC,
+      }]);
     expect(result).toHaveLength(1);
     expect(result[0]?.candidateTools).toEqual([]);
   });
