@@ -57,3 +57,41 @@ Next: independent curation and source verification, then a $0 CPU-only preflight
 ## Synthetic regression tests
 
 training/finetune/tests/test_review_admission.py uses invented data only. It tests missing approval, changed text, source provenance, withdrawn sources, reviewer identity, staff-only leakage, unverified tool traces, held-out family leakage, and explicit approved split assignment.
+
+
+## Mandatory source-quarantine gate for assistant-slice releases
+
+For stage-style worker `candidate_id` values such as
+`W01-0123-a01`, an APPROVED W19 review record also requires an
+**immutable, private source-quarantine ledger**. The loader finds it from
+`quarantine_ledger_file` in the private independent review manifest (relative
+to that manifest's directory, or absolute on the authorized machine).
+
+That manifest must additionally pin:
+
+- `quarantine_ledger_sha256`: the exact SHA-256 of the ledger file;
+- `source_hold_manifest_sha256`: the original immutable all-HOLD cohort
+  manifest SHA-256 recorded inside the quarantine ledger.
+
+A missing or altered ledger, wrong release, malformed/duplicate rejected-source
+entries, missing sibling slice, inconsistent source lineage, or candidate from
+a rejected source **blocks W19 admission** even when an individual candidate
+is marked APPROVED. The source-level refusal covers both listed slices and
+any later slice retaining the same source ID. Do not mutate the original
+rejection ledger to "fix" a reviewed target. A future independent adjudication
+must create a new, auditable decision/release; staff may not silently convert
+a previous REJECT into approval.
+
+Build the PRIVATE ledger from the frozen `editorial-derivative-v3` and
+`normalized-worker-review-v1` outputs, with no training operation:
+
+```powershell
+python training/ticket-corpus/tools/build_rejected_source_quarantine.py \
+  --staging-dir "PRIVATE/SyntheticWorkers/editorial-derivative-v3" \
+  --rejections "PRIVATE/SyntheticWorkers/parallel-review-coordinator/normalized-worker-review-v1/QUARANTINED-REJECTION-RECOMMENDATIONS.private.jsonl" \
+  --out-file "PRIVATE/SyntheticWorkers/parallel-review-coordinator/quarantine-v1/SOURCE-QUARANTINE.private.json"
+```
+
+This private ledger is not the W19 approval manifest, must never be published,
+and never grants rights/privacy, quality admission or training permission.
+The direct GPU input validator uses the same W19 admission check.

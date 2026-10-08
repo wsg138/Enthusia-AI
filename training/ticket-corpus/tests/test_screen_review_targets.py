@@ -87,6 +87,62 @@ class ReviewScreenTests(unittest.TestCase):
         self.assertIn("synthetic_artifact_wording_in_target",result["flags"])
         self.assertEqual(result["risk_tier"],"EVIDENCE_OR_SAFETY_REVIEW")
 
+    def test_unmodified_synthetic_and_fixture_wording_is_flagged_in_target(self):
+        for phrase in ("synthetic restart", "synthetic deaths", "fixture behaves", "a fixture"):
+            with self.subTest(phrase=phrase):
+                a, b, _ = fixture()
+                a["expected_answer"] = f"The {phrase} is confirmed."
+                result = flag_case(a, b, 1)
+                self.assertIn("synthetic_artifact_wording_in_target", result["flags"])
+                self.assertFalse(result["training_eligible"])
+
+    def test_unverified_staff_action_is_reviewed_in_both_turns(self):
+        a, b, _ = fixture()
+        a["expected_answer"] = "I'm handing this to staff now."
+        a["messages"] = [
+            {"role": "user", "content": "lost a tool"},
+            {"role": "assistant", "content": "I've escalated the ticket."},
+            {"role": "user", "content": "Any update?"},
+        ]
+        result = flag_case(a, b, 1)
+        self.assertIn("unverified_staff_handoff_in_target", result["flags"])
+        self.assertIn("unverified_staff_handoff_in_context", result["flags"])
+
+    def test_unanchored_source_assertions_are_reviewed(self):
+        samples = (
+            "The server-side evidence supports a real disconnect.",
+            "The server timing shows a disconnect.",
+            "The available records confirm a transfer.",
+            "The latest incident overlaps the restart window.",
+        )
+        for phrase in samples:
+            with self.subTest(phrase=phrase):
+                a, b, _ = fixture()
+                a["expected_answer"] = phrase
+                result = flag_case(a, b, 1)
+                self.assertIn("unanchored_source_finding_in_target", result["flags"])
+        a, b, _ = fixture()
+        a["messages"] = [
+            {"role": "user", "content": "lag?"},
+            {"role": "assistant", "content": "The available records confirm a server crash."},
+            {"role": "user", "content": "What should I send?"},
+        ]
+        self.assertIn("unanchored_source_finding_in_context", flag_case(a, b, 1)["flags"])
+
+    def test_conditional_or_future_handoff_is_not_a_completed_action(self):
+        for phrase in (
+            "I can send this to staff if you want.",
+            "I'll flag it for staff once you upload a log.",
+            "If evidence confirms the loss, staff can investigate.",
+            "Please upload the screenshot you mentioned.",
+        ):
+            with self.subTest(phrase=phrase):
+                a, b, _ = fixture()
+                a["expected_answer"] = phrase
+                flags = flag_case(a, b, 1)["flags"]
+                self.assertNotIn("unverified_staff_handoff_in_target", flags)
+                self.assertNotIn("unanchored_source_finding_in_target", flags)
+
     def test_mutable_and_repeated_source_are_review_only(self):
         a,b,c=fixture()
         b["source_refs"]=[{"ref":"wsg138/Example@main:README.md"}]

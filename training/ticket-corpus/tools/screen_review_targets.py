@@ -34,6 +34,27 @@ ARTIFACT = re.compile(
     r"as an ai language model)\b",
     re.IGNORECASE,
 )
+# Review-only signals. These patterns do NOT establish incident facts or
+# prove a handoff did not occur; a reviewer must check the as-of-turn trace.
+SYNTHETIC_LANGUAGE = re.compile(r"\b(?:synthetic|fixture)\b", re.IGNORECASE)
+SOURCE_FINDING = re.compile(
+    r"\b(?:server(?:-side)? (?:evidence|timing|logs?|records?) |"
+    r"(?:the )?available (?:records?|logs?|evidence) |"
+    r"(?:the )?latest incident |"
+    r"(?:our|the) (?:server|proxy) (?:checks?|records?) )"
+    r"(?:supports?|shows?|confirms?|indicates?|overlaps?|matches?|proves?)\b",
+    re.IGNORECASE,
+)
+UNVERIFIED_HANDOFF = re.compile(
+    r"\b(?:I(?:'m| am) (?:handing|sending|passing|escalating|forwarding)"
+    r"(?: (?:this|the|your|it|a|an|case|ticket|issue|report|request|incident|to|over|along|up)\b){0,9}"
+    r"(?:\s+to\s+(?:staff|moderators?|admins?|the team))?|"
+    r"I(?:'ve| have) (?:already )?(?:handed|sent|passed|escalated|forwarded)"
+    r"(?: (?:this|the|your|it|case|ticket|issue|report|request|incident|to|over|along|up)\b){0,9})\b",
+    re.IGNORECASE,
+)
+
+
 PROMISE = re.compile(
     r"\b(?:I(?:'ll| will) (?:refund|restore|reimburse|ban|punish|"
     r"roll\s?back|delete|edit|transfer) (?:your |the |those |that |it\b)|"
@@ -128,10 +149,18 @@ def flag_case(draft: dict, meta: dict, duplicate_frequency: int) -> dict:
         flags.add("unsupported_verified_result_in_target")
     if EVIDENCE_CLAIM.search(history):
         flags.add("unsupported_verified_result_in_context")
-    if ARTIFACT.search(answer):
+    if ARTIFACT.search(answer) or SYNTHETIC_LANGUAGE.search(answer):
         flags.add("synthetic_artifact_wording_in_target")
-    if ARTIFACT.search(history):
+    if ARTIFACT.search(history) or SYNTHETIC_LANGUAGE.search(history):
         flags.add("synthetic_artifact_wording_in_context")
+    if SOURCE_FINDING.search(answer):
+        flags.add("unanchored_source_finding_in_target")
+    if SOURCE_FINDING.search(history):
+        flags.add("unanchored_source_finding_in_context")
+    if UNVERIFIED_HANDOFF.search(answer):
+        flags.add("unverified_staff_handoff_in_target")
+    if UNVERIFIED_HANDOFF.search(history):
+        flags.add("unverified_staff_handoff_in_context")
     if PROMISE.search(answer):
         flags.add("discretionary_action_promised")
     if SECRETS_REQUEST.search(answer):
@@ -166,6 +195,10 @@ def flag_case(draft: dict, meta: dict, duplicate_frequency: int) -> dict:
         "synthetic_artifact_wording_in_target",
         "synthetic_artifact_wording_in_context",
         "discretionary_action_promised",
+        "unanchored_source_finding_in_target",
+        "unanchored_source_finding_in_context",
+        "unverified_staff_handoff_in_target",
+        "unverified_staff_handoff_in_context",
         "sensitive_credential_request_review",
     }
     if flags & urgent:

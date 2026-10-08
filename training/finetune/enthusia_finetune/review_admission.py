@@ -19,6 +19,8 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
+from .source_quarantine import SourceQuarantine, QuarantineError, SLICE_ID
+
 SCHEMA = "enthusia-ticket-review-admission/v1"
 HEX64 = re.compile(r"^[a-f0-9]{64}$")
 APPROVED_SPLITS = frozenset({"train", "validation"})
@@ -95,7 +97,7 @@ def _tokens(entry: dict) -> set[tuple[str, str]]:
 
 
 class ReviewAdmission:
-    def __init__(self, doc: dict, *, digest: str):
+    def __init__(self, doc: dict, *, digest: str, quarantine: SourceQuarantine | None = None):
         if not isinstance(doc, dict) or doc.get("schema") != SCHEMA:
             raise AdmissionError("unrecognized ticket review manifest schema")
         self.manifest_id = _str(doc, "manifest_id", "manifest")
@@ -106,6 +108,12 @@ class ReviewAdmission:
         if not isinstance(entries, list) or not entries:
             raise AdmissionError("manifest must have nonempty entries")
         self.manifest_sha256 = digest
+        self.quarantine = quarantine
+        if quarantine is not None:
+            if doc.get("quarantine_ledger_sha256") != quarantine.sha256:
+                raise AdmissionError("private quarantine ledger SHA-256 mismatch")
+            if doc.get("source_hold_manifest_sha256") != quarantine.source_hold_manifest_sha256:
+                raise AdmissionError("quarantine ledger belongs to a different source HOLD release")
         self.entries: dict[str, dict] = {}
         for entry in entries:
             if not isinstance(entry, dict):
@@ -155,7 +163,19 @@ class ReviewAdmission:
             doc = json.loads(source.decode("utf-8"))
         except (UnicodeError, json.JSONDecodeError) as exc:
             raise AdmissionError("invalid UTF-8/JSON review manifest") from exc
-        return cls(doc, digest=hashlib.sha256(source).hexdigest())
+        quarantine = None
+        ledger_file = doc.get("quarantine_ledger_file")
+        if ledger_file is not None:
+            if not isinstance(ledger_file, str) or not ledger_file.strip():
+                raise AdmissionError("invalid private quarantine ledger path")
+            location = Path(ledger_file)
+            if not location.is_absolute():
+                location = Path(path).parent / location
+            try:
+                quarantine = SourceQuarantine.from_path(location)
+            except (OSError, QuarantineError) as exc:
+                raise AdmissionError("missing or invalid private quarantine ledger") from exc
+        return cls(doc, digest=hashlib.sha256(source).hexdigest(), quarantine=quarantine)
 
     def _validate_lineage_splits(self) -> None:
         """Reject any transitive connected source family crossing split."""
@@ -221,6 +241,15 @@ class ReviewAdmission:
             return None, "reviewed training target digest mismatch"
         if entry["review_status"] != "APPROVED":
             return None, "not independently approved"
+        # A source-level worker rejection is never cleared by approving one
+        # draft slice. Multi-slice admissions require a pinned PRIVATE ledger,
+        # even if the approved target hash, reviewer and rights are plausible.
+        if SLICE_ID.fullmatch(cid) or "source_candidate_id" in record:
+            if self.quarantine is None:
+                return None, "source-ticket candidate requires private source quarantine ledger"
+            blocked = self.quarantine.reason(record)
+            if blocked is not None:
+                return None, blocked
         if entry["split"] not in APPROVED_SPLITS:
             return None, "holdout or unassigned split"
         if "train" not in entry["approved_uses"]:
