@@ -24,6 +24,7 @@ def draft(suffix):
         "family_group": "fake-family",
         "seed_refs": ["fake-seed"],
         "source_type": "synthetic",
+        "scenario": "Fictional sample ticket",
         "visibility": "public",
         "messages": [{"role": "user", "content": "Fictional help request"}],
         "expected_answer": "What time did it happen?",
