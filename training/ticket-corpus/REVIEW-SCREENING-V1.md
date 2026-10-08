@@ -92,3 +92,28 @@ Suggested next scope: verify exact source claims for the 60 sampled drafts;
 repair/remove the unsupported observed-action completions; conduct independent
 review/rights/privacy clearance on the strongest corrected targets; then run
 CPU-only W16/W19 conversion checks on an explicitly approved, immutable release.
+
+
+## Source-reference warning taxonomy after private screening-v7
+
+A read-only inspection of the `editorial-derivative-v3` private source index
+and `screening-v7` established that the **68** warnings formerly grouped under
+`nonversioned_ref_review` consist of **20 GitHub issue-reference occurrences**
+(two source issue links, ten occurrences each) and **48 private rewritten-ticket
+alias occurrences** (46 `private ticket-rewrite-N` and two
+`private rewritten ticket ticket-rewrite-N`). These are *not* the same
+problem as an unpinned `repository:path` or a mutable `@main` link.
+
+The review-only screener now distinguishes:
+- `issue_reference_context_only`: a GitHub issue link, which proves neither a
+  private player incident nor the truth of a synthetic scenario.
+- `private_rewrite_alias_review`: an editorial/provenance alias that needs
+  validation against its private source lineage, not public repo path pinning.
+- `nonversioned_ref_review`: an otherwise unpinned or unrecognized reference
+  whose underlying source/version still needs investigation.
+
+This changes how the 68 existing warnings are *categorized*, not whether they
+need review; all remain non-admitted. It does not parse or verify the content of
+private rewrite references, nor treat issue existence as as-of-turn evidence.
+A new private re-screen, with verified immutable HOLD inputs and a fresh output
+directory, is required before quoting any new full-corpus flag counts.
