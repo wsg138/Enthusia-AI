@@ -415,6 +415,8 @@ export class InferenceClient {
     if (parsed.temperature !== undefined) body['temperature'] = parsed.temperature;
     if (parsed.topP !== undefined) body['top_p'] = parsed.topP;
     if (parsed.stop !== undefined) body['stop'] = parsed.stop;
+    // Provider-specific Ollama extension: opt-in only; default stays compatible.
+    if (this.config.inferenceThinkingMode === 'disabled') body['think'] = false;
     return body;
   }
 

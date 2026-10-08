@@ -217,6 +217,28 @@ describe('InferenceClient — completions', () => {
     }
   });
 
+  it('omits provider-specific think by default and opts in for Ollama on both paths', async () => {
+    const server = await startMockServer();
+    try {
+      const standard = clientFor(server.url);
+      await standard.complete(helloRequest);
+      expect('think' in (server.stats.lastRequestBody as Record<string, unknown>)).toBe(false);
+
+      const ollama = clientFor(server.url, {
+        ENTHUSIA_INFERENCE_THINKING_MODE: 'disabled',
+      });
+      await ollama.complete(helloRequest);
+      expect((server.stats.lastRequestBody as Record<string, unknown>)['think']).toBe(false);
+
+      await ollama.completeStream(helloRequest, () => undefined);
+      const streamed = server.stats.lastRequestBody as Record<string, unknown>;
+      expect(streamed['think']).toBe(false);
+      expect(streamed['stream']).toBe(true);
+    } finally {
+      await server.close();
+    }
+  });
+
   it('rejects an empty message list without calling the server', async () => {
     const server = await startMockServer();
     try {
