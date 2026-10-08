@@ -320,7 +320,12 @@ export class EnthusiaAiDiscordBot {
         { code: error.code, statusCode: error.statusCode },
         `AI Gateway error: ${error.message}`,
       );
-      await sendChunks([FALLBACK_GATEWAY_ERROR]);
+      const notice = error.code === 'TOOL_TIMEOUT'
+        ? 'That took longer than expected. Please try again in a moment.'
+        : error.code === 'RATE_LIMITED'
+          ? 'The AI is handling too many requests right now. Please wait a moment and try again.'
+          : FALLBACK_GATEWAY_ERROR;
+      await sendChunks([notice]);
     } else {
       log.error({ error: String(error) }, 'unexpected error calling AI Gateway');
       await sendChunks([FALLBACK_UNEXPECTED_ERROR]);
