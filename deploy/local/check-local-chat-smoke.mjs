@@ -12,6 +12,7 @@ import { pathToFileURL } from 'node:url';
 const root = resolve(import.meta.dirname, '..', '..');
 const resolver = resolve(root, 'deploy/local/workspace-source-resolver.mjs');
 const launched = [];
+const publicDocs = process.argv.includes('--public-docs');
 const delay = (ms) => new Promise((done) => setTimeout(done, ms));
 
 async function getFreePort() {
@@ -105,6 +106,7 @@ try {
   const gatewayKey = randomBytes(32).toString('hex');
   const agent = start('agent', 'apps/agent-service/dist/main.js', {
     ...shared, ENTHUSIA_AGENT_PORT: String(agentPort), ENTHUSIA_AGENT_API_KEYS: agentKey,
+    ENTHUSIA_TEST_PIECLOAK_PUBLIC_DOCS: publicDocs ? '1' : '0',
   });
   await waitLive(agent, agentPort);
   await checkReady('agent', agentPort);
@@ -133,7 +135,7 @@ try {
       surface: 'discord',
       actor: { id: '100000000000000000', type: 'player', displayName: 'Local smoke' },
       conversationId: 'discord:local-test:ai-testing',
-      message: 'What can you do?',
+      message: publicDocs ? 'How does the pie cloak system work on the server?' : 'What can you do?',
       visibilityCeiling: Visibility.PUBLIC,
       context: { trigger: 'slash', isStaff: false },
     }),
@@ -154,7 +156,14 @@ try {
   if (String(payload.text ?? '').includes('Something went wrong while handling your request')) {
     throw new Error('Orchestrator returned its built-in failure fallback');
   }
-  console.log('[smoke] One synthetic end-to-end model request completed without Discord.');
+  if (publicDocs && (!String(payload.text ?? '').includes('github.com/wsg138/PieCloak/blob/') ||
+      !String(payload.text ?? '').includes('documented settings') ||
+      !Array.isArray(payload.sources) || payload.sources.length !== 1)) {
+    throw new Error('The public-source answer lacks a verified GitHub commit/source.');
+  }
+  console.log(publicDocs
+    ? '[smoke] Verified public README reached the local Agent and Gateway without Discord.'
+    : '[smoke] One synthetic end-to-end model request completed without Discord.');
 } finally {
   for (const record of launched.reverse()) {
     if (record.child.exitCode === null) record.child.kill();
