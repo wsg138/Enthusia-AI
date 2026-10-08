@@ -24,7 +24,9 @@ describe('TicketEventRouter delivery deduplication', () => {
       onDuplicate: (event) => duplicates.push(event.eventId),
     });
     const seen: string[] = [];
-    router.subscribe('ticket.closed', (event) => seen.push(event.eventId));
+    router.subscribe('ticket.closed', (event) => {
+      seen.push(event.eventId);
+    });
 
     await router.ingest(closedEvent('event-1'));
     await router.ingest(closedEvent('event-1'));
@@ -54,7 +56,9 @@ describe('TicketEventRouter delivery deduplication', () => {
   it('dispatches distinct event ids independently', async () => {
     const router = new TicketEventRouter();
     const seen: string[] = [];
-    router.subscribe('*', (event) => seen.push(event.eventId));
+    router.subscribe('*', (event) => {
+      seen.push(event.eventId);
+    });
 
     await router.ingest(closedEvent('event-a'));
     await router.ingest(closedEvent('event-b'));
