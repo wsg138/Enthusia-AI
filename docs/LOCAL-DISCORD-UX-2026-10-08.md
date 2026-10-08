@@ -30,3 +30,21 @@ Branch: `fix/discord-command-safe-upsert-20261008` / draft PR #118. No productio
 6. If embeds do not appear or reactions fail, check the bot permissions only in the approved test channel: View Channel, Send Messages, Embed Links, Add Reactions, and Read Message History. Do not give Administrator. Share nonsecret console errors for diagnosis.
 
 Remaining HOLD gates: only this dedicated test app; no private tools/tickets; no broad message interception; no deployment, merge, or token reset; source-backed broader answers and direct PieCloak wiki article are separate milestones.
+
+
+## 2026-10-08 19:58 EDT: Warzones mention returned ❌ and generic gateway error
+
+Owner's screenshot from the isolated #ai-testing channel:
+- Input: \`@Enthusia AI Can you explain how the warzones combat rotator system works\`.
+- Expected mention handling occurred (the bot replied to the exact Discord message, original message received ❌).
+- Actual reply: \`Sorry — I could not reach the AI right now. Please try again in a moment.\`.
+- The screenshot alone does **not** establish whether it was a timeout, rate-limit HTTP response, or a transport error. The previous user-facing fallback grouped multiple conditions into the same message. This was a Gateway request failure, not proof the @mention listener was broken.
+
+Investigation:
+- In the isolated launcher, downstream Gateway → Agent had \`ENTHUSIA_GATEWAY_AGENT_TIMEOUT_MS=120000\`, while Discord → Gateway still used its default \`30000\` ms. A slow Qwen3 inference can exceed Discord's deadline even when the Gateway/Agent could return normally.
+- Reproduced the **same Warzones question** with a credential-free loopback Agent + Gateway request using \`node deploy/local/check-local-chat-smoke.mjs --warzone\`: **HTTP 200 in 20,641 ms**, response: \`I could not verify how does the warzones combat rotator system work from current sources.\`. This demonstrates that the source-less Agent can give an appropriate non-hallucinated answer. It does NOT prove the owner's screenshot was specifically a timeout because live error logs weren't supplied.
+- Fix: isolated launcher explicitly sets \`ENTHUSIA_DISCORD_GATEWAY_TIMEOUT_MS=130000\`, longer than the Gateway's 120-second Agent deadline. Existing production defaults are unchanged.
+- Fix: HTTP client preserves HTTP 429 as \`RATE_LIMITED\` and HTTP 504 as \`TOOL_TIMEOUT\`; log safe upstream HTTP status/trace metadata, not model or user-provided content. Discord now provides distinct short messages for timeout and rate limit; genuine network failures retain a generic reachability error.
+- Tests: **1,132 passing, one preexisting integration smoke skipped**, clean Discord TypeScript build, targeted lint clean. Test checkout fast-forwarded cleanly on owner's PC; no token needed, no bot session stopped or restarted. Draft PR #118 remains HOLD.
+
+Owner acceptance: Stop the existing isolated launcher with Ctrl+C, rerun it (same existing token entered in private prompt), and mention the AI in #ai-testing asking the **same Warzones question**. The answer should be a short, source-limited reply instead of a Gateway error; if it still fails, share the **non-secret** console errors including any \`gatewayStatus\`, \`code\`, \`statusCode\`, and elapsed time. Avoid copy/pasting tokens. Current pilot only indexes PieCloak's public README; it **cannot yet verify** the actual Warzones combat rotator behavior. The absence of Warzones source knowledge is a separate planned integration, not a reason for the Discord transport to fail.
