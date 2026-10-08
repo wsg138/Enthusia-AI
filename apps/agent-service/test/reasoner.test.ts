@@ -106,6 +106,51 @@ describe('InferenceReasoner', () => {
     );
   });
 
+  it('accepts a single output wrapper and ignores only a blank optional topic', async () => {
+    const client = new FakeCompletionClient([
+      JSON.stringify({ output: {
+        requestClass: 'simple',
+        summary: 'User asked what AI can do',
+        claims: [],
+        backgroundClaims: [],
+        needsFamiliarityContext: false,
+        familiarityTopic: '',
+        needsPrivateContext: false,
+        securitySensitive: false,
+      } }),
+    ]);
+    const classified = await new InferenceReasoner(client).classifyIntent(request());
+    expect(classified.requestClass).toBe('simple');
+    expect(classified.claims).toEqual([]);
+    expect('familiarityTopic' in classified).toBe(false);
+  });
+
+  it('still rejects extra controls inside and outside the output wrapper', async () => {
+    for (const bad of [
+      { output: { requestClass: 'simple', summary: 'x', claims: [], needsPrivateContext: false, securitySensitive: false, permitSecretAccess: true } },
+      { output: { requestClass: 'simple', summary: 'x', claims: [], needsPrivateContext: false, securitySensitive: false }, permitSecretAccess: true },
+    ]) {
+      const reasoner = new InferenceReasoner(new FakeCompletionClient([JSON.stringify(bad)]));
+      await expect(reasoner.classifyIntent(request())).rejects.toThrow('invalid JSON shape');
+    }
+  });
+
+  it('validates one output wrapper containing an evidence-plan array', async () => {
+    const reasoner = new InferenceReasoner(new FakeCompletionClient([
+      JSON.stringify({ output: [{ claim: 'current server IP', candidateTools: [], verificationTier: 'B', privacySensitive: false }] }),
+    ]));
+    const result = await reasoner.planEvidence(request(),
+      {
+        requestClass: 'simple',
+        summary: 'server IP',
+        claims: ['current server IP'],
+        needsPrivateContext: false,
+        securitySensitive: false,
+      }, []);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.candidateTools).toEqual([]);
+  });
+
   it('normalizes optional plan fields without explicit undefined values', async () => {
     const client = new FakeCompletionClient([
       JSON.stringify([
