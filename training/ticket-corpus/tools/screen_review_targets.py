@@ -153,7 +153,15 @@ def flag_case(draft: dict, meta: dict, duplicate_frequency: int) -> dict:
         flags.add("synthetic_artifact_wording_in_target")
     if ARTIFACT.search(history) or SYNTHETIC_LANGUAGE.search(history):
         flags.add("synthetic_artifact_wording_in_context")
-    if SOURCE_FINDING.search(answer):\n        flags.add("unanchored_source_finding_in_target")\n    if SOURCE_FINDING.search(history):\n        flags.add("unanchored_source_finding_in_context")\n    if UNVERIFIED_HANDOFF.search(answer):\n        flags.add("unverified_staff_handoff_in_target")\n    if UNVERIFIED_HANDOFF.search(history):\n        flags.add("unverified_staff_handoff_in_context")\n    if PROMISE.search(answer):
+    if SOURCE_FINDING.search(answer):
+        flags.add("unanchored_source_finding_in_target")
+    if SOURCE_FINDING.search(history):
+        flags.add("unanchored_source_finding_in_context")
+    if UNVERIFIED_HANDOFF.search(answer):
+        flags.add("unverified_staff_handoff_in_target")
+    if UNVERIFIED_HANDOFF.search(history):
+        flags.add("unverified_staff_handoff_in_context")
+    if PROMISE.search(answer):
         flags.add("discretionary_action_promised")
     if SECRETS_REQUEST.search(answer):
         flags.add("sensitive_credential_request_review")
@@ -186,7 +194,11 @@ def flag_case(draft: dict, meta: dict, duplicate_frequency: int) -> dict:
         "unsupported_verified_result_in_context",
         "synthetic_artifact_wording_in_target",
         "synthetic_artifact_wording_in_context",
-        "discretionary_action_promised",\n        "unanchored_source_finding_in_target",\n        "unanchored_source_finding_in_context",\n        "unverified_staff_handoff_in_target",\n        "unverified_staff_handoff_in_context",
+        "discretionary_action_promised",
+        "unanchored_source_finding_in_target",
+        "unanchored_source_finding_in_context",
+        "unverified_staff_handoff_in_target",
+        "unverified_staff_handoff_in_context",
         "sensitive_credential_request_review",
     }
     if flags & urgent:
