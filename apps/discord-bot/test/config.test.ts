@@ -13,6 +13,7 @@ describe('resolveDiscordBotOptions', () => {
     expect(options.botName).toBe('Enthusia AI');
     expect(options.gatewayBaseUrl).toBe('http://127.0.0.1:4100');
     expect(options.useMockGateway).toBe(false);
+    expect(options.slashOnly).toBe(false);
     expect(options.aiChannelIds).toEqual([]);
     expect(options.testChannelIds).toEqual([]);
     expect(options.staffChannelIds).toEqual([]);
