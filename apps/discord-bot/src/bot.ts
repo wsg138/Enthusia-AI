@@ -118,6 +118,9 @@ export class EnthusiaAiDiscordBot {
 
   /** Full pipeline for an incoming message. Exposed for tests. */
   async handleMessage(message: DiscordMessageRef): Promise<HandleResult> {
+    if (this.options.slashOnly) {
+      return { outcome: 'ignored', reason: 'slash-command-only test mode' };
+    }
     if (!this.inAllowedScope(message.channel.guild?.id, message.channel.id)) {
       return { outcome: 'ignored', reason: 'outside allowed test guild/channel' };
     }
