@@ -27,6 +27,14 @@ export const inferenceConfigSchema = appConfigSchema.extend({
   inferenceModel: z.string().default(''),
 
   /**
+   * Opt-in Ollama OpenAI-compatible extension. Default preserves the
+   * standard request shape for llama.cpp, vLLM and other providers.
+   * 'disabled' sends think:false so Qwen3 returns visible text without
+   * consuming the entire generation budget on hidden reasoning.
+   */
+  inferenceThinkingMode: z.enum(['default', 'disabled']).default('default'),
+
+  /**
    * Optional API key for the inference endpoint (llama.cpp --api-key).
    * Sent as a Bearer token. OPTIONAL — local dev runs without one.
    */
@@ -91,6 +99,7 @@ export function loadInferenceConfig(env: NodeJS.ProcessEnv = process.env): Infer
     ...base,
     inferenceBaseUrl: env['ENTHUSIA_INFERENCE_BASE_URL'],
     inferenceModel: env['ENTHUSIA_INFERENCE_MODEL'],
+    inferenceThinkingMode: env['ENTHUSIA_INFERENCE_THINKING_MODE'],
     inferenceApiKey: env['ENTHUSIA_INFERENCE_API_KEY'],
     inferenceTimeoutMs: env['ENTHUSIA_INFERENCE_TIMEOUT_MS'],
     inferenceMaxRetries: env['ENTHUSIA_INFERENCE_MAX_RETRIES'],
