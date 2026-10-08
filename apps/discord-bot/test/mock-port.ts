@@ -87,6 +87,7 @@ export function testOptions(overrides: Partial<DiscordBotOptions> = {}): Discord
     useMockGateway: true,
     gatewayTimeoutMs: 1000,
     slashOnly: false,
+    mentionOnly: false,
     allowedGuildIds: [],
     allowedChannelIds: [],
     aiChannelIds: [],
