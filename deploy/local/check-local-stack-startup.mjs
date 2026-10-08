@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import net from 'node:net';
 import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const root = resolve(import.meta.dirname, '..', '..');
 const resolver = resolve(root, 'deploy/local/workspace-source-resolver.mjs');
@@ -29,7 +30,7 @@ async function getFreePort() {
 function start(label, entry, env) {
   const child = spawn(process.execPath, [
     '--experimental-transform-types',
-    '--import', resolver,
+    '--import', pathToFileURL(resolver).href,
     resolve(root, entry),
   ], { cwd: root, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   let diagnostic = '';
