@@ -244,19 +244,37 @@ export class TicketEventRouter {
 
   /** Dispatch an already-validated event. Callers bypassing ingest own deduplication. */
   async dispatch(event: TicketEvent): Promise<void> {
+    await this.dispatchWithOutcome(event);
+  }
+
+  private async dispatchWithOutcome(event: TicketEvent): Promise<boolean> {
     const targets = [
       ...(this.handlers.get(event.type) ?? []),
       ...(this.handlers.get('*') ?? []),
     ];
-    for (const handler of targets) await this.runHandler(handler, event);
+    let allSucceeded = true;
+    for (const handler of targets) {
+      if (!(await this.runHandler(handler, event))) allSucceeded = false;
+    }
+    return allSucceeded;
   }
 
-  /** Parse, deduplicate, and dispatch one webhook/queue delivery. */
+  /** Parse and claim a delivery. Failed handlers release it for retry. */
   async ingest(raw: unknown): Promise<TicketEvent> {
     const event = parseTicketEvent(raw);
     if (!(await this.claim(event))) return event;
-    await this.dispatch(event);
-    return event;
+    const key = ticketEventDeduplicationKey(event);
+    try {
+      if (!(await this.dispatchWithOutcome(event))) {
+        throw new Error('Ticket event handler failed: retry delivery required');
+      }
+      // Don't mark the dedup key completed until every subscriber succeeds.
+      await this.deduplicationStore?.complete(key);
+      return event;
+    } catch (err) {
+      await this.deduplicationStore?.release(key);
+      throw err;
+    }
   }
 
   get subscriberCount(): number {
@@ -283,11 +301,13 @@ export class TicketEventRouter {
   private async runHandler(
     handler: TicketEventHandler,
     event: TicketEvent,
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
       await handler(event);
+      return true;
     } catch (err) {
       this.onHandlerError(err, event);
+      return false;
     }
   }
 }
