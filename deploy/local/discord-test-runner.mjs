@@ -9,6 +9,7 @@ import { spawn } from 'node:child_process';
 import { access } from 'node:fs/promises';
 import net from 'node:net';
 import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const TEST_GUILD = '1552729865306767471';
 const TICKET_LOGS = '1552873662745546822';
@@ -143,7 +144,7 @@ function spawnChild(label, entry, env) {
   // with .js relative specifiers. The test-only resolver handles these under
   // Node 24 without touching production packages or changing builds.
   const resolver = resolve(root, 'deploy/local/workspace-source-resolver.mjs');
-  const child = spawn(process.execPath, ['--experimental-transform-types', '--import', resolver, resolve(root, entry)], {
+  const child = spawn(process.execPath, ['--experimental-transform-types', '--import', pathToFileURL(resolver).href, resolve(root, entry)], {
     cwd: root, env, stdio: 'inherit', windowsHide: true,
   });
   child.on('error', (error) => console.error('[test] ' + label + ' could not start:', error.message));
