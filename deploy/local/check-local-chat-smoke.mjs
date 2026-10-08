@@ -13,6 +13,7 @@ const root = resolve(import.meta.dirname, '..', '..');
 const resolver = resolve(root, 'deploy/local/workspace-source-resolver.mjs');
 const launched = [];
 const publicDocs = process.argv.includes('--public-docs');
+const warzone = process.argv.includes('--warzone');
 const delay = (ms) => new Promise((done) => setTimeout(done, ms));
 
 async function getFreePort() {
@@ -135,9 +136,12 @@ try {
       surface: 'discord',
       actor: { id: '100000000000000000', type: 'player', displayName: 'Local smoke' },
       conversationId: 'discord:local-test:ai-testing',
-      message: publicDocs ? 'How does the pie cloak system work on the server?' : 'What can you do?',
+      message: publicDocs ? 'How does the pie cloak system work on the server?' :
+        warzone ? 'Can you explain how the warzones combat rotator system works' : 'What can you do?',
       visibilityCeiling: Visibility.PUBLIC,
-      context: { trigger: 'slash', isStaff: false },
+      context: { trigger: warzone ? 'mention' : 'slash', isStaff: false,
+        channelId: 'local-test', guildId: 'local-test-guild',
+        messageId: 'local-test-message', channelKind: 'guild-text' },
     }),
     signal: AbortSignal.timeout(155000),
   });
@@ -148,7 +152,7 @@ try {
     console.log('[smoke] error code: ' + String(code).slice(0,100));
     throw new Error('Gateway rejected the synthetic local request');
   }
-  console.log('[smoke] Answer: ' + String(payload.text ?? '').slice(0, 600));
+  console.log('[smoke] Answer: ' + String(payload.text ?? '').slice(0, 900));
   if (payload.escalation?.reason) {
     // This is diagnostic information only: never send it to Discord.
     console.log('[smoke] Internal failure reason: ' + String(payload.escalation.reason).slice(0, 900));
