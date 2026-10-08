@@ -20,6 +20,7 @@ export class MockDiscordClientPort implements DiscordClientPort {
   botUserId: Snowflake | null = 'bot-user-id';
   readonly sentMessages: SentMessage[] = [];
   readonly slashResponses: { interaction: DiscordSlashAskRef; chunks: string[] }[] = [];
+  readonly deferredSlashes: DiscordSlashAskRef[] = [];
   private messageHandler: ((message: DiscordMessageRef) => void | Promise<void>) | null = null;
   private slashHandler: ((interaction: DiscordSlashAskRef) => void | Promise<void>) | null = null;
   registerSlashCommandsCalled = false;
@@ -40,6 +41,10 @@ export class MockDiscordClientPort implements DiscordClientPort {
   async sendMessage(channelId: Snowflake, message: OutgoingDiscordMessage): Promise<Snowflake> {
     this.sentMessages.push({ channelId, message });
     return `sent-${this.sentMessages.length}`;
+  }
+
+  async deferSlashAsk(interaction: DiscordSlashAskRef): Promise<void> {
+    this.deferredSlashes.push(interaction);
   }
 
   async respondToSlashAsk(interaction: DiscordSlashAskRef, chunks: string[]): Promise<void> {
