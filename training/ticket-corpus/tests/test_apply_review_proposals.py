@@ -9,7 +9,7 @@ import unittest
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"tools"))
 from apply_review_proposals import (
-    apply_proposals,digest_target,replace_refs,resolution_pairs
+    apply_proposals,digest_target,replace_refs,resolution_pairs,verify_rejected_source_ledger
 )
 
 
@@ -114,6 +114,74 @@ class EditorialDerivativeTests(unittest.TestCase):
                 "exists_at_pinned_commit":False}]}))
             with self.assertRaisesRegex(ValueError,"not verified"):
                 resolution_pairs([file])
+
+
+    def test_quarantine_frozen_to_source_release_both_slices(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            stage=Path(td)
+            drafts,indexes,manifest,notes,pairs=fixtures()
+            for row in drafts:
+                row["source_revision"]="fixture-original-revision"
+            for entry,row in zip(manifest["entries"],drafts):
+                entry["record_sha256"]=digest_target(row)
+                entry["source_candidate_sha256"]=row["source_candidate_sha256"]
+                entry["source_file_sha256"]=row["source_file_sha256"]
+                entry["source_revision"]=row["source_revision"]
+            (stage/"REVIEW-MANIFEST-ALL-HOLD.private.json").write_text(
+                json.dumps(manifest),encoding="utf-8")
+            cohort_sha=sha256((stage/"REVIEW-MANIFEST-ALL-HOLD.private.json").read_bytes()).hexdigest()
+            doc={"schema":"enthusia-ticket-source-quarantine/v1",
+                 "source_hold_manifest_sha256":cohort_sha,
+                 "source_count":1,"draft_count":2,
+                 "entries":[{"source_candidate_id":"W01-0001",
+                             "source_candidate_sha256":"a"*64,"source_file_sha256":"b"*64,
+                             "source_revision":"fixture-original-revision",
+                             "disposition":"REJECT",
+                             "draft_ids":["W01-0001-a01","W01-0001-a02"]}]}
+            ledger=stage/"ledger.private.json"
+            ledger.write_text(json.dumps(doc),encoding="utf-8")
+            blocked=verify_rejected_source_ledger(stage,ledger,drafts,indexes,manifest)
+            self.assertEqual(blocked,{"W01-0001"})
+            notes[0].update({
+                "source_candidate_id":"W01-0001",
+                "expected_original_record_sha256":manifest["entries"][0]["record_sha256"],
+                "expected_original_source_sha256":"a"*64,
+            })
+            with self.assertRaisesRegex(ValueError,"cannot edit quarantined"):
+                apply_proposals(drafts,indexes,manifest,notes,pairs,lambda x:x,
+                                quarantined_sources=blocked,require_pinned_proposals=True)
+            doc["entries"][0]["draft_ids"]=["W01-0001-a02"]
+            ledger.write_text(json.dumps(doc),encoding="utf-8")
+            with self.assertRaisesRegex(ValueError,"missing sibling"):
+                verify_rejected_source_ledger(stage,ledger,drafts,indexes,manifest)
+            doc["entries"][0]["draft_ids"]=["W01-0001-a01","W01-0001-a02"]
+            doc["source_hold_manifest_sha256"]="f"*64
+            ledger.write_text(json.dumps(doc),encoding="utf-8")
+            with self.assertRaisesRegex(ValueError,"another HOLD release"):
+                verify_rejected_source_ledger(stage,ledger,drafts,indexes,manifest)
+
+    def test_pinned_editorial_proposal_refuses_old_record_or_source_hash(self):
+        d,i,m,p,f=fixtures()
+        p[0].update({
+            "source_candidate_id":d[0]["source_candidate_id"],
+            "expected_original_record_sha256":m["entries"][0]["record_sha256"],
+            "expected_original_source_sha256":d[0]["source_candidate_sha256"],
+        })
+        updated,_,_,_,_=apply_proposals(d,i,m,p,f,lambda x:x,
+                       quarantined_sources=set(),require_pinned_proposals=True)
+        self.assertNotEqual(updated[0]["expected_answer"],d[0]["expected_answer"])
+        for field,value in (
+            ("expected_original_record_sha256","f"*64),
+            ("expected_original_source_sha256","d"*64),
+            ("source_candidate_id","W11-0022"),
+        ):
+            with self.subTest(field=field):
+                changed=deepcopy(p)
+                changed[0][field]=value
+                with self.assertRaisesRegex(ValueError,"mismatch"):
+                    apply_proposals(d,i,m,changed,f,lambda x:x,
+                                    quarantined_sources=set(),require_pinned_proposals=True)
 
     def test_invalid_staged_content_rejected(self):
         d,i,m,p,f=fixtures()
