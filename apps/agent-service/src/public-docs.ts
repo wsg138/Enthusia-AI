@@ -99,12 +99,14 @@ export class PieCloakPublicDocsPilot {
       if (!rules) return unavailable;
       const url = 'https://github.com/wsg138/PieCloak/blob/' + commit + '/README.md';
       return {
-        text: 'According to the public PieCloak README, PieCloak helps conceal selected entity and block-entity clues from clients to reduce pie-chart/ESP base-finding. It does not remove mobs, stop farms, or hide players. The documented rules always show managed clues within about ' +
-          rules.closeRadius + ' blocks. Between about ' + rules.closeRadius + ' and ' +
-          rules.raycastRadius + ' blocks, it checks line of sight and hides clues behind ' +
-          rules.occludingSamples + ' occluding block samples; beyond ' +
-          rules.raycastRadius + ' blocks, managed clues are hidden. These are documented settings, not proof of the currently deployed plugin or its health.\nSource: ' + url +
-          '\nDocumentation revision: ' + commit.slice(0, 12) + '.',
+        text: '**PieCloak helps hide your base.** It hides selected mobs and special blocks from pie-chart/ESP base-finding.\n\n' +
+          '**How it works**\n' +
+          '• **Under ' + rules.closeRadius + ' blocks:** Those clues are visible.\n' +
+          '• **' + rules.closeRadius + '–' + rules.raycastRadius + ' blocks:** Clues behind ' + rules.occludingSamples + ' blocking samples are hidden.\n' +
+          '• **Over ' + rules.raycastRadius + ' blocks:** Those clues stay hidden.\n\n' +
+          'Your mobs and farms still work normally, and players are never hidden.\n' +
+          '_These are documented settings, not a live-server health check._\n' +
+          'Source: ' + url + '\nDocumentation revision: ' + commit.slice(0, 12) + '.',
         actions: [],
         sources: [{
           artifactId: 'github:wsg138/PieCloak@' + commit + ':README.md',
