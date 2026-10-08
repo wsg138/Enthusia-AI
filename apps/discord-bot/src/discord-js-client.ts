@@ -48,6 +48,8 @@ export interface DiscordJsClientOptions {
   slashCommandGuildId?: string;
   /** Test-only slash command mode requiring no privileged gateway intents. */
   slashOnly?: boolean;
+  /** Read only messages explicitly mentioning this application; no privileged MessageContent intent. */
+  mentionOnly?: boolean;
 }
 
 export const AI_COMMAND_NAME = 'ai';
@@ -305,6 +307,8 @@ export class DiscordJsClientAdapter implements DiscordClientPort {
     this.client = new Client({
       intents: options.slashOnly
         ? [GatewayIntentBits.Guilds]
+        : options.mentionOnly
+        ? [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
         : [
           GatewayIntentBits.Guilds,
           GatewayIntentBits.GuildMessages,
