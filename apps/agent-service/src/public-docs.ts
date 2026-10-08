@@ -7,6 +7,7 @@
  * No documentation fact is represented as verified deployed runtime state.
  */
 import { Visibility, type AgentResponse } from '@enthusia/contracts';
+import { createHash } from 'node:crypto';
 import type { ResolvedChatRequest } from '@enthusia/agent-core';
 
 const ROOT = 'https://api.github.com/repos/wsg138/PieCloak';
@@ -91,6 +92,9 @@ export class PieCloakPublicDocsPilot {
           file['size'] < 1) return unavailable;
       const decoded = Buffer.from(base64.replace(/\s/g, ''), 'base64');
       if (decoded.length !== file['size'] || decoded.length > MAX_DOC_BYTES) return unavailable;
+      // Verify the Git blob object identity rather than trusting a claimed SHA.
+      const gitBlob = createHash('sha1').update('blob ' + decoded.length + '\0').update(decoded).digest('hex');
+      if (gitBlob.toLowerCase() !== blob.toLowerCase()) return unavailable;
       const rules = extractPieCloakDocumentedRules(decoded.toString('utf8'));
       if (!rules) return unavailable;
       const url = 'https://github.com/wsg138/PieCloak/blob/' + commit + '/README.md';
