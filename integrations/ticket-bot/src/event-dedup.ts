@@ -4,10 +4,16 @@ export interface TicketEventDeduplicationStore {
   /**
    * Atomically claim an event key.
    *
-   * Returns true only for the first successful claim. Durable production
-   * implementations should enforce uniqueness across processes/restarts.
+   * Returns true only when this worker acquires the right to attempt delivery.
+   * A durable implementation must use an expiring lease for in-flight claims,
+   * retain completed keys, and atomically prevent parallel claim ownership.
+   * Delivery may happen more than once after crashes: handlers must be idempotent.
    */
   claim(key: string): Promise<boolean>;
+  /** Mark the delivery completed only after every subscriber succeeded. */
+  complete(key: string): Promise<void>;
+  /** Allow a future retry if any subscriber failed. */
+  release(key: string): Promise<void>;
 }
 
 export interface TicketEventIdentity {
@@ -29,7 +35,7 @@ export function ticketEventDeduplicationKey(event: TicketEventIdentity): string 
 export class InMemoryTicketEventDeduplicationStore
   implements TicketEventDeduplicationStore
 {
-  private readonly claimed = new Map<string, true>();
+  private readonly claimed = new Map<string, 'inflight' | 'completed'>();
 
   constructor(private readonly maxEntries = 10_000) {
     if (!Number.isInteger(maxEntries) || maxEntries < 1) {
@@ -39,9 +45,20 @@ export class InMemoryTicketEventDeduplicationStore
 
   async claim(key: string): Promise<boolean> {
     if (this.claimed.has(key)) return false;
-    this.claimed.set(key, true);
+    this.claimed.set(key, 'inflight');
     this.evictOldestIfNeeded();
     return true;
+  }
+
+  async complete(key: string): Promise<void> {
+    if (this.claimed.get(key) !== 'inflight') {
+      throw new ValidationError('cannot complete an unclaimed ticket event');
+    }
+    this.claimed.set(key, 'completed');
+  }
+
+  async release(key: string): Promise<void> {
+    if (this.claimed.get(key) === 'inflight') this.claimed.delete(key);
   }
 
   get size(): number {
@@ -50,7 +67,14 @@ export class InMemoryTicketEventDeduplicationStore
 
   private evictOldestIfNeeded(): void {
     if (this.claimed.size <= this.maxEntries) return;
-    const oldest = this.claimed.keys().next().value as string | undefined;
-    if (oldest !== undefined) this.claimed.delete(oldest);
+    // Never evict an in-flight claim; doing so could dispatch concurrently.
+    // A bounded test store may reject further deliveries until a handler ends.
+    for (const [key, state] of this.claimed) {
+      if (state === 'completed') {
+        this.claimed.delete(key);
+        return;
+      }
+    }
+    throw new ValidationError('too many concurrent ticket event claims');
   }
 }
