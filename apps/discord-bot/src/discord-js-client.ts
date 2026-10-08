@@ -71,6 +71,23 @@ export function buildAiSlashCommand(): { name: string; definition: unknown } {
   return { name: AI_COMMAND_NAME, definition: definition.toJSON() };
 }
 
+/**
+ * Upsert just the /ai command. A bulk PUT with [definition] would delete
+ * unrelated commands registered by another component of the same app.
+ * This never removes existing Ticket Bot or other application commands.
+ */
+export async function upsertAiSlashCommand(
+  rest: Pick<REST, 'post'>,
+  applicationId: string,
+  guildId?: string,
+): Promise<void> {
+  const { definition } = buildAiSlashCommand();
+  const route = guildId !== undefined
+    ? Routes.applicationGuildCommands(applicationId, guildId)
+    : Routes.applicationCommands(applicationId);
+  await rest.post(route, { body: definition });
+}
+
 function channelKindOf(channel: Message['channel']): DiscordChannelKind {
   if (channel.isDMBased()) {
     return 'dm';
@@ -339,12 +356,9 @@ export class DiscordJsClientAdapter implements DiscordClientPort {
     if (this.readyUserId === null) {
       throw new Error('cannot register slash commands before the client is ready');
     }
-    const { definition } = buildAiSlashCommand();
-    const route =
-      this.options.slashCommandGuildId !== undefined
-        ? Routes.applicationGuildCommands(this.readyUserId, this.options.slashCommandGuildId)
-        : Routes.applicationCommands(this.readyUserId);
-    await this.rest.put(route, { body: [definition] });
+    await upsertAiSlashCommand(
+      this.rest, this.readyUserId, this.options.slashCommandGuildId,
+    );
     this.logger.info(
       { guildScoped: this.options.slashCommandGuildId !== undefined },
       'registered /ai slash command',
