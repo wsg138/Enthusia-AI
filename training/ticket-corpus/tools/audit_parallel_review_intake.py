@@ -80,8 +80,10 @@ def check_result(result: dict, assignment: dict):
         raise ValueError(f"{rid}: missing/unknown provisional recommendation")
     blocked_truthy = ("training_eligible", "approved_for_training", "rights_cleared",
                       "privacy_cleared", "independent_approval")
-    if any(result.get(k) is True for k in blocked_truthy):
+    if any(result.get(k) not in (None, False) for k in blocked_truthy):
         raise ValueError(f"{rid}: worker claimed training/rights approval")
+    if result.get("rights_clearance") not in (None, "NOT_VERIFIED", "UNCLEARED"):
+        raise ValueError(f"{rid}: worker claimed rights clearance")
     if result.get("review_status") not in (None, "HOLD", "PENDING_INDEPENDENT"):
         raise ValueError(f"{rid}: worker attempted a review status promotion")
     if result.get("approval_status") not in (None, "HOLD", "PENDING"):
