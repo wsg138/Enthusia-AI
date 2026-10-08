@@ -1,8 +1,8 @@
 # Parallel ticket review: coordinator intake (HOLD only)
 
-Status: **2026-10-08 coordinator assignment frozen**; six independent review
-workers have separate GitHub branches and private review directories. This
-process does not authorize training, production changes or paid GPU use.
+Status: **2026-10-08 all six worker outputs mechanically validated and
+private editorial derivative prepared**. This process does not authorize
+training, production changes or paid GPU use.
 
 ## Frozen input and partition
 
@@ -113,10 +113,64 @@ Before any approved training release:
 The coordinator assignment was executed on the owner's Windows PC and
 assigned all 71 evidence-risk cases exactly once across six slots.
 
-Nineteen synthetic-only coordinator tests passed: ten for deterministic
-partition/freezing and nine for intake validation/refusal. These tests do not
-validate the independent workers' substantive review findings.
+**30 synthetic-only coordinator tests passed**: assignment freezing, worker
+intake validation, approval refusal, review-proposal normalization, and
+rejection quarantine. These tests do not validate the workers' substantive
+review findings.
 
 **No user action needed for the coordinator stage.** Worker results can be
 checked when submitted; six parallel worker chats are not themselves
 six independently approved reviewers.
+
+## Executed worker intake and editorial derivative (2026-10-08)
+
+All six private review-result files were present and validated against the
+frozen 71-case assignment ledger:
+
+- **71/71** source IDs, draft IDs and original-target hashes matched.
+- **0** missing, duplicate, wrong-worker or stale results.
+- **65** `PROPOSE_REWRITE` recommendations; **6** `REJECT` recommendations.
+- **0** worker-provided training approvals admitted. W19 remains HOLD.
+
+The newest coordinator-owned private artifacts:
+
+- `SyntheticWorkers/parallel-review-coordinator/intake-v2/` — verified
+  six-worker mechanical intake and counts.
+- `SyntheticWorkers/parallel-review-coordinator/normalized-worker-review-v1/`
+  — **65** private HOLD-only editorial proposals and a separate **6-case**
+  rejection/quarantine list.
+- `SyntheticWorkers/editorial-derivative-v3/` — new immutable private
+  derivative with those 65 proposed answers applied. Original worker
+  files, staged review and prior derivatives remain unchanged.
+- `SyntheticWorkers/screening-v6/` — independent risk *screening*, not
+  an independent correctness/admission decision.
+
+`prepare_parallel_review_proposals.py` refuses incomplete or stale six-slot
+intake, empty/unchanged proposed rewrites and worker training-approval claims.
+It does not apply rejected cases as rewrites. Maintain the private quarantine
+list in any later independent approval/admission process: the original rejected
+record remains in the all-HOLD draft corpus but **must not** become trainable.
+
+After review proposal application:
+
+| Screening category | Before (v5) | After (v6) |
+| --- | ---: | ---: |
+| Evidence/safety review | 71 | 6 |
+| Style/provenance review | 214 | 258 |
+| Standard independent review | 383 | 404 |
+
+The remaining six flagged completions correspond to the six rejection
+recommendations. The *screening heuristic* finding no warning is **not**
+independent factual quality approval.
+
+Fresh CPU-only W16/W19 check on derivative-v3:
+- **668/668** records and HOLD manifest record hashes validated;
+- **668/668** refused admission for `not independently approved`;
+- **0** schema/digest/staff-handoff errors;
+- **0** credential-pattern matches (not full privacy clearance).
+
+Next: independently adjudicate the 65 revised answers and six rejected cases
+against as-of-turn evidence and current policy; enforce quarantine in any
+future admissions; address remaining quality/repetition/source warnings
+across the other drafts; freeze leakage-safe connected families; only then
+consider an explicitly approved release and paid training.
