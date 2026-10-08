@@ -224,6 +224,12 @@ export async function runInvestigation(
     }
   };
 
+  // With no planned evidence steps there is nothing to investigate.
+  // Do not force a model-generated tool decision when no tools are usable.
+  if (input.plan.length === 0) {
+    return finish('evidence_complete');
+  }
+
   // Main loop — every exit path is deterministic and budget-bounded.
   for (;;) {
     if (deps.budget.exhausted()) {
