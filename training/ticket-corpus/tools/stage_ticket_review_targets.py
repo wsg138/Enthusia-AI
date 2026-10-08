@@ -195,13 +195,14 @@ def stage(source_dir: Path, audit_dir: Path, out_dir: Path, w16_root: Path) -> d
 
     outputs: list[dict] = []
     entries: list[dict] = []
+    source_index: list[dict] = []
     skipped = Counter()
     inventory = []
     seen = set()
     for path in originals:
         fd = _digest(path.read_bytes())
         count = 0
-        for _, source, raw_digest in _iter_jsonl(path):
+        for source_line, source, raw_digest in _iter_jsonl(path):
             cid = source.get("candidate_id")
             count += 1
             if not isinstance(cid, str) or cid in seen:
@@ -223,6 +224,22 @@ def stage(source_dir: Path, audit_dir: Path, out_dir: Path, w16_root: Path) -> d
             for row, entry in pairs:
                 outputs.append(row)
                 entries.append(entry)
+                source_index.append({
+                    "draft_id": row["candidate_id"],
+                    "source_candidate_id": cid,
+                    "source_filename": path.name,
+                    "source_line": source_line,
+                    "source_refs": source.get("source_refs", []),
+                    "family_group": family[cid],
+                    "review_flags": row["review_flags"],
+                    "investigation_step_count": len(source.get("investigation", [])),
+                    "investigation_turn_order_verified": False,
+                    "staff_handoff_needed": bool(
+                        source.get("staff_handoff", {}).get("needed", False)
+                    ),
+                    "review_status": "HOLD",
+                    "training_eligible": False,
+                })
         inventory.append({"filename": path.name, "sha256": fd, "records": count})
     if not outputs:
         raise ValueError("no reviewable candidate slices; no output written")
@@ -235,6 +252,7 @@ def stage(source_dir: Path, audit_dir: Path, out_dir: Path, w16_root: Path) -> d
     out_dir.mkdir(parents=True)  # protected by pre-existing directory check
     draft_path = out_dir / "DRAFT-W16-NOT-TRAINABLE.private.jsonl"
     approval_path = out_dir / "REVIEW-MANIFEST-ALL-HOLD.private.json"
+    index_path = out_dir / "REVIEW-SOURCE-INDEX.private.jsonl"
     draft_path.write_text("\n".join(canonical_json(x) for x in outputs) + "\n",
                           encoding="utf-8")
     approval_path.write_text(json.dumps({
@@ -243,6 +261,10 @@ def stage(source_dir: Path, audit_dir: Path, out_dir: Path, w16_root: Path) -> d
         "review_protocol_revision": "ticket-review-pending-v1",
         "entries": entries,
     }, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    index_path.write_text(
+        "\n".join(canonical_json(x) for x in source_index) + "\n",
+        encoding="utf-8"
+    )
     report = {
         "status": "REVIEW_ONLY_NOT_TRAINABLE",
         "candidates_seen": len(seen),
@@ -257,6 +279,8 @@ def stage(source_dir: Path, audit_dir: Path, out_dir: Path, w16_root: Path) -> d
         "source_inventory": inventory,
         "draft_sha256": _digest(draft_path.read_bytes()),
         "manifest_sha256": _digest(approval_path.read_bytes()),
+        "private_review_index_sha256": _digest(index_path.read_bytes()),
+        "private_review_index_records": len(source_index),
         "warnings": [
             "A structural draft is NOT a reviewed target.",
             "No unanchored investigation trace was converted into a tool result.",
