@@ -273,6 +273,22 @@ describe('EnthusiaAiDiscordBot slash flow', () => {
     expect(port.slashResponses[0]!.chunks).toEqual(['echo: how do I claim land?']);
   });
 
+  it('defers the slash response before waiting for a slow gateway', async () => {
+    const port = new MockDiscordClientPort();
+    const gateway = new RecordingGateway(async (request) => {
+      expect(port.deferredSlashes).toHaveLength(1);
+      return {
+        text: 'ready', actions: [], sources: [], memoryUpdates: [],
+        escalation: null, traceId: request.traceId ?? 'no-trace',
+      };
+    });
+    const bot = new EnthusiaAiDiscordBot(port, gateway, testOptions(), nullLogger());
+    const interaction = slashAsk({ question: 'slow request' });
+    expect((await bot.handleSlashAsk(interaction)).outcome).toBe('responded');
+    expect(port.deferredSlashes).toEqual([interaction]);
+    expect(port.slashResponses).toHaveLength(1);
+  });
+
   it('rate-limits slash invocations too', async () => {
     const gateway = new RecordingGateway();
     const options = testOptions({ perUserRateLimit: { maxRequests: 1, windowMs: 60_000 } });
