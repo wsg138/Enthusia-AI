@@ -191,14 +191,15 @@ class ReviewAdmission:
         by_component: dict[int, set[str]] = defaultdict(set)
         for i, cid in enumerate(keys):
             entry = self.entries[cid]
-            # Only active training/validation approvals participate.
-            if entry["review_status"] == "APPROVED" and (
-                "train" in entry["approved_uses"]
-                and entry["split"] in APPROVED_SPLITS
+            # Any independently approved held-out or training cohort is
+            # protected. A holdout that shares lineage with train/validation
+            # would otherwise compromise supposedly frozen evaluation.
+            if entry["review_status"] == "APPROVED" and entry["split"] in (
+                "train", "validation", "holdout"
             ):
                 by_component[find(i)].add(entry["split"])
         if any(len(splits) > 1 for splits in by_component.values()):
-            raise AdmissionError("related source/incident family crosses train and validation")
+            raise AdmissionError("related source/incident family crosses approved data splits")
 
     def eligible_split(self, record: dict) -> tuple[str | None, str | None]:
         """Return (approved split, rejection reason), never infer approval."""
@@ -212,6 +213,10 @@ class ReviewAdmission:
             return None, "missing worker_origin provenance"
         if record.get("source_candidate_sha256") != entry["source_candidate_sha256"]:
             return None, "source candidate digest mismatch"
+        if record.get("source_file_sha256") != entry["source_file_sha256"]:
+            return None, "source file digest mismatch"
+        if record.get("source_revision") != entry["source_revision"]:
+            return None, "source revision mismatch"
         if record_digest(record) != entry["record_sha256"]:
             return None, "reviewed training target digest mismatch"
         if entry["review_status"] != "APPROVED":
