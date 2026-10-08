@@ -272,6 +272,7 @@ export class InferenceReasoner implements Reasoner {
       },
       classificationSchema,
       request.traceId,
+      'classifyIntent',
     );
 
     return {
@@ -325,6 +326,7 @@ export class InferenceReasoner implements Reasoner {
       },
       z.array(planStepSchema).max(32),
       request.traceId,
+      'planEvidence',
     );
     return normalizePlanSteps(raw);
   }
@@ -354,6 +356,7 @@ export class InferenceReasoner implements Reasoner {
       },
       decisionSchema,
       snapshot.request.traceId,
+      'nextStep',
     );
     return normalizeDecision(raw);
   }
@@ -366,10 +369,17 @@ export class InferenceReasoner implements Reasoner {
     request: GenerationRequest,
     schema: z.ZodType<T>,
     traceId?: string,
+    stage = 'unknown',
   ): Promise<T> {
     const options: RequestOptions = {};
     if (traceId !== undefined) options.traceId = traceId;
     const result = await this.client.complete(request, options);
-    return parseJson(result.content, schema);
+    try {
+      return parseJson(result.content, schema);
+    } catch (error) {
+      // Stage-only failure detail is safe for internal diagnostics; never log
+      // prompts, completions or user-provided model text to Discord.
+      throw new Error(`${stage}: ${error instanceof Error ? error.message : 'invalid local model response'}`);
+    }
   }
 }
