@@ -6,6 +6,7 @@ describe('loadInferenceConfig', () => {
     const config = loadInferenceConfig({});
     expect(config.inferenceBaseUrl).toBe('http://localhost:8080');
     expect(config.inferenceModel).toBe('');
+    expect(config.inferenceThinkingMode).toBe('default');
     expect(config.inferenceApiKey).toBeUndefined();
     expect(config.inferenceTimeoutMs).toBe(120_000);
     expect(config.inferenceMaxRetries).toBe(3);
@@ -20,15 +21,22 @@ describe('loadInferenceConfig', () => {
     const config = loadInferenceConfig({
       ENTHUSIA_INFERENCE_BASE_URL: 'http://llm.internal:8080',
       ENTHUSIA_INFERENCE_MODEL: 'qwen-30b',
+      ENTHUSIA_INFERENCE_THINKING_MODE: 'disabled',
       ENTHUSIA_INFERENCE_TIMEOUT_MS: '45000',
       ENTHUSIA_INFERENCE_MAX_RETRIES: '5',
       ENTHUSIA_INFERENCE_MAX_CONTEXT_TOKENS: '16384',
     });
     expect(config.inferenceBaseUrl).toBe('http://llm.internal:8080');
     expect(config.inferenceModel).toBe('qwen-30b');
+    expect(config.inferenceThinkingMode).toBe('disabled');
     expect(config.inferenceTimeoutMs).toBe(45_000);
     expect(config.inferenceMaxRetries).toBe(5);
     expect(config.inferenceMaxContextTokens).toBe(16_384);
+  });
+
+  it('rejects unsupported non-thinking configuration values', () => {
+    expect(() => loadInferenceConfig({ ENTHUSIA_INFERENCE_THINKING_MODE: 'maybe' })).toThrow();
+    expect(() => loadInferenceConfig({ ENTHUSIA_INFERENCE_THINKING_MODE: 'true' })).toThrow();
   });
 
   it('requires an inference API key in production', () => {
