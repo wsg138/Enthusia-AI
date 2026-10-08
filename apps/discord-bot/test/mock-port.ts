@@ -81,6 +81,8 @@ export function testOptions(overrides: Partial<DiscordBotOptions> = {}): Discord
     gatewayBaseUrl: 'http://127.0.0.1:4100',
     useMockGateway: true,
     gatewayTimeoutMs: 1000,
+    allowedGuildIds: [],
+    allowedChannelIds: [],
     aiChannelIds: [],
     staffChannelIds: [],
     testChannelIds: [],
