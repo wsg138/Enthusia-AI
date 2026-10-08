@@ -75,6 +75,18 @@ class IntakeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"promotion"):
             check_result(x,a)
 
+    def test_nonempty_approved_uses_rejected(self):
+        a=assignment(1)
+        x=result(a);x["approved_uses"]=["train"]
+        with self.assertRaisesRegex(ValueError,"dataset uses"):
+            check_result(x,a)
+
+    def test_worker_train_split_rejected(self):
+        a=assignment(1)
+        x=result(a);x["split"]="train"
+        with self.assertRaisesRegex(ValueError,"split"):
+            check_result(x,a)
+
     def test_original_record_sha_is_accepted(self):
         a=assignment(1)
         x=result(a);x["original_target_hash"]=a["record_sha256"]
