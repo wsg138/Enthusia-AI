@@ -148,6 +148,8 @@ export class EnthusiaAiDiscordBot {
     if (!this.inAllowedScope(interaction.channel.guild?.id, interaction.channel.id)) {
       return { outcome: 'ignored', reason: 'outside allowed test guild/channel' };
     }
+    // Acknowledge only authorized slash interactions before slow inference.
+    await this.port.deferSlashAsk?.(interaction);
     const decision = decideSlashTrigger(interaction.question);
     return this.respondToTrigger(
       decision,
