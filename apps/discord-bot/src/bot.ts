@@ -144,6 +144,9 @@ export class EnthusiaAiDiscordBot {
       // Discord may display a timeout; no channel content is sent.
       return { outcome: 'ignored', reason: 'outside configured guild/channel allowlist' };
     }
+    // Discord requires acknowledgement within a few seconds. Defer before
+    // model/tool work, never after waiting for the gateway round-trip.
+    await this.port.deferSlashAsk?.(interaction);
     const decision = decideSlashTrigger(interaction.question);
     return this.respondToTrigger(
       decision,
