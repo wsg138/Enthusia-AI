@@ -94,6 +94,27 @@ export function assembleResponse(args: AssembleArgs): AgentResponse {
     args.responseStyle,
   );
 
+  // Bot-capability questions are about this application's supported behavior,
+  // not mutable server facts. Provide a short, bounded explanation rather
+  // than presenting a hallucinated claim about the user's question itself.
+  // Keep the evidence-first path for all other questions.
+  if (
+    /^(?:what can you do|what are your capabilities)[?!.\s]*$/i.test(request.message.trim()) &&
+    escalation === null &&
+    visibleAssessments.every((assessment) => assessment.verdict === 'unsupported')
+  ) {
+    return {
+      text: 'I can help explain general topics and work through Enthusia questions. ' +
+        'For current server information, player accounts, punishments, or tickets, ' +
+        'I need connected, verified sources and will not guess without them.',
+      actions: [],
+      sources: [],
+      memoryUpdates: [],
+      escalation: null,
+      traceId: request.traceId,
+    };
+  }
+
   const lines: string[] = [];
   const preamble = safeFraming(draft.preamble, SAFE_PREAMBLES);
   if (preamble !== undefined) {
