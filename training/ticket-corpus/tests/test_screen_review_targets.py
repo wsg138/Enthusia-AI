@@ -115,6 +115,36 @@ class ReviewScreenTests(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 screen(stage,out)
 
+    def test_review_sample_covers_all_families_before_extra_risk(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            staging = base/"staging"
+            staging.mkdir()
+            cases = []
+            for number in range(61):
+                row, meta, ent = fixture(f"W01-0001-a{number+1:02d}")
+                row["expected_answer"] = "I checked the server log already."
+                ent["record_sha256"] = candidate_digest(row)
+                cases.append((row, meta, ent))
+            row, meta, ent = fixture("W02-0002-a01")
+            row["family_group"] = "family-b"
+            meta["family_group"] = "family-b"
+            ent["family_group"] = "family-b"
+            ent["record_sha256"] = candidate_digest(row)
+            cases.append((row, meta, ent))
+            (staging/"DRAFT-W16-NOT-TRAINABLE.private.jsonl").write_text(
+                "\n".join(json.dumps(x[0]) for x in cases)+"\n",encoding="utf-8")
+            (staging/"REVIEW-SOURCE-INDEX.private.jsonl").write_text(
+                "\n".join(json.dumps(x[1]) for x in cases)+"\n",encoding="utf-8")
+            (staging/"REVIEW-MANIFEST-ALL-HOLD.private.json").write_text(
+                json.dumps(doc(*cases)),encoding="utf-8")
+            report = screen(staging,base/"review")
+            sample = [json.loads(x) for x in
+                (base/"review"/"MANUAL-REVIEW-SAMPLE.private.jsonl").read_text().splitlines()]
+            self.assertEqual(report["manual_sample_size"],60)
+            self.assertEqual({x["family_group"] for x in sample},
+                             {"family-a","family-b"})
+
     def test_inconsistent_source_file_blocks(self):
         case=fixture()
         with self.assertRaisesRegex(ValueError,"mismatched record counts"):
