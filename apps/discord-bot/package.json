@@ -7,12 +7,20 @@
   },
   "description": "Enthusia AI Discord bot adapter (W06): mentions, /ai slash command, configured channels, actor context, formatting, rate limits",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "default": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
   },
   "license": "UNLICENSED",
-  "main": "./src/index.ts",
+  "main": "./dist/index.js",
   "name": "@enthusia/discord-bot",
   "private": true,
   "type": "module",
-  "version": "0.1.0"
+  "version": "0.1.0",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "npm run build -w @enthusia/contracts -w @enthusia/logging -w @enthusia/config && tsc -p tsconfig.json",
+    "start": "node dist/main.js"
+  }
 }
