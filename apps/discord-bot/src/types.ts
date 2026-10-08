@@ -133,6 +133,9 @@ export interface DiscordClientPort {
    */
   respondToSlashAsk(interaction: DiscordSlashAskRef, chunks: string[]): Promise<void>;
 
+  /** Acknowledge an allowed slash command before waiting for slow model inference. */
+  deferSlashAsk?(interaction: DiscordSlashAskRef): Promise<void>;
+
   /** Register the `/ai` slash command (global or per-guild). */
   registerSlashCommands(): Promise<void>;
 
