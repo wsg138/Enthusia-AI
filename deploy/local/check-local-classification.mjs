@@ -37,6 +37,8 @@ const request = {
 try {
   const answer = await reasoner.classifyIntent(request);
   console.log('[shape] Classification accepted: ' + JSON.stringify(answer));
+  const plan = await reasoner.planEvidence(request, answer, []);
+  console.log('[shape] Evidence plan accepted: ' + JSON.stringify(plan));
 } catch (error) {
   console.log('[shape] Classification rejected: ' + (error?.message ?? String(error)));
   process.exitCode = 1;
