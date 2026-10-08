@@ -108,6 +108,44 @@ class ReviewScreenTests(unittest.TestCase):
         self.assertIn("unverified_staff_handoff_in_target", result["flags"])
         self.assertIn("unverified_staff_handoff_in_context", result["flags"])
 
+    def test_curly_quotes_in_realistic_handoff_claims(self):
+        a, b, _ = fixture()
+        a["expected_answer"] = "I’m sending this to staff now."
+        a["messages"] = [
+            {"role": "user", "content": "Missing item"},
+            {"role": "assistant", "content": "I’ve already sent this to staff."},
+            {"role": "user", "content": "What now?"},
+        ]
+        flags = flag_case(a, b, 1)["flags"]
+        self.assertIn("unverified_staff_handoff_in_target", flags)
+        self.assertIn("unverified_staff_handoff_in_context", flags)
+
+    def test_curly_apostrophe_checked_result_is_reviewed(self):
+        a, b, _ = fixture()
+        a["expected_answer"] = "I’ve confirmed your transfer."
+        self.assertIn("unsupported_verified_result_in_target", flag_case(a, b, 1)["flags"])
+
+    def test_completed_checks_and_evidence_outcome_variants_are_reviewed(self):
+        for phrase in (
+            "I can confirm the server state.",
+            "I finished correlating the timestamps.",
+            "I went through the evidence for the report.",
+            "The evidence supports the reported loss.",
+            "The records still show a death.",
+        ):
+            with self.subTest(phrase=phrase):
+                a, b, _ = fixture()
+                a["expected_answer"] = phrase
+                result = flag_case(a, b, 1)
+                self.assertIn("unsupported_verified_result_in_target", result["flags"])
+                self.assertEqual(result["risk_tier"], "EVIDENCE_OR_SAFETY_REVIEW")
+                self.assertFalse(result["training_eligible"])
+
+    def test_conditional_evidence_discussion_is_not_verified_result(self):
+        a, b, _ = fixture()
+        a["expected_answer"] = "If the evidence supports a transfer, staff can consider it."
+        self.assertNotIn("unsupported_verified_result_in_target", flag_case(a, b, 1)["flags"])
+
     def test_unanchored_source_assertions_are_reviewed(self):
         samples = (
             "The server-side evidence supports a real disconnect.",
