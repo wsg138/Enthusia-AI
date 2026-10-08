@@ -176,3 +176,25 @@ ledger with no conflicts. The authorized PC refused local script updates and
 derivative generation under tool safety checks, so the new v4 derivative,
 its W16/W19 checks and re-screening have **not** been executed. The existing
 v3 all-HOLD release remains authoritative; do not claim v4 exists.
+
+
+## Mandatory private quarantine ledger on each future editorial run
+
+The editorial derivative CLI now requires
+`--source-quarantine-ledger PRIVATE/.../SOURCE-QUARANTINE.private.json`
+instead of leaving this lineage guard optional. Its Python `run(...)`
+entrypoint also fails before reading or writing any dataset files when
+`quarantine_ledger` is absent. This ensures the six source-level REJECT
+recommendations (both assistant slices per source) are not accidentally
+omitted during subsequent proposal application. Per-proposal source and
+original reviewed-target hashes remain mandatory when the ledger is supplied.
+
+The original private `editorial-derivative-v3` remains the authoritative
+668-row all-HOLD release. The 37 hash-checked proposed changes across
+22 non-rejected source tickets are merely private editorial notes; they are
+**not** an independently validated derivative or training approval.
+The PC execution gate blocked creation of `editorial-derivative-v4`;
+do not claim that v4, post-edit W16/W19 CPU preflight or a fresh screen exists.
+
+Passing synthetic code tests cannot establish actual source verification,
+privacy/rights, historical incident facts, or authorized staff tool actions.

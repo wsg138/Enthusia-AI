@@ -9,7 +9,7 @@ import unittest
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"tools"))
 from apply_review_proposals import (
-    apply_proposals,digest_target,replace_refs,resolution_pairs,verify_rejected_source_ledger
+    apply_proposals,digest_target,replace_refs,resolution_pairs,verify_rejected_source_ledger,run
 )
 
 
@@ -55,6 +55,15 @@ def fixtures():
 
 
 class EditorialDerivativeTests(unittest.TestCase):
+    def test_editorial_run_cannot_omit_source_quarantine_ledger(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td)
+            output=root/"v4"
+            with self.assertRaisesRegex(ValueError, "private source quarantine ledger is required"):
+                run(root, root/"notes.private.jsonl", [], output, root/"datasets")
+            self.assertFalse(output.exists())
+
     def test_earlier_turn_replay_updates_followup(self):
         d,i,m,p,f=fixtures()
         rows,idx,adm,changes,report=apply_proposals(d,i,m,p,f,lambda x:x)
