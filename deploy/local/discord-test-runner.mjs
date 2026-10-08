@@ -139,7 +139,11 @@ async function locateTestChannel(botToken) {
 }
 
 function spawnChild(label, entry, env) {
-  const child = spawn(process.execPath, [resolve(root, entry)], {
+  // The local agent imports workspace packages that still export .ts source
+  // with .js relative specifiers. The test-only resolver handles these under
+  // Node 24 without touching production packages or changing builds.
+  const resolver = resolve(root, 'deploy/local/workspace-source-resolver.mjs');
+  const child = spawn(process.execPath, ['--import', resolver, resolve(root, entry)], {
     cwd: root, env, stdio: 'inherit', windowsHide: true,
   });
   child.on('error', (error) => console.error('[test] ' + label + ' could not start:', error.message));
