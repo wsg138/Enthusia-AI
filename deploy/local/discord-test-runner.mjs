@@ -143,7 +143,7 @@ function spawnChild(label, entry, env) {
   // with .js relative specifiers. The test-only resolver handles these under
   // Node 24 without touching production packages or changing builds.
   const resolver = resolve(root, 'deploy/local/workspace-source-resolver.mjs');
-  const child = spawn(process.execPath, ['--import', resolver, resolve(root, entry)], {
+  const child = spawn(process.execPath, ['--experimental-transform-types', '--import', resolver, resolve(root, entry)], {
     cwd: root, env, stdio: 'inherit', windowsHide: true,
   });
   child.on('error', (error) => console.error('[test] ' + label + ' could not start:', error.message));
