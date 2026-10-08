@@ -151,6 +151,18 @@ describe('InferenceReasoner', () => {
     expect(result[0]?.candidateTools).toEqual([]);
   });
 
+  it('does not ask the model to invent an evidence plan with zero available tools', async () => {
+    const client = new FakeCompletionClient([]);
+    const reasoner = new InferenceReasoner(client);
+    const plan = await reasoner.planEvidence(
+      request(),
+      { requestClass: 'simple', summary: 'test', claims: ['current server IP'], needsPrivateContext: false, securitySensitive: false },
+      [],
+    );
+    expect(plan).toEqual([]);
+    expect(client.calls).toHaveLength(0);
+  });
+
   it('normalizes optional plan fields without explicit undefined values', async () => {
     const client = new FakeCompletionClient([
       JSON.stringify([
