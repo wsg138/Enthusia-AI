@@ -69,6 +69,10 @@ SECRETS_REQUEST = re.compile(
 MUTABLE = re.compile(r"@[a-zA-Z][\w./-]*(?=[:#]|$)")
 PINNED = re.compile(r"@[0-9a-fA-F]{40}(?=[:#]|$)")
 NORMALIZE = re.compile(r"\s+")
+GITHUB_ISSUE_REF = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[1-9][0-9]*$")
+PRIVATE_REWRITE_ALIAS = re.compile(
+    r"^private(?: rewritten ticket)? ticket-rewrite-[0-9]+$", re.IGNORECASE
+)
 
 
 def canonical(record):
@@ -174,14 +178,21 @@ def flag_case(draft: dict, meta: dict, duplicate_frequency: int) -> dict:
         for ref in refs if isinstance(ref, dict)
     ):
         flags.add("mutable_referenced_source")
-    if any(
-        isinstance(ref, dict) and (
-            "@" not in str(ref.get("ref", ""))
-            and not str(ref.get("ref", "")).startswith(("private:", "ticket-rewrite-"))
-        )
-        for ref in refs
-    ):
-        flags.add("nonversioned_ref_review")
+    # Distinguish issue links and private editorial aliases from unpinned
+    # repository paths. An issue existing does NOT verify an incident.
+    # Keep every previously flagged reference pending independent review.
+    for ref in refs:
+        if not isinstance(ref, dict):
+            continue
+        value = str(ref.get("ref", ""))
+        if "@" in value or value.startswith(("private:", "ticket-rewrite-")):
+            continue
+        if GITHUB_ISSUE_REF.fullmatch(value):
+            flags.add("issue_reference_context_only")
+        elif PRIVATE_REWRITE_ALIAS.fullmatch(value):
+            flags.add("private_rewrite_alias_review")
+        else:
+            flags.add("nonversioned_ref_review")
     if not messages or messages[-1].get("role") != "user":
         flags.add("prompt_not_last_player_turn")
     if not answer.strip():
