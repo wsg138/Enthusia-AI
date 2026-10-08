@@ -141,3 +141,46 @@ independent source/trace review, preserve the original strict HOLD
 manifest, and never authorize training. Any full-corpus after-change
 counts require a separate new-directory private screening execution;
 do not substitute static pattern estimates for actual screen outputs.
+
+
+## Actual v8 and v9 private re-screen outcomes — 2026-10-08
+
+After the PR #103 screening improvements, a new immutable private
+`screening-v8` queue was executed against `editorial-derivative-v4`.
+A further `screening-v9` queue was executed after 44 additional
+case-specific provisional v5 edits. Both were produced on the authorized
+PC with the merged screening tool, and all 668 source/manifest entries
+validated as strictly HOLD.
+
+| Review-only tier | v7 on v3 | v8 on v4 | v9 on v5 |
+| --- | ---: | ---: | ---: |
+| Evidence/safety review | 28 | 50 | 6 |
+| Style/provenance review | 253 | 228 | 229 |
+| Standard independent review | 387 | 390 | 433 |
+| **Total** | **668** | **668** | **668** |
+| Independently approved | **0** | **0** | **0** |
+
+The **v8 increase** to 50 was caused primarily by improved detection of
+curly apostrophes and asserted completed evidence/handoff wording, not
+evidence that 22 newly changed tickets became incorrect. It consisted of
+the six original source-rejection candidates plus 44 other cases. The 44
+were provisionally reworded in v5 without claiming unseen tool outputs
+or completed staff actions; their actual source correctness still
+requires independent investigation.
+
+**v9 observed review flags:** 6
+`unsupported_verified_result_in_target` occurrences; 3
+`unverified_staff_handoff_in_target`; 73 inherited
+`unverified_tool_result_claim`; 94 repeated-target warnings; 20
+issue-link references and 48 private rewrite aliases. Flags may overlap.
+All six remaining evidence/safety-tier cases belong to the six
+source-quarantined tickets, whose 12 assistant slices were unchanged.
+
+All 668 v9 records remain `PENDING_INDEPENDENT`, and none is trainable.
+The 433 examples in the standard tier are *not* independently validated.
+The source-index lookup, regex matches, and credential scanner do not
+verify historical log contents or prove staff actually executed an
+escalation. Source rights, personally identifiable information, as-of-turn
+tool traces, family-level leakage and external evaluator independence still
+require separate review. Keep private queue files and individual
+conversation text off GitHub.
