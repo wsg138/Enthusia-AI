@@ -123,6 +123,23 @@ class QuarantineTests(unittest.TestCase):
         split, why = gate(row, quarantine=quarantine).eligible_split(validate_record(row))
         self.assertEqual((split, why), ("train", None))
 
+    def test_renamed_rejected_source_is_still_excluded(self):
+        quarantine = SourceQuarantine(ledger(), digest="c"*64)
+        row = draft("-a01")
+        row["id"] = row["candidate_id"] = "different-target-name"
+        split, why = gate(row, quarantine=quarantine).eligible_split(validate_record(row))
+        self.assertIsNone(split)
+        self.assertIn("source-ticket quarantine", why)
+
+    def test_rejected_source_hash_cannot_be_reassigned_to_other_source(self):
+        quarantine = SourceQuarantine(ledger(), digest="c"*64)
+        row = draft("-a01")
+        row["id"] = row["candidate_id"] = "W02-0111-a01"
+        row["source_candidate_id"] = "W02-0111"
+        split, why = gate(row, quarantine=quarantine).eligible_split(validate_record(row))
+        self.assertIsNone(split)
+        self.assertIn("quarantined source identity mismatch", why)
+
     def test_wrong_release_and_ledger_hash_are_rejected(self):
         quarantine = SourceQuarantine(ledger(), digest="c"*64)
         row = draft("-a01")
