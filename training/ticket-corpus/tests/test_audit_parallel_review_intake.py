@@ -92,6 +92,18 @@ class IntakeTests(unittest.TestCase):
         x=result(a);x["final_admission_decision"]="NONE"
         self.assertEqual(check_result(x,a),"PROPOSE_REWRITE")
 
+    def test_independent_admission_flag_rejected(self):
+        a=assignment(1)
+        x=result(a);x["independent_admission"]=True
+        with self.assertRaisesRegex(ValueError,"approval"):
+            check_result(x,a)
+
+    def test_rights_privacy_clearance_claim_rejected(self):
+        a=assignment(1)
+        x=result(a);x["rights_privacy_clearance"]="CLEARED"
+        with self.assertRaisesRegex(ValueError,"clearance"):
+            check_result(x,a)
+
     def test_original_record_sha_is_accepted(self):
         a=assignment(1)
         x=result(a);x["original_target_hash"]=a["record_sha256"]
