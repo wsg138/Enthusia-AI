@@ -117,3 +117,27 @@ need review; all remain non-admitted. It does not parse or verify the content of
 private rewrite references, nor treat issue existence as as-of-turn evidence.
 A new private re-screen, with verified immutable HOLD inputs and a fresh output
 directory, is required before quoting any new full-corpus flag counts.
+
+
+## Additional risk-language detection (no data approval)
+
+A source-by-source, private, read-only v3 screening audit found evidence
+that earlier regular expressions missed real-looking player-facing claims
+written with curly apostrophes (`I’m`, `I’ve`). A virtual comparison
+using the existing 37 private proposed edits still found **39**
+curly-apostrophe staff-handoff phrases in other candidates, **36** of them
+previously in the standard independent-review tier. The audit measured
+lexical matches, **not** verified impropriety or whether staff were contacted.
+
+The screening code now normalizes apostrophe variants **only for pattern
+matching**, never in the actual private source text or W16 record hash.
+The evidence-risk checks also look for claims such as an already-completed
+comparison, confirmation of an event, and unconditional evidence-result
+assertions. The known conditional `If the evidence supports ...`
+case is expressly not promoted by the new result check.
+
+These rules may create false positives. New flags simply prioritize
+independent source/trace review, preserve the original strict HOLD
+manifest, and never authorize training. Any full-corpus after-change
+counts require a separate new-directory private screening execution;
+do not substitute static pattern estimates for actual screen outputs.
