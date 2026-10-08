@@ -59,6 +59,7 @@ export async function startBotFromEnv(env: NodeJS.ProcessEnv = process.env): Pro
     {
       token,
       slashOnly: options.slashOnly,
+    mentionOnly: options.mentionOnly,
       ...(options.slashCommandGuildId ? { slashCommandGuildId: options.slashCommandGuildId } : {}),
     },
     logger,
