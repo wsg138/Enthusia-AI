@@ -71,6 +71,22 @@ export function buildAiSlashCommand(): { name: string; definition: unknown } {
   return { name: AI_COMMAND_NAME, definition: definition.toJSON() };
 }
 
+/**
+ * Upsert only the /ai command without replacing any unrelated commands.
+ * Safe even if other services register commands for this application.
+ */
+export async function upsertAiSlashCommand(
+  rest: Pick<REST, 'post'>,
+  applicationId: string,
+  guildId?: string,
+): Promise<void> {
+  const { definition } = buildAiSlashCommand();
+  const route = guildId !== undefined
+    ? Routes.applicationGuildCommands(applicationId, guildId)
+    : Routes.applicationCommands(applicationId);
+  await rest.post(route, { body: definition });
+}
+
 function channelKindOf(channel: Message['channel']): DiscordChannelKind {
   if (channel.isDMBased()) {
     return 'dm';
@@ -345,12 +361,9 @@ export class DiscordJsClientAdapter implements DiscordClientPort {
     if (this.readyUserId === null) {
       throw new Error('cannot register slash commands before the client is ready');
     }
-    const { definition } = buildAiSlashCommand();
-    const route =
-      this.options.slashCommandGuildId !== undefined
-        ? Routes.applicationGuildCommands(this.readyUserId, this.options.slashCommandGuildId)
-        : Routes.applicationCommands(this.readyUserId);
-    await this.rest.put(route, { body: [definition] });
+    await upsertAiSlashCommand(
+      this.rest, this.readyUserId, this.options.slashCommandGuildId,
+    );
     this.logger.info(
       { guildScoped: this.options.slashCommandGuildId !== undefined },
       'registered /ai slash command',
