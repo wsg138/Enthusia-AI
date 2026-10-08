@@ -15,8 +15,8 @@ const PIECLOAK_SOURCE = /^github:wsg138\/PieCloak@([a-f0-9]{40}):README\.md$/;
  * The pinned README remains the proof for each documented PieCloak rule.
  */
 export function formatRichAgentResponse(response: AgentResponse): DiscordRichResponse | null {
-  const source = response.sources.find((s) => PIECLOAK_SOURCE.test(s.artifactId));
-  const match = source && PIECLOAK_SOURCE.exec(source.artifactId);
+  const source = response.sources.find((s) => typeof s.artifactId === 'string' && PIECLOAK_SOURCE.test(s.artifactId));
+  const match = source?.artifactId ? PIECLOAK_SOURCE.exec(source.artifactId) : null;
   const isPieCloak = match !== null && match !== undefined;
   let description = response.text.trim();
   if (!description || description.length > 6000 || description.includes(String.fromCharCode(96).repeat(3))) return null;
