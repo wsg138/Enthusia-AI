@@ -129,6 +129,23 @@ describe('mention lifecycle in isolated test channel', () => {
     expect((await bot.handleMessage(message)).outcome).toBe('responded');
     expect(port.richMessages).toHaveLength(1);
   });
+  it('uses an error reaction if the Gateway fails, without leaving thinking behind', async () => {
+    const port = new RichTestPort();
+    const failingGateway = { sendChat: async () => { throw new Error('synthetic gateway outage'); } };
+    const bot = new EnthusiaAiDiscordBot(port, failingGateway, testOptions({
+      mentionOnly: true,
+      allowedGuildIds: ['test-guild'],
+      allowedChannelIds: ['ai-testing'],
+    }), nullLogger());
+    const { message } = botFor(port);
+    const result = await bot.handleMessage(message);
+    expect(result.outcome).toBe('gateway-error');
+    expect(port.reactions).toEqual(['+👀', '-👀', '+🤔', '-👀', '-🤔', '+❌']);
+    expect(port.richMessages).toHaveLength(0);
+    expect(port.sentMessages).toHaveLength(1);
+    expect(port.sentMessages[0]?.message.content).not.toContain('synthetic gateway outage');
+  });
+
   it('renders /ai ask as a rich reply without status reactions', async () => {
     const port = new RichTestPort();
     const { bot } = botFor(port);
