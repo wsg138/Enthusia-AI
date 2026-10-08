@@ -88,8 +88,8 @@ describe('PieCloak public documentation pilot (synthetic, no network)', () => {
     const answer = await new PieCloakPublicDocsPilot(client).resolve(sample());
     expect(answer?.text).toContain('24 blocks');
     expect(answer?.text).toContain('48 blocks');
-    expect(answer?.text).toContain('3 occluding');
-    expect(answer?.text).toContain('not proof of the currently deployed plugin');
+    expect(answer?.text).toContain('3 blocking samples');
+    expect(answer?.text).toContain('not a live-server health check');
     expect(answer?.text).toContain('/blob/' + COMMIT + '/README.md');
     expect(answer?.escalation).toBeNull();
     expect(answer?.sources).toHaveLength(1);
