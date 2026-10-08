@@ -32,9 +32,13 @@ Enthusia AI **REQUESTS** actions; the Ticket Bot validates and executes them.
   `parseTicketEvent` (zod-validated), `TicketEventRouter` (typed + wildcard
   subscriptions), duplicate `event_id` suppression, and `verifyWebhookSignature`
   (HMAC-SHA256).
-- **`src/event-dedup.ts`** — an atomic claim interface for at-least-once webhook
-  delivery. The default store is bounded and process-local for tests/shadow use;
-  production ingress must inject a durable uniqueness-backed implementation.
+- **`src/event-dedup.ts`** — claim/complete/release interface for retryable webhook
+  delivery. The default bounded store is process-local for tests/shadow use.
+  A subscriber failure releases the claim and causes ingest to reject, so
+  callers can retry. Production ingress must inject a durable store with
+  **expiring in-flight leases**, atomic claims, permanent completed markers,
+  and recovery after process crashes. A uniqueness-only store is insufficient.
+  At-least-once delivery requires each downstream handler to be idempotent.
 - **`src/context.ts`** — `ticketToAgentContext`: pure adapter from ticket data to
   agent context (no I/O, no mutation). Classifies output as `PLAYER_SELF` (§17);
   the orchestrator's visibility ceiling decides disclosure.
