@@ -34,6 +34,7 @@ import type {
   DiscordClientPort,
   DiscordMemberInfo,
   DiscordMessageRef,
+  DiscordRichResponse,
   DiscordRoleInfo,
   DiscordSlashAskRef,
   OutgoingDiscordMessage,
@@ -295,6 +296,7 @@ export class DiscordJsClientAdapter implements DiscordClientPort {
    * can defer/edit/follow-up. WeakMap: no lifetime beyond the interaction.
    */
   private readonly rawInteractions = new WeakMap<DiscordSlashAskRef, ChatInputCommandInteraction>();
+  private readonly rawMessages = new WeakMap<DiscordMessageRef, Message>();
 
   constructor(
     private readonly options: DiscordJsClientOptions,
@@ -323,6 +325,7 @@ export class DiscordJsClientAdapter implements DiscordClientPort {
       }
       try {
         const normalized = normalizeMessage(message);
+        this.rawMessages.set(normalized, message);
         void Promise.resolve(this.messageHandler(normalized)).catch((error: unknown) => {
           this.logger.error({ error: String(error) }, 'message handler failed');
         });
@@ -380,11 +383,36 @@ export class DiscordJsClientAdapter implements DiscordClientPort {
     }
     const sent = await channel.send({
       content: message.content,
+      allowedMentions: { parse: [] },
       ...(message.replyToMessageId !== undefined
         ? { reply: { messageReference: message.replyToMessageId } }
         : {}),
     });
     return sent.id;
+  }
+
+  async sendRichMessage(channelId: Snowflake, payload: DiscordRichResponse, replyToMessageId?: Snowflake): Promise<Snowflake> {
+    const channel = await this.client.channels.fetch(channelId);
+    if (!channel || !channel.isSendable()) throw new Error('target channel is not sendable');
+    const sent = await channel.send({
+      content: payload.content ?? '',
+      embeds: [payload.embed],
+      allowedMentions: { parse: [], repliedUser: false },
+      ...(replyToMessageId ? { reply: { messageReference: replyToMessageId } } : {}),
+    });
+    return sent.id;
+  }
+
+  async addMessageReaction(message: DiscordMessageRef, emoji: string): Promise<void> {
+    const raw = this.rawMessages.get(message);
+    if (!raw) throw new Error('incoming message is not available for reaction');
+    await raw.react(emoji);
+  }
+
+  async removeMessageReaction(message: DiscordMessageRef, emoji: string): Promise<void> {
+    const raw = this.rawMessages.get(message);
+    if (!raw || !this.readyUserId) return;
+    await raw.reactions.resolve(emoji)?.users.remove(this.readyUserId);
   }
 
   async deferSlashAsk(interaction: DiscordSlashAskRef): Promise<void> {
@@ -405,6 +433,17 @@ export class DiscordJsClientAdapter implements DiscordClientPort {
     for (const chunk of rest) {
       await raw.followUp(chunk);
     }
+  }
+
+  async respondToSlashAskRich(interaction: DiscordSlashAskRef, payload: DiscordRichResponse): Promise<void> {
+    const raw = this.rawInteractions.get(interaction);
+    if (!raw) throw new Error('slash interaction is missing its raw Discord interaction');
+    if (!raw.deferred && !raw.replied) await raw.deferReply();
+    await raw.editReply({
+      content: payload.content ?? '',
+      embeds: [payload.embed],
+      allowedMentions: { parse: [] },
+    });
   }
 
   async registerSlashCommands(): Promise<void> {
