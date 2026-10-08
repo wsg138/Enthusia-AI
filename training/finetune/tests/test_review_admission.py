@@ -19,6 +19,8 @@ def worker_record(cid="W01-0001", *, family="family-A", seed="fake-seed-A"):
         "candidate_id": cid,
         "worker_origin": "ticket_worker_v1",
         "source_candidate_sha256": "a" * 64,
+        "source_file_sha256": "b" * 64,
+        "source_revision": "synthetic-private-fixture-revision",
         "source_type": "synthetic",
         "visibility": "public",
         "scenario": "Fictional ticket about a stall",
@@ -108,6 +110,24 @@ class ManifestAdmissionTests(unittest.TestCase):
         self.assertIsNone(split)
         self.assertIn("digest mismatch", why)
 
+    def test_source_file_and_revision_mismatch(self):
+        r = worker_record()
+        gate = ReviewAdmission(manifest(entry(r)), digest="a"*64)
+        for key, newval in (("source_file_sha256", "c"*64),
+                            ("source_revision", "different-version")):
+            with self.subTest(key=key):
+                altered = dict(r, **{key: newval})
+                split, why = gate.eligible_split(validate_record(altered))
+                self.assertIsNone(split)
+                self.assertIn("mismatch", why)
+
+    def test_approved_holdout_cannot_share_train_family(self):
+        a = worker_record("W01-0001", family="same-incident")
+        b = worker_record("W02-0002", family="same-incident")
+        with self.assertRaisesRegex(AdmissionError, "crosses approved data splits"):
+            ReviewAdmission(manifest(entry(a, "train"),
+                entry(b, "holdout", approved_uses=["evaluation"])), digest="a"*64)
+
     def test_privacy_clearance_required(self):
         r = worker_record()
         gate = ReviewAdmission(manifest(entry(r, privacy_cleared=False)), digest="a"*64)
@@ -154,7 +174,7 @@ class ManifestAdmissionTests(unittest.TestCase):
     def test_family_crosses_splits_fail_closed(self):
         a = worker_record("W01-0001", family="incident-1")
         b = worker_record("W01-0002", family="incident-1")
-        with self.assertRaisesRegex(AdmissionError, "crosses train and validation"):
+        with self.assertRaisesRegex(AdmissionError, "crosses approved data splits"):
             ReviewAdmission(manifest(entry(a, "train"), entry(b, "validation")), digest="a"*64)
 
     def test_transitive_lineage_crosses_splits(self):
