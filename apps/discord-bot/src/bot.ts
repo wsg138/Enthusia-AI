@@ -118,6 +118,9 @@ export class EnthusiaAiDiscordBot {
 
   /** Full pipeline for an incoming message. Exposed for tests. */
   async handleMessage(message: DiscordMessageRef): Promise<HandleResult> {
+    if (!this.inAllowedScope(message.channel.guild?.id, message.channel.id)) {
+      return { outcome: 'ignored', reason: 'outside allowed test guild/channel' };
+    }
     const decision = decideTrigger(message, this.port.botUserId, this.options);
     const trigger = decision.trigger;
     if (trigger === null) {
@@ -139,6 +142,9 @@ export class EnthusiaAiDiscordBot {
 
   /** Full pipeline for a `/ai ask` invocation. Exposed for tests. */
   async handleSlashAsk(interaction: DiscordSlashAskRef): Promise<HandleResult> {
+    if (!this.inAllowedScope(interaction.channel.guild?.id, interaction.channel.id)) {
+      return { outcome: 'ignored', reason: 'outside allowed test guild/channel' };
+    }
     const decision = decideSlashTrigger(interaction.question);
     return this.respondToTrigger(
       decision,
@@ -147,6 +153,16 @@ export class EnthusiaAiDiscordBot {
       () => extractSlashAskContext(interaction, this.options),
       (chunks) => this.port.respondToSlashAsk(interaction, chunks),
     );
+  }
+
+  private inAllowedScope(guildId: string | undefined, channelId: string): boolean {
+    const allowedGuilds = this.options.allowedGuildIds;
+    if (allowedGuilds.length > 0 && (guildId === undefined || !allowedGuilds.includes(guildId))) {
+      return false;
+    }
+    const channels = this.options.allowedChannelIds;
+    if (channels.length > 0 && !channels.includes(channelId)) return false;
+    return true;
   }
 
   /**
