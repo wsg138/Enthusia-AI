@@ -63,6 +63,12 @@ class IntakeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"approval"):
             check_result(x,a)
 
+    def test_string_approval_rejected(self):
+        a=assignment(1)
+        x=result(a);x["rights_cleared"]="true"
+        with self.assertRaisesRegex(ValueError,"approval"):
+            check_result(x,a)
+
     def test_non_hold_status_rejected(self):
         a=assignment(1)
         x=result(a);x["review_status"]="APPROVED"
