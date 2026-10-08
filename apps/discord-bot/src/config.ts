@@ -37,6 +37,8 @@ export interface DiscordBotOptions {
   useMockGateway: boolean;
   /** HTTP timeout for gateway calls, in milliseconds. */
   gatewayTimeoutMs: number;
+  /** Use only Guilds intent, slash commands; do not read ordinary messages. */
+  slashOnly: boolean;
   /** Optional safety scope for test deployments; empty means standard behavior. */
   allowedGuildIds: string[];
   /** Optional channel allowlist for ALL response triggers, including slash. */
@@ -99,6 +101,7 @@ export function resolveDiscordBotOptions(env: NodeJS.ProcessEnv = process.env): 
       : {}),
     useMockGateway: envBool(env['ENTHUSIA_DISCORD_USE_MOCK_GATEWAY'], false),
     gatewayTimeoutMs: envInt(env['ENTHUSIA_DISCORD_GATEWAY_TIMEOUT_MS'], 30_000),
+    slashOnly: envBool(env['ENTHUSIA_DISCORD_SLASH_ONLY'], false),
     allowedGuildIds: commaSeparatedList(env['ENTHUSIA_DISCORD_ALLOWED_GUILD_IDS']),
     allowedChannelIds: commaSeparatedList(env['ENTHUSIA_DISCORD_ALLOWED_CHANNEL_IDS']),
     aiChannelIds: commaSeparatedList(env['ENTHUSIA_DISCORD_AI_CHANNELS']),
