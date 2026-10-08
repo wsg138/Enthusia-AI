@@ -244,9 +244,9 @@ class ReviewAdmission:
         # A source-level worker rejection is never cleared by approving one
         # draft slice. Multi-slice admissions require a pinned PRIVATE ledger,
         # even if the approved target hash, reviewer and rights are plausible.
-        if SLICE_ID.fullmatch(cid):
+        if SLICE_ID.fullmatch(cid) or "source_candidate_id" in record:
             if self.quarantine is None:
-                return None, "multi-slice ticket requires private source quarantine ledger"
+                return None, "source-ticket candidate requires private source quarantine ledger"
             blocked = self.quarantine.reason(record)
             if blocked is not None:
                 return None, blocked
