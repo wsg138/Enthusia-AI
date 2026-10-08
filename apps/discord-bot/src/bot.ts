@@ -27,12 +27,14 @@ import type { EnthusiaLogger } from '@enthusia/logging';
 import type { DiscordBotOptions } from './config.js';
 import { extractMessageContext, extractSlashAskContext } from './context.js';
 import { formatAgentResponse } from './formatting.js';
+import { formatRichAgentResponse } from './rich-formatting.js';
 import type { AiGatewayClient } from './gateway-client.js';
 import { decideSlashTrigger, decideTrigger, type TriggerDecision } from './policy.js';
 import { DiscordRateLimitPolicy } from './rate-limit.js';
 import type {
   DiscordClientPort,
   DiscordMessageRef,
+  DiscordRichResponse,
   DiscordSlashAskRef,
   Snowflake,
 } from './types.js';
@@ -56,7 +58,7 @@ export interface HandleResult {
 const FALLBACK_GATEWAY_ERROR =
   'Sorry — I could not reach the AI right now. Please try again in a moment.';
 const FALLBACK_UNEXPECTED_ERROR =
-  'Sorry — something went wrong on my end. The team has been notified via logs; please try again.';
+  'Sorry — something went wrong on my end. Please try again in a moment.';
 
 function greetingFor(displayName: string | undefined, botName: string): string {
   const who = displayName ? ` ${displayName}` : '';
@@ -126,21 +128,43 @@ export class EnthusiaAiDiscordBot {
     }
     const decision = decideTrigger(message, this.port.botUserId, this.options);
     const trigger = decision.trigger;
-    if (trigger === null) {
+    if (trigger === null || (this.options.mentionOnly && trigger !== 'mention')) {
       this.logger.debug({ reason: decision.reason, messageId: message.id }, 'message ignored');
       return { outcome: 'ignored', reason: decision.reason };
     }
-    return this.respondToTrigger(
-      decision,
-      message.author.id,
-      message.author.displayName ?? message.author.username,
-      () => extractMessageContext(message, trigger, this.options),
-      (chunks) =>
-        this.port.sendMessage(message.channel.id, {
-          content: chunks[0] as string,
-          replyToMessageId: message.id,
-        }).then(() => this.sendRemainingChunks(message.channel.id, chunks.slice(1))),
-    );
+    // The original message gets best-effort status reactions. A failed
+    // reaction (missing permission, deleted message) must never block Q&A.
+    await this.tryReaction(message, '👀', true);
+    let result: HandleResult | undefined;
+    try {
+      result = await this.respondToTrigger(
+        decision,
+        message.author.id,
+        message.author.displayName ?? message.author.username,
+        () => extractMessageContext(message, trigger, this.options),
+        (chunks) =>
+          this.port.sendMessage(message.channel.id, {
+            content: chunks[0] as string,
+            replyToMessageId: message.id,
+          }).then(() => this.sendRemainingChunks(message.channel.id, chunks.slice(1))),
+        {
+          ...(this.port.sendRichMessage ? {
+            sendRich: (card: DiscordRichResponse) =>
+              this.port.sendRichMessage!(message.channel.id, card, message.id),
+          } : {}),
+          onGatewayStart: async () => {
+            await this.tryReaction(message, '👀', false);
+            await this.tryReaction(message, '🤔', true);
+          },
+        },
+      );
+      return result;
+    } finally {
+      await this.tryReaction(message, '👀', false);
+      await this.tryReaction(message, '🤔', false);
+      await this.tryReaction(message,
+        result?.outcome === 'responded' || result?.outcome === 'greeted' ? '✅' : '❌', true);
+    }
   }
 
   /** Full pipeline for a `/ai ask` invocation. Exposed for tests. */
@@ -157,6 +181,11 @@ export class EnthusiaAiDiscordBot {
       interaction.user.displayName ?? interaction.user.username,
       () => extractSlashAskContext(interaction, this.options),
       (chunks) => this.port.respondToSlashAsk(interaction, chunks),
+      {
+        ...(this.port.respondToSlashAskRich ? {
+          sendRich: (card: DiscordRichResponse) => this.port.respondToSlashAskRich!(interaction, card),
+        } : {}),
+      },
     );
   }
 
@@ -180,6 +209,10 @@ export class EnthusiaAiDiscordBot {
     displayName: string | undefined,
     extractContext: () => ReturnType<typeof extractMessageContext>,
     sendChunks: (chunks: string[]) => Promise<unknown>,
+    rich?: {
+      sendRich?: (card: DiscordRichResponse) => Promise<unknown>;
+      onGatewayStart?: () => Promise<void>;
+    },
   ): Promise<HandleResult> {
     const traceId = newTraceId();
     const log = this.logger.withTraceId(traceId);
@@ -222,6 +255,7 @@ export class EnthusiaAiDiscordBot {
     }
 
     // 4. Gateway round-trip.
+    await rich?.onGatewayStart?.();
     let response: AgentResponse;
     try {
       log.info(
@@ -243,8 +277,22 @@ export class EnthusiaAiDiscordBot {
       { userId, chunks: chunks.length, responseTraceId: response.traceId },
       'sending AgentResponse to Discord',
     );
-    await sendChunks(chunks);
+    const card = rich?.sendRich ? formatRichAgentResponse(response) : null;
+    if (card && rich?.sendRich) {
+      await rich.sendRich(card);
+    } else {
+      await sendChunks(chunks);
+    }
     return { outcome: 'responded', traceId };
+  }
+
+  private async tryReaction(message: DiscordMessageRef, emoji: string, add: boolean): Promise<void> {
+    try {
+      if (add) await this.port.addMessageReaction?.(message, emoji);
+      else await this.port.removeMessageReaction?.(message, emoji);
+    } catch {
+      this.logger.debug({ messageId: message.id, emoji }, 'message status reaction unavailable');
+    }
   }
 
   private async sendRemainingChunks(channelId: Snowflake, chunks: string[]): Promise<void> {
