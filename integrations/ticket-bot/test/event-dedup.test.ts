@@ -67,11 +67,45 @@ describe('TicketEventRouter delivery deduplication', () => {
     expect(router.duplicatesSuppressed).toBe(0);
   });
 
+  it('releases a failed delivery so it can be retried', async () => {
+    const errors: string[] = [];
+    const router = new TicketEventRouter({
+      onHandlerError: (error) => errors.push(String(error)),
+    });
+    let attempts = 0;
+    router.subscribe('ticket.closed', () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error('transient write failure');
+    });
+    await expect(router.ingest(closedEvent('retry-1'))).rejects.toThrow(
+      'retry delivery required',
+    );
+    await expect(router.ingest(closedEvent('retry-1'))).resolves.toBeDefined();
+    await router.ingest(closedEvent('retry-1'));
+    expect(attempts).toBe(2);
+    expect(router.duplicatesSuppressed).toBe(1);
+    expect(errors).toHaveLength(1);
+  });
+
+  it('refuses to evict active claims under bounded capacity', async () => {
+    const store = new InMemoryTicketEventDeduplicationStore(1);
+    expect(await store.claim('ticket-bot:a')).toBe(true);
+    await expect(store.claim('ticket-bot:b')).rejects.toThrow(
+      'too many concurrent ticket event claims',
+    );
+    expect(store.size).toBe(1);
+    await store.release('ticket-bot:a');
+    expect(await store.claim('ticket-bot:b')).toBe(true);
+    await store.complete('ticket-bot:b');
+  });
+
   it('fails closed when the injected deduplication store cannot claim', async () => {
     const store: TicketEventDeduplicationStore = {
       claim: async () => {
         throw new Error('dedup store unavailable');
       },
+      complete: async () => undefined,
+      release: async () => undefined,
     };
     const router = new TicketEventRouter({ deduplicationStore: store });
     let calls = 0;
@@ -89,8 +123,11 @@ describe('TicketEventRouter delivery deduplication', () => {
     const store = new InMemoryTicketEventDeduplicationStore(2);
 
     expect(await store.claim('ticket-bot:a')).toBe(true);
+    await store.complete('ticket-bot:a');
     expect(await store.claim('ticket-bot:b')).toBe(true);
+    await store.complete('ticket-bot:b');
     expect(await store.claim('ticket-bot:c')).toBe(true);
+    await store.complete('ticket-bot:c');
     expect(store.size).toBe(2);
 
     expect(await store.claim('ticket-bot:a')).toBe(true);
