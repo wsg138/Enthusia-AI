@@ -146,6 +146,17 @@ describe('mention lifecycle in isolated test channel', () => {
     expect(port.sentMessages[0]?.message.content).not.toContain('synthetic gateway outage');
   });
 
+  it('falls back to plain text if Discord refuses the embed permission', async () => {
+    const port = new RichTestPort();
+    port.sendRichMessage = async () => { throw new Error('Missing Embed Links permission'); };
+    const { bot, message } = botFor(port);
+    const result = await bot.handleMessage(message);
+    expect(result.outcome).toBe('responded');
+    expect(port.sentMessages).toHaveLength(1);
+    expect(port.sentMessages[0]?.message.content).toContain('PieCloak');
+    expect(port.reactions.at(-1)).toBe('+✅');
+  });
+
   it('renders /ai ask as a rich reply without status reactions', async () => {
     const port = new RichTestPort();
     const { bot } = botFor(port);
