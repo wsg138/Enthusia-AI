@@ -101,6 +101,10 @@ class StagingFixtureTests(unittest.TestCase):
         self.assertEqual(len(result), 2)
 
     def test_end_to_end_all_hold_and_non_overwrite(self):
+        w16_root = (Path(os.environ["ENTHUSIA_W16_ROOT"])
+                    if "ENTHUSIA_W16_ROOT" in os.environ
+                    else Path(__file__).resolve().parents[2]/"datasets")
+        sys.path.insert(0, str(w16_root))
         from enthusia_datasets.record import validate_record
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
