@@ -942,14 +942,15 @@ describe('ticket events', () => {
     };
     const off = router.subscribe('ticket.updated', good);
     router.subscribe('ticket.updated', bad);
-    await router.ingest({
+    await expect(router.ingest({
       type: 'ticket.updated',
       event_id: 'e-5',
       ticket_id: 'T-1234',
       occurred_at: '2026-10-03T10:00:00.000Z',
       source: 'ticket-bot',
       payload: { status: 'pending' },
-    });
+    })).rejects.toThrow('retry delivery required');
+    // Other subscribers still execute, but the delivery is not falsely acked.
     expect(seen).toEqual(['good']);
     expect(errors).toHaveLength(1);
     off();
