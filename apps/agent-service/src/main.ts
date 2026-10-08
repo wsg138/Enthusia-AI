@@ -9,6 +9,7 @@ import {
   redactedAgentServiceConfig,
 } from './config.js';
 import { InferenceReasoner } from './reasoner.js';
+import { PieCloakPublicDocsPilot } from './public-docs.js';
 import { loadConfiguredFamiliarityRuntime } from './familiarity.js';
 import {
   createAgentRuntime,
@@ -23,6 +24,11 @@ import { StaleTicketDecisionService } from './stale-ticket.js';
 async function main(): Promise<void> {
   const config = loadAgentServiceConfig();
   const inferenceConfig = loadInferenceConfig();
+  const publicDocsOptIn = process.env['ENTHUSIA_TEST_PIECLOAK_PUBLIC_DOCS'] === '1';
+  if (publicDocsOptIn && config.nodeEnv !== 'development') {
+    throw new Error('Public documentation pilot is restricted to development test runtimes.');
+  }
+  const publicDocs = publicDocsOptIn ? new PieCloakPublicDocsPilot() : undefined;
   const logger = createLogger({
     name: config.serviceName,
     level: config.logLevel,
@@ -107,6 +113,7 @@ async function main(): Promise<void> {
       ...familiarity.tools,
     ],
     {
+      ...(publicDocs !== undefined ? { publicSourceResolver: (request: import('@enthusia/agent-core').ResolvedChatRequest) => publicDocs.resolve(request) } : {}),
       ...(familiarity.onVerifiedTopicHelp !== undefined
         ? { onVerifiedTopicHelp: familiarity.onVerifiedTopicHelp }
         : {}),
