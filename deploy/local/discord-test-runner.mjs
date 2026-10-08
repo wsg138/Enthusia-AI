@@ -76,9 +76,10 @@ async function main() {
     ...shared,
     ENTHUSIA_AGENT_PORT: '4200',
     ENTHUSIA_AGENT_API_KEYS: keyAgent,
+    ENTHUSIA_TEST_PIECLOAK_PUBLIC_DOCS: '1',
   });
   await waitReady('http://127.0.0.1:4200/health/ready', launched[0], 30000);
-  console.log('[test] Agent ready. No live tools or private data are connected.');
+  console.log('[test] Agent ready. Only the opt-in public PieCloak README pilot is enabled; no private/live server tools.');
 
   spawnChild('gateway', 'apps/ai-gateway/dist/main.js', {
     ...shared,
