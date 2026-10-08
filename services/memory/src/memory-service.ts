@@ -50,6 +50,7 @@ import type {
   ReportConflictInput,
   StoredRevision,
   SupersedeInput,
+  VerifyMemoryOptions,
 } from './types.js';
 import type { MemoryEvidence, MemoryKey, MemoryRevision } from './types.js';
 
@@ -882,11 +883,31 @@ export class MemoryService {
   }
 
   /**
-   * Re-verify the active revision against its evidence (§21 memory.verified).
+   * All verifications require independently confirmed source/version data
+   * already supporting this exact revision. A source-version change must
+   * create a new revision through supersede(), not reverify old evidence.
    */
+  private requireReverificationEvidence(
+    revisionId: string,
+    options: VerifyMemoryOptions,
+  ): void {
+    const source = options.confirmedSource;
+    if (!source?.sourceArtifactId?.trim() || !source.sourceVersion?.trim()) {
+      throw new MemoryValidationError('Verification requires a confirmed source and version');
+    }
+    const evidence = this.stmtEvidenceForRevision.all(revisionId) as EvidenceRow[];
+    const matches = evidence.some((row) =>
+      row.source_artifact_id === source.sourceArtifactId &&
+      row.source_version === source.sourceVersion &&
+      [EvidenceRole.PRIMARY, EvidenceRole.SUPERSEDING].includes(row.evidence_role as EvidenceRole),
+    );
+    if (!matches) throw new MemoryValidationError('Confirmed source does not match primary evidence');
+  }
+
+  /** Re-verify against source evidence, never promote STALE by assertion alone. */
   async verify(
     ref: MemoryRef,
-    options: { authority: string },
+    options: VerifyMemoryOptions,
   ): Promise<StoredRevision> {
     return this.withKeyLock(ref, () => {
       const keyRow = this.getKeyRowOrThrow(ref);
@@ -896,6 +917,16 @@ export class MemoryService {
         if (!active) {
           throw new NoActiveRevisionError(refLabel(ref));
         }
+        if (!options.authority?.trim()) {
+          throw new MemoryValidationError('verify requires an authority');
+        }
+        if (options.expectedRevisionId && options.expectedRevisionId !== active.id) {
+          throw new ConcurrentModificationError(options.expectedRevisionId, active.id);
+        }
+        if (active.status === SourceStatus.CONFLICTED) {
+          throw new MemoryValidationError('Conflicted memory requires conflict resolution');
+        }
+        this.requireReverificationEvidence(active.id, options);
         const at = nowIso();
         const revalidated = active.status === SourceStatus.STALE;
 
@@ -928,6 +959,7 @@ export class MemoryService {
         const event = this.recordEvent('memory.verified', key, active.id, {
           authority: options.authority,
           revalidated,
+          ...(revalidated ? { confirmedSource: options.confirmedSource } : {}),
         });
         const stored = this.mapRevision(
           this.stmtRevisionById.get(active.id) as RevisionRow,

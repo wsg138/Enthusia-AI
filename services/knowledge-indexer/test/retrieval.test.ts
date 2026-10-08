@@ -319,6 +319,48 @@ describe('HybridRanker', () => {
 // ---------------------------------------------------------------------------
 
 describe('KnowledgeRetrievalEngine — current-only default', () => {
+  it('rechecks status after an asynchronous query and excludes newly stale hits', async () => {
+    const dimension = 64;
+    const base = new HashingEmbeddingProvider({ dimension });
+    let releaseQuery!: () => void;
+    let queryStarted!: () => void;
+    const blocked = new Promise<void>((resolve) => { releaseQuery = resolve; });
+    const started = new Promise<void>((resolve) => { queryStarted = resolve; });
+    const provider: EmbeddingProvider = {
+      name: 'delayed-query',
+      dimension,
+      version: 'delayed-query-test',
+      async embed(texts: string[]): Promise<number[][]> {
+        if (texts[0] === 'server status') {
+          queryStarted();
+          await blocked;
+        }
+        return base.embed(texts);
+      },
+    };
+    const engine = new KnowledgeRetrievalEngine({
+      chunkStore: new SqliteChunkStore(':memory:'),
+      vectorStore: new InMemoryVectorStore(dimension),
+      lexicalIndex: new InMemoryLexicalIndex(),
+      embeddingProvider: provider,
+    });
+    await engine.indexChunks([makeChunk({
+      chunkId: 'runtime#0',
+      artifactId: 'runtime',
+      text: 'server status is online',
+    })]);
+
+    const inFlight = engine.search('server status', PUBLIC_SEARCH);
+    await started;
+    await engine.updateArtifactStatus('runtime', SourceStatus.STALE);
+    releaseQuery();
+    const result = await inFlight;
+    expect(result.results).toEqual([]);
+    expect(result.total).toBe(0);
+    engine.close();
+  });
+
+
   it('excludes SUPERSEDED chunks by default, even when they match best', async () => {
     const engine = makeEngine();
     await engine.indexChunks([
@@ -475,6 +517,125 @@ describe('KnowledgeRetrievalEngine — visibility', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Engine: current-production deployment verification
+// ---------------------------------------------------------------------------
+
+describe('KnowledgeRetrievalEngine — production deployment verification', () => {
+  it('preserves source deployment metadata on indexed chunks', async () => {
+    const engine = makeEngine();
+    const [chunk] = await engine.indexArtifactText(
+      {
+        artifactId: 'github-file',
+        sourceType: SourceType.GITHUB,
+        sourceLocator: 'github:wsg138/Example:config.yml',
+        component: 'github-indexer',
+        visibility: Visibility.PUBLIC,
+        authority: 'github:wsg138/Example',
+        version: 'blob-sha',
+        observedTime: '2026-10-08T12:00:00.000Z',
+        indexedTime: '2026-10-08T12:00:01.000Z',
+        current: true,
+        parserVersion: 'github-indexer/1.0',
+        contentMetadata: {
+          contentType: 'text/yaml',
+          extra: {
+            branch: 'main',
+            commitSha: 'main-sha',
+            deploymentState: 'git-main',
+          },
+        },
+      },
+      SourceStatus.CURRENT,
+      'feature.enabled: true',
+    );
+
+    expect(chunk?.metadata).toMatchObject({
+      branch: 'main',
+      commitSha: 'main-sha',
+      deploymentState: 'git-main',
+      contentType: 'text/yaml',
+      parserVersion: 'github-indexer/1.0',
+      sourceObservedTime: '2026-10-08T12:00:00.000Z',
+    });
+    engine.close();
+  });
+
+  it('fails closed on GitHub main when deployed SHA is absent or mismatched', async () => {
+    const engine = makeEngine();
+    await engine.indexChunks([
+      makeChunk({
+        chunkId: 'git#0',
+        artifactId: 'git-file',
+        sourceType: SourceType.GITHUB,
+        component: 'github-indexer',
+        authority: 'github:wsg138/Example',
+        sourceLocator: 'github:wsg138/Example:src/Feature.java',
+        text: 'production feature toggle is enabled',
+        metadata: { commitSha: 'main-sha', deploymentState: 'git-main' },
+      }),
+    ]);
+
+    const sourceView = await engine.search('production feature toggle', PUBLIC_SEARCH);
+    expect(sourceView.results.map((hit) => hit.chunk.chunkId)).toEqual(['git#0']);
+    expect(sourceView.productionMode).toBe(false);
+
+    const unproven = await engine.search('production feature toggle', {
+      ...PUBLIC_SEARCH,
+      production: { deployedGitShas: {} },
+    });
+    expect(unproven.results).toEqual([]);
+    expect(unproven.productionMode).toBe(true);
+
+    const mismatch = await engine.search('production feature toggle', {
+      ...PUBLIC_SEARCH,
+      production: { deployedGitShas: { 'github:wsg138/Example': 'deployed-sha' } },
+    });
+    expect(mismatch.results).toEqual([]);
+
+    const exact = await engine.search('production feature toggle', {
+      ...PUBLIC_SEARCH,
+      production: { deployedGitShas: { 'github:wsg138/Example': 'MAIN-SHA' } },
+    });
+    expect(exact.results.map((hit) => hit.chunk.chunkId)).toEqual(['git#0']);
+    engine.close();
+  });
+
+  it('keeps the visibility ceiling when an exact deployed SHA matches', async () => {
+    const engine = makeEngine();
+    await engine.indexChunks([
+      makeChunk({
+        chunkId: 'staff-git#0',
+        artifactId: 'staff-git',
+        sourceType: SourceType.GITHUB,
+        visibility: Visibility.STAFF,
+        component: 'github-indexer',
+        authority: 'github:wsg138/InternalPlugin',
+        sourceLocator: 'github:wsg138/InternalPlugin:src/Internal.java',
+        text: 'internal production implementation detail',
+        metadata: { commitSha: 'deployed-sha', deploymentState: 'git-main' },
+      }),
+    ]);
+
+    const publicResult = await engine.search('production implementation detail', {
+      visibilityCeiling: Visibility.PUBLIC,
+      production: {
+        deployedGitShas: { 'github:wsg138/InternalPlugin': 'deployed-sha' },
+      },
+    });
+    expect(publicResult.results).toEqual([]);
+
+    const staffResult = await engine.search('production implementation detail', {
+      visibilityCeiling: Visibility.STAFF,
+      production: {
+        deployedGitShas: { 'github:wsg138/InternalPlugin': 'deployed-sha' },
+      },
+    });
+    expect(staffResult.results.map((hit) => hit.chunk.chunkId)).toEqual(['staff-git#0']);
+    engine.close();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Engine: metadata filters, provenance, pagination
 // ---------------------------------------------------------------------------
 
@@ -609,6 +770,24 @@ describe('KnowledgeRetrievalEngine — indexing and persistence', () => {
     engine.close();
   });
 
+  it('refuses to publish CURRENT chunks from a withdrawn source artifact', async () => {
+    const engine = makeEngine();
+    await expect(engine.indexArtifactText({
+      artifactId: 'withdrawn-file',
+      sourceType: SourceType.DOCUMENT,
+      sourceLocator: 'doc:withdrawn',
+      component: 'knowledge-indexer',
+      visibility: Visibility.PUBLIC,
+      authority: 'staff-approved-docs',
+      version: 'v1',
+      observedTime: '2026-10-08T12:00:00.000Z',
+      indexedTime: '2026-10-08T12:00:01.000Z',
+      current: false,
+    }, SourceStatus.CURRENT, 'withdrawn internal command')).rejects.toThrow(/non-current source/);
+    expect((await engine.search('withdrawn internal command', PUBLIC_SEARCH)).total).toBe(0);
+    engine.close();
+  });
+
   it('keeps the previous searchable state when re-embedding fails', async () => {
     const dimension = 64;
     const baseProvider = new HashingEmbeddingProvider({ dimension });
@@ -667,6 +846,32 @@ describe('KnowledgeRetrievalEngine — indexing and persistence', () => {
     expect((await engine.search('unique zebra phrase', PUBLIC_SEARCH)).total).toBe(0);
     expect(engine.indexedCount()).toBe(0);
     engine.close();
+  });
+
+  it('retains deployment provenance when rebuilding SQLite indexes', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'k01-deployment-'));
+    const dbPath = join(dir, 'chunks.sqlite');
+    const engine = makeEngine(dbPath);
+    await engine.indexChunks([makeChunk({
+      chunkId: 'pinned#0',
+      artifactId: 'pinned',
+      sourceType: SourceType.GITHUB,
+      authority: 'github:wsg138/Example',
+      text: 'deployed behavior of /example',
+      metadata: { commitSha: 'commit-a', deploymentState: 'git-main' },
+    })]);
+    engine.close();
+
+    const restored = makeEngine(dbPath);
+    await restored.rebuildIndexes();
+    const options: SearchOptions = {
+      ...PUBLIC_SEARCH,
+      production: { deployedGitShas: { 'github:wsg138/Example': 'commit-b' } },
+    };
+    expect((await restored.search('deployed behavior', options)).results).toEqual([]);
+    options.production = { deployedGitShas: { 'github:wsg138/Example': 'commit-a' } };
+    expect((await restored.search('deployed behavior', options)).results).toHaveLength(1);
+    restored.close();
   });
 
   it('persists chunks to SQLite and rehydrates on rebuild', async () => {

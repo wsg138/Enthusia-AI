@@ -95,6 +95,17 @@ export interface RankWeights {
 
 export const DEFAULT_RANK_WEIGHTS: RankWeights = { vector: 0.5, lexical: 0.5 };
 
+/**
+ * Exact deployment evidence for current-production retrieval. GitHub source
+ * is not production evidence by itself: a GitHub chunk is eligible only when
+ * its indexed commit SHA exactly matches the deployed SHA supplied for that
+ * source authority.
+ */
+export interface ProductionSearchContext {
+  /** Exact deployed Git commit SHA keyed by chunk authority/repository identity. */
+  deployedGitShas: Readonly<Record<string, string>>;
+}
+
 /** Options for `KnowledgeRetrievalEngine.search`. */
 export interface SearchOptions {
   /**
@@ -105,6 +116,14 @@ export interface SearchOptions {
   visibilityCeiling: Visibility;
   /** Caller identity for PLAYER_SELF disclosure checks. */
   requester?: RequesterContext;
+  /**
+   * Current-production verification context. When present, GitHub chunks fail
+   * closed unless their indexed commit SHA exactly matches verified deployed
+   * evidence supplied for the chunk authority. This prevents Git main from
+   * being treated as production merely because it is CURRENT in the source
+   * registry.
+   */
+  production?: ProductionSearchContext;
   /**
    * Explicit opt-in for historical content. Default false → only CURRENT
    * chunks are eligible. When true, SUPERSEDED chunks become eligible and
@@ -160,6 +179,8 @@ export interface SearchResponse {
   effectiveStatuses: SourceStatus[];
   /** True when historical content was eligible. */
   historicalMode: boolean;
+  /** True when current-production deployment verification was enforced. */
+  productionMode: boolean;
 }
 
 /** Build the provenance block for a chunk. */

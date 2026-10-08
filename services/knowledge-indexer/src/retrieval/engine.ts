@@ -19,6 +19,7 @@
 
 import {
   SourceStatus,
+  SourceType,
   Visibility,
   canDisclose,
   type SourceArtifact,
@@ -143,6 +144,9 @@ export class KnowledgeRetrievalEngine {
     text: string,
     chunker?: Chunker,
   ): Promise<KnowledgeChunk[]> {
+    if (status === SourceStatus.CURRENT && !artifact.current) {
+      throw new Error('refusing CURRENT indexing of a non-current source artifact');
+    }
     const use = chunker ?? this.defaultChunker;
     if (!use) throw new Error('no chunker available: pass one or set defaultChunker');
     const cuts = use.chunk(text);
@@ -161,7 +165,8 @@ export class KnowledgeRetrievalEngine {
         chunkIndex: i,
         tokenCount: estimateTokens(cut.text),
       };
-      if (cut.heading !== undefined) chunk.metadata = { heading: cut.heading };
+      const metadata = chunkMetadata(artifact, cut.heading);
+      if (metadata !== undefined) chunk.metadata = metadata;
       return chunk;
     });
     return this.indexChunks(chunks);
@@ -213,7 +218,14 @@ export class KnowledgeRetrievalEngine {
     const effectiveStatuses = effectiveStatusSet(options);
 
     if (trimmed.length === 0) {
-      return { results: [], total: 0, query, effectiveStatuses, historicalMode: isHistorical(effectiveStatuses) };
+      return {
+        results: [],
+        total: 0,
+        query,
+        effectiveStatuses,
+        historicalMode: isHistorical(effectiveStatuses),
+        productionMode: options.production !== undefined,
+      };
     }
 
     // Pre-search eligibility: status + visibility + metadata filters.
@@ -221,7 +233,16 @@ export class KnowledgeRetrievalEngine {
     // are never scored.
     const eligible = new Set<string>();
     for (const [chunkId, chunk] of this.chunks) {
-      if (isEligible(chunk, effectiveStatuses, ceiling, options.requester, options.filters)) {
+      if (
+        isEligible(
+          chunk,
+          effectiveStatuses,
+          ceiling,
+          options.requester,
+          options.filters,
+          options.production?.deployedGitShas,
+        )
+      ) {
         eligible.add(chunkId);
       }
     }
@@ -257,6 +278,13 @@ export class KnowledgeRetrievalEngine {
     for (const r of ranked) {
       const chunk = this.chunks.get(r.chunkId);
       if (!chunk) continue; // index/store skew: never surface unknown chunks
+      // A source can become STALE, INVALID or SUPERSEDED while an async
+      // embedding/vector search is in flight. Recheck eligibility at publish
+      // time so the pre-search snapshot cannot leak withdrawn evidence.
+      if (!isEligible(
+        chunk, effectiveStatuses, ceiling, options.requester,
+        options.filters, options.production?.deployedGitShas,
+      )) continue;
       if (r.score < minScore) continue;
       const historical = chunk.status !== SourceStatus.CURRENT;
       const hit: RetrievalHit = {
@@ -273,7 +301,14 @@ export class KnowledgeRetrievalEngine {
 
     const total = hits.length;
     const results = hits.slice(offset, offset + limit);
-    return { results, total, query, effectiveStatuses, historicalMode };
+    return {
+      results,
+      total,
+      query,
+      effectiveStatuses,
+      historicalMode,
+      productionMode: options.production !== undefined,
+    };
   }
 
   /** Number of chunks currently searchable through this engine. */
@@ -312,8 +347,10 @@ function isEligible(
   ceiling: Visibility,
   requester: RequesterContext | undefined,
   filters: ChunkFilters | undefined,
+  deployedGitShas: Readonly<Record<string, string>> | undefined,
 ): boolean {
   if (!statuses.includes(chunk.status)) return false;
+  if (!isProductionEligible(chunk, deployedGitShas)) return false;
   // Visibility ceiling enforcement — before scoring, before the caller.
   const discloseOpts: { isSubject?: boolean; isStaff?: boolean } = {};
   if (requester?.isSubject !== undefined) discloseOpts.isSubject = requester.isSubject;
@@ -331,6 +368,56 @@ function isEligible(
     if (filters.sourceLocator !== undefined && chunk.sourceLocator !== filters.sourceLocator) return false;
   }
   return true;
+}
+
+function isProductionEligible(
+  chunk: KnowledgeChunk,
+  deployedGitShas: Readonly<Record<string, string>> | undefined,
+): boolean {
+  if (deployedGitShas === undefined || chunk.sourceType !== SourceType.GITHUB) {
+    return true;
+  }
+
+  const commitSha = metadataString(chunk.metadata, 'commitSha');
+  if (commitSha === undefined) return false;
+
+  const deployedSha = deployedGitShas[chunk.authority]?.trim();
+  if (!deployedSha) return false;
+
+  return commitSha.trim().toLowerCase() === deployedSha.toLowerCase();
+}
+
+function metadataString(
+  metadata: Record<string, unknown> | undefined,
+  key: string,
+): string | undefined {
+  const value = metadata?.[key];
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+}
+
+function chunkMetadata(
+  artifact: SourceArtifact,
+  heading: string | undefined,
+): Record<string, unknown> | undefined {
+  // Copy only the provenance fields required for retrieval. Parser extras
+  // may contain large or unsuitable values that should not be replicated.
+  const metadata: Record<string, unknown> = {
+    sourceObservedTime: artifact.observedTime,
+    sourceIndexedTime: artifact.indexedTime,
+  };
+  if (artifact.sourceType === SourceType.GITHUB) {
+    for (const field of ['branch', 'commitSha', 'deploymentState', 'blobSha']) {
+      const value = metadataString(artifact.contentMetadata?.extra, field);
+      if (value !== undefined) metadata[field] = value;
+    }
+  }
+  if (artifact.contentMetadata?.contentType !== undefined) {
+    metadata.contentType = artifact.contentMetadata.contentType;
+  }
+  if (artifact.parserVersion !== undefined) metadata.parserVersion = artifact.parserVersion;
+  if (heading !== undefined) metadata.heading = heading;
+
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
 
 function clampLimit(limit: number | undefined): number {
