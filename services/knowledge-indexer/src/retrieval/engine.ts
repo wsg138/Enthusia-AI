@@ -216,6 +216,7 @@ export class KnowledgeRetrievalEngine {
     const offset = Math.max(0, options.offset ?? 0);
     const minScore = options.minScore ?? 0;
     const effectiveStatuses = effectiveStatusSet(options);
+    const deployedGitShas = productionShas(options.production);
 
     if (trimmed.length === 0) {
       return {
@@ -240,7 +241,7 @@ export class KnowledgeRetrievalEngine {
           ceiling,
           options.requester,
           options.filters,
-          options.production?.deployedGitShas,
+          deployedGitShas,
         )
       ) {
         eligible.add(chunkId);
@@ -283,7 +284,7 @@ export class KnowledgeRetrievalEngine {
       // time so the pre-search snapshot cannot leak withdrawn evidence.
       if (!isEligible(
         chunk, effectiveStatuses, ceiling, options.requester,
-        options.filters, options.production?.deployedGitShas,
+        options.filters, deployedGitShas,
       )) continue;
       if (r.score < minScore) continue;
       const historical = chunk.status !== SourceStatus.CURRENT;
@@ -368,6 +369,17 @@ function isEligible(
     if (filters.sourceLocator !== undefined && chunk.sourceLocator !== filters.sourceLocator) return false;
   }
   return true;
+}
+
+function productionShas(
+  production: SearchOptions['production'],
+): Readonly<Record<string, string>> | undefined {
+  if (production === undefined) return undefined;
+  const shas = production?.deployedGitShas;
+  if (!shas || typeof shas !== 'object' || Array.isArray(shas)) {
+    throw new Error('production search requires deployedGitShas evidence');
+  }
+  return shas;
 }
 
 function isProductionEligible(
