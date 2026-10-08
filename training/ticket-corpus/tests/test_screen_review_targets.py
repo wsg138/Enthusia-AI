@@ -143,6 +143,38 @@ class ReviewScreenTests(unittest.TestCase):
                 self.assertNotIn("unverified_staff_handoff_in_target", flags)
                 self.assertNotIn("unanchored_source_finding_in_target", flags)
 
+
+    def test_issue_ref_is_reviewed_as_context_not_commit_proof(self):
+        a,b,c=fixture()
+        b["source_refs"]=[{"ref":"wsg138/Example#91"}]
+        flags=flag_case(a,b,1)["flags"]
+        self.assertIn("issue_reference_context_only", flags)
+        self.assertNotIn("nonversioned_ref_review", flags)
+
+    def test_private_rewrite_alias_remains_reviewable(self):
+        for value in ("private ticket-rewrite-14",
+                      "private rewritten ticket ticket-rewrite-7"):
+            with self.subTest(value=value):
+                a,b,c=fixture()
+                b["source_refs"]=[{"ref":value}]
+                flags=flag_case(a,b,1)["flags"]
+                self.assertIn("private_rewrite_alias_review",flags)
+                self.assertNotIn("nonversioned_ref_review",flags)
+        for value in ("ticket-rewrite-14","private:ticket-rewrite-14"):
+            with self.subTest(value=value):
+                a,b,c=fixture()
+                b["source_refs"]=[{"ref":value}]
+                flags=flag_case(a,b,1)["flags"]
+                self.assertNotIn("nonversioned_ref_review",flags)
+                self.assertNotIn("private_rewrite_alias_review",flags)
+
+    def test_unversioned_repo_file_still_needs_review(self):
+        a,b,c=fixture()
+        b["source_refs"]=[{"ref":"wsg138/Example:docs/policy.md"}]
+        flags=flag_case(a,b,1)["flags"]
+        self.assertIn("nonversioned_ref_review", flags)
+        self.assertNotIn("issue_reference_context_only",flags)
+
     def test_mutable_and_repeated_source_are_review_only(self):
         a,b,c=fixture()
         b["source_refs"]=[{"ref":"wsg138/Example@main:README.md"}]
