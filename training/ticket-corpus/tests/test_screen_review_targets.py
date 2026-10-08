@@ -221,6 +221,55 @@ class ReviewScreenTests(unittest.TestCase):
         self.assertIn("repeated_target_text_4plus",result["flags"])
         self.assertEqual(result["risk_tier"],"STYLE_OR_PROVENANCE_REVIEW")
 
+    def test_future_tool_promise_gets_capability_review(self):
+        a, b, _ = fixture()
+        a["expected_answer"] = "I'll compare the proxy logs once you give me a time."
+        result = flag_case(a, b, 1)
+        self.assertIn("unverified_tool_capability_promise_in_target", result["flags"])
+        self.assertNotIn("unsupported_verified_result_in_target", result["flags"])
+        self.assertEqual(result["risk_tier"], "STYLE_OR_PROVENANCE_REVIEW")
+
+    def test_inherited_tool_warning_without_current_trigger_is_annotated(self):
+        a, b, _ = fixture()
+        a["review_flags"] = ["unverified_tool_result_claim"]
+        a["expected_answer"] = "Please send the exact error and rough time."
+        result = flag_case(a, b, 1)
+        self.assertIn("unverified_tool_result_claim", result["flags"])
+        self.assertIn("inherited_tool_warning_no_lexical_trigger", result["flags"])
+
+    def test_cross_lane_exact_repeat_is_reviewed(self):
+        a, b, _ = fixture()
+        a["expected_answer"] = "Please send the exact error and rough time."
+        result = flag_case(a, b, 1, global_duplicate_frequency=4)
+        self.assertIn("cross_lane_repeated_target_text_4plus", result["flags"])
+        self.assertNotIn("repeated_target_text_4plus", result["flags"])
+
+    def test_screen_reports_repeat_group_stats(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            stage = base / "stage"
+            stage.mkdir()
+            cases = []
+            for number in range(4):
+                row, meta, entry = fixture(f"W01-0001-a{number + 1:02d}")
+                row["expected_answer"] = "Please send the exact error and rough time."
+                entry["record_sha256"] = candidate_digest(row)
+                cases.append((row, meta, entry))
+            (stage / "DRAFT-W16-NOT-TRAINABLE.private.jsonl").write_text(
+                "\n".join(json.dumps(x[0]) for x in cases) + "\n", encoding="utf-8"
+            )
+            (stage / "REVIEW-SOURCE-INDEX.private.jsonl").write_text(
+                "\n".join(json.dumps(x[1]) for x in cases) + "\n", encoding="utf-8"
+            )
+            (stage / "REVIEW-MANIFEST-ALL-HOLD.private.json").write_text(
+                json.dumps(doc(*cases)), encoding="utf-8"
+            )
+            report = screen(stage, base / "screen")
+            self.assertEqual(report["exact_repeat_groups_4plus"], 1)
+            self.assertEqual(report["exact_repeat_rows_4plus"], 4)
+            self.assertEqual(report["largest_exact_repeat_group"], 4)
+            self.assertEqual(report["cross_lane_exact_repeat_groups_4plus"], 0)
+
     def test_private_output_and_no_overwrite(self):
         with tempfile.TemporaryDirectory() as tmp:
             base=Path(tmp)
