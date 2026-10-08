@@ -91,7 +91,7 @@ def check_result(result: dict, assignment: dict):
         raise ValueError(f"{rid}: worker tried to assign a train/eval split")
     if result.get("admission_status") not in (None, "HOLD", "NOT_APPROVED"):
         raise ValueError(f"{rid}: worker claimed admission")
-    if result.get("final_admission_decision") not in (None, "HOLD", "NOT_APPROVED"):
+    if result.get("final_admission_decision") not in (None, "HOLD", "NOT_APPROVED", "NONE"):
         raise ValueError(f"{rid}: worker claimed final admission")
     if result.get("review_status") not in (None, "HOLD", "PENDING_INDEPENDENT"):
         raise ValueError(f"{rid}: worker attempted a review status promotion")
