@@ -29,6 +29,7 @@ import os
 import random
 from dataclasses import dataclass
 
+from .review_admission import ReviewAdmission, worker_derived
 from .record import (
     SPECIAL_PARTITIONS,
     RecordValidationError,
@@ -134,12 +135,18 @@ def assemble(
     generator: str = "enthusia-finetune-assemble",
     split_config: SplitConfig | None = None,
     corpus_labels: dict[str, str] | None = None,
+    ticket_review_manifest: str | None = None,
 ) -> dict:
     """Assemble train/validation datasets from corpus JSONL files.
 
     Returns the manifest dict (also written to out_dir/manifest.json).
     """
     split_config = split_config or SplitConfig()
+    # Never infer independent review approval from a worker's GOOD/PASS label.
+    # Non-worker legacy fixtures remain compatible; worker-derived records
+    # require an explicit private review manifest even with quality=IDEAL.
+    admission = ReviewAdmission.from_path(ticket_review_manifest) if ticket_review_manifest else None
+    reviewed_splits: dict[str, str] = {}
     stats = AssemblyStats()
     sources: list[dict] = []
 
@@ -163,6 +170,20 @@ def assemble(
                 stats.invalid += 1
                 stats.exclusions.append({"id": raw.get("id"), "reason": f"invalid: {exc}"})
                 continue
+            if worker_derived(rec) or admission is not None:
+                if admission is None:
+                    stats.excluded += 1
+                    stats.exclusions.append({
+                        "id": rec["id"],
+                        "reason": "worker-derived record requires independent ticket review manifest",
+                    })
+                    continue
+                split, reason = admission.eligible_split(rec)
+                if reason is not None:
+                    stats.excluded += 1
+                    stats.exclusions.append({"id": rec["id"], "reason": "review admission: " + reason})
+                    continue
+                reviewed_splits[rec["id"]] = split
             reason = quality_excluded(rec)
             if reason:
                 stats.excluded += 1
@@ -213,7 +234,13 @@ def assemble(
         else:
             trainable.append(rec)
 
-    train, validation = split_by_leak_group(trainable, split_config)
+    if admission is not None:
+        # The independently frozen manifest assigns split at connected-source
+        # family level. Do not reshuffle its assignments row by row.
+        train = [r for r in trainable if reviewed_splits[r["id"]] == "train"]
+        validation = [r for r in trainable if reviewed_splits[r["id"]] == "validation"]
+    else:
+        train, validation = split_by_leak_group(trainable, split_config)
     stats.train = len(train)
     stats.validation = len(validation)
 
@@ -243,7 +270,7 @@ def assemble(
             "train_ratio": split_config.train_ratio,
             "validation_ratio": split_config.validation_ratio,
             "seed": split_config.seed,
-            "method": "leak_group",
+            "method": "independent_review_manifest" if admission else "leak_group",
         },
         "source_sets": sources,
         "counts": {
@@ -261,9 +288,17 @@ def assemble(
             "W16 secret-scan findings excluded",
             "exact-text duplicates removed (keep lowest id)",
             "special-partition tags routed out of train/validation",
+            "worker ticket records require independently reviewed manifest with exact target digest",
         ],
         "exclusions": stats.exclusions,
         "duplicates": stats.duplicates_info,
+        "ticket_review_admission": (
+            {
+                "manifest_id": admission.manifest_id,
+                "manifest_sha256": admission.manifest_sha256,
+                "review_protocol_revision": admission.review_protocol_revision,
+            } if admission is not None else None
+        ),
         "outputs": outputs,
         "special_outputs": special_outputs,
     }

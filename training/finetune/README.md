@@ -117,6 +117,23 @@ W19 therefore fails closed on records whose generator is
 from current authoritative Enthusia sources under a separate approved
 generator/version rather than relabeling the fixture sample.
 
+## Independent ticket-worker admission (issue #94)
+
+Worker-derived synthetic ticket records must include their worker-origin metadata
+and must have an independent, private review manifest before W19 can assemble
+them for train/validation. A worker-provided GOOD/IDEAL label alone cannot
+authorize training; missing or mismatched approvals fail closed.
+
+Use `--ticket-review-manifest /private/approved-ticket-records.json` with
+`finetune assemble` or `finetune pipeline --stage prepare`.
+The reviewed manifest pins exact normalized target hashes, source candidate
+and source file revisions, rights/privacy and staff-only review, plus a frozen
+family-connected split (including holdout isolation). The manifest hash and
+review protocol revision appear in the output manifest.
+
+Original private ticket data and review records must not be committed to GitHub.
+See `training/ticket-corpus/INDEPENDENT-ADMISSION-V1.md`.
+
 ## Training configs
 
 `configs/` — one YAML per run stage (spec §18 hyperparameter tracking:
