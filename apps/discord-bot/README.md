@@ -46,3 +46,23 @@ configuration, not secrets — see `.env.example`.
 ## Running tests
 
 From the repo root: `npx vitest run apps/discord-bot/test/`
+
+## Safe slash registration and shared application warning
+
+The bot registers `/ai ask` with a **single-command upsert** instead of
+bulk-overwriting every slash command for the same application. This preserves
+Ticket Bot commands if an owner later integrates both surfaces under one
+Discord application identity. It does **not** make running two independent
+Gateway clients with a shared Discord bot token safe: interaction ownership,
+replies, sharding, rate limits, token exposure and permissions must be
+coordinated in a single bot runtime or an explicitly tested integration.
+
+Recommended initial testing: retain the existing Ticket Bot for ticket
+lifecycle; create a separate Enthusia AI Discord application and use that
+**same Enthusia AI application** in the testing guild and later the actual
+Enthusia guild. Keep credentials separate. Existing test guild
+`ENTHUSIA_DISCORD_SLASH_GUILD_ID` should be used for fast test-only registration;
+leave all auto-response channel ID lists empty until a dedicated AI test
+channel is approved. The bot currently requests privileged Member and
+Message Content gateway intents; both must be enabled in the Developer Portal
+for the chosen application. Production deployment is independent of a merge.
