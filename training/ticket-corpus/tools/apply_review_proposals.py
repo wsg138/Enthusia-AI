@@ -18,6 +18,7 @@ import sys
 
 ID = re.compile(r"^(W[0-9]{2}-[0-9]{4})-a([0-9]{2})$")
 SHA40 = re.compile(r"^[a-f0-9]{40}$")
+SHA64 = re.compile(r"^[a-f0-9]{64}$")
 
 
 def canon(row):
@@ -74,7 +75,60 @@ def replace_refs(refs, pairs):
     return new_refs, count
 
 
-def apply_proposals(drafts, indexes, manifest, proposals, pairs, validator):
+def verify_rejected_source_ledger(staged, ledger_path, drafts, indexes, manifest):
+    """Pin private REJECT source IDs and both sibling draft slices to this input."""
+    path = Path(ledger_path)
+    try:
+        ledger = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError("missing or invalid private source quarantine ledger") from exc
+    release_bytes = (staged/"REVIEW-MANIFEST-ALL-HOLD.private.json").read_bytes()
+    if (ledger.get("schema") != "enthusia-ticket-source-quarantine/v1"
+            or ledger.get("source_hold_manifest_sha256") != sha256(release_bytes).hexdigest()):
+        raise ValueError("source quarantine ledger belongs to another HOLD release")
+    rows = ledger.get("entries")
+    if not isinstance(rows, list) or not rows:
+        raise ValueError("source quarantine ledger must have entries")
+    if ledger.get("source_count") != len(rows) or ledger.get("draft_count") != 2*len(rows):
+        raise ValueError("source quarantine ledger count mismatch")
+    by_draft = {d["candidate_id"]:d for d in drafts}
+    by_index = {d["draft_id"]:d for d in indexes}
+    by_entry = {d["candidate_id"]:d for d in manifest["entries"]}
+    if (len(by_draft) != len(drafts) or len(by_index) != len(indexes)
+            or len(by_entry) != len(manifest["entries"])):
+        raise ValueError("duplicate draft/source/manifest IDs")
+    blocked = set()
+    for row in rows:
+        source = row.get("source_candidate_id")
+        if (not isinstance(source, str) or not re.fullmatch(r"W[0-9]{2}-[0-9]{4}",source)
+                or source in blocked or row.get("disposition") != "REJECT"):
+            raise ValueError("invalid or duplicated rejected source")
+        ids = [f"{source}-a01",f"{source}-a02"]
+        if row.get("draft_ids") != ids:
+            raise ValueError("quarantine ledger missing sibling slices")
+        for key in ("source_candidate_sha256","source_file_sha256"):
+            if not isinstance(row.get(key),str) or not SHA64.fullmatch(row[key]):
+                raise ValueError("quarantine ledger missing source hash")
+        if not isinstance(row.get("source_revision"),str) or not row["source_revision"]:
+            raise ValueError("quarantine ledger missing source revision")
+        for rid in ids:
+            d, idx, entry = by_draft.get(rid), by_index.get(rid), by_entry.get(rid)
+            if d is None or idx is None or entry is None:
+                raise ValueError("rejected source missing complete sibling release")
+            if (d.get("source_candidate_id") != source
+                    or idx.get("source_candidate_id") != source):
+                raise ValueError("quarantined draft source lineage mismatch")
+            for field in ("source_candidate_sha256","source_file_sha256","source_revision"):
+                if d.get(field) != row[field] or entry.get(field) != row[field]:
+                    raise ValueError("quarantine source provenance mismatch")
+            if entry.get("review_status") != "HOLD" or entry.get("approved_uses") != []:
+                raise ValueError("rejected source must remain HOLD")
+        blocked.add(source)
+    return blocked
+
+
+def apply_proposals(drafts, indexes, manifest, proposals, pairs, validator, *,
+                    quarantined_sources=None, require_pinned_proposals=False):
     from screen_review_targets import verify_staged
     original, by_meta, by_appr = verify_staged(drafts, indexes, manifest)
     source_order = defaultdict(list)
@@ -92,6 +146,16 @@ def apply_proposals(drafts, indexes, manifest, proposals, pairs, validator):
         rid = p.get("draft_id")
         if rid in by_proposal or rid not in original:
             raise ValueError("duplicate or unknown editorial proposal")
+        src = original[rid].get("source_candidate_id")
+        if quarantined_sources is not None and src in quarantined_sources:
+            raise ValueError("cannot edit quarantined rejected source")
+        if require_pinned_proposals:
+            if p.get("source_candidate_id") != src:
+                raise ValueError("proposal source identity mismatch")
+            if p.get("expected_original_record_sha256") != by_appr[rid]["record_sha256"]:
+                raise ValueError("proposal original target hash mismatch")
+            if p.get("expected_original_source_sha256") != original[rid].get("source_candidate_sha256"):
+                raise ValueError("proposal original source hash mismatch")
         if p.get("approval_status") != "HOLD" or p.get("training_eligible") is not False:
             raise ValueError("editorial notes unexpectedly assert training eligibility")
         answer = p.get("suggested_player_safe_answer")
@@ -162,7 +226,7 @@ def digest_target(row):
     return sha256(canon(data).encode("utf-8")).hexdigest()
 
 
-def run(staged, notes, resolutions, out_dir, w16_root):
+def run(staged, notes, resolutions, out_dir, w16_root, quarantine_ledger=None):
     if out_dir.exists():
         raise FileExistsError("review derivative destination already exists")
     sys.path.insert(0,str(w16_root))
@@ -172,7 +236,12 @@ def run(staged, notes, resolutions, out_dir, w16_root):
     manifest = json.loads((staged/"REVIEW-MANIFEST-ALL-HOLD.private.json").read_text(encoding="utf-8"))
     proposals = load_rows(notes)
     pairs = resolution_pairs(resolutions)
-    results = apply_proposals(drafts,indexes,manifest,proposals,pairs,validate_record)
+    blocked = (verify_rejected_source_ledger(staged, quarantine_ledger, drafts, indexes, manifest)
+               if quarantine_ledger is not None else None)
+    results = apply_proposals(
+        drafts,indexes,manifest,proposals,pairs,validate_record,
+        quarantined_sources=blocked,
+        require_pinned_proposals=(blocked is not None))
     out_d,out_m,out_a,changes,counts = results
     out_dir.mkdir(parents=True)
     for filename,body in (
@@ -198,10 +267,12 @@ def main(argv=None):
     p.add_argument("--editorial-notes",required=True,type=Path)
     p.add_argument("--source-resolutions",required=True,nargs="+",type=Path)
     p.add_argument("--w16-root",required=True,type=Path)
+    p.add_argument("--source-quarantine-ledger",type=Path,
+                   help="private release-pinned REJECT ledger; requires per-proposal original hashes")
     p.add_argument("--out-dir",required=True,type=Path)
     a=p.parse_args(argv)
     print(json.dumps(run(a.staged_dir,a.editorial_notes,a.source_resolutions,
-                         a.out_dir,a.w16_root),indent=2))
+                         a.out_dir,a.w16_root,a.source_quarantine_ledger),indent=2))
     return 0
 
 
