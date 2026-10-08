@@ -31,6 +31,8 @@ export type {
   InvalidateInput,
   ReportConflictInput,
   CorrectionInput,
+  VerifiedSource,
+  VerifyMemoryOptions,
   CacheInvalidator,
   MemoryEventType,
   MemoryEvent,

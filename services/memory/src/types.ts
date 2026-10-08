@@ -80,6 +80,20 @@ export interface SupersedeInput extends MemoryRef {
   expectedCurrentRevisionId?: string;
 }
 
+/** Rechecked immutable evidence required before a STALE value becomes CURRENT. */
+export interface VerifiedSource {
+  sourceArtifactId: string;
+  sourceVersion: string;
+}
+
+export interface VerifyMemoryOptions {
+  authority: string;
+  /** Independently re-observed exact source/version; required for STALE. */
+  confirmedSource?: VerifiedSource;
+  /** Reject an in-flight recheck when another writer replaces the revision. */
+  expectedRevisionId?: string;
+}
+
 /** Options for marking a revision INVALID with no replacement (§13.4). */
 export interface InvalidateInput extends MemoryRef {
   reason: string;

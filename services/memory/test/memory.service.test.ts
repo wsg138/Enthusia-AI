@@ -251,20 +251,105 @@ describe('W05 memory service — acceptance', () => {
     expect(svc.getCurrent(REF)).toBeNull();
   });
 
-  it('re-verifying a STALE revision restores it to the current view', async () => {
-    await svc.createRevision({
+  it('re-verifying a STALE revision requires matching authoritative evidence', async () => {
+    const created = await svc.createRevision({
       ...REF,
       value: 'vip.trade',
       summary: 'trade permission = vip.trade',
       authority: 'indexer',
+      evidence: [{
+        sourceArtifactId: 'config:trade.yml',
+        sourceVersion: 'hash-v1',
+        evidenceRole: EvidenceRole.PRIMARY,
+      }],
     });
     await svc.markStale(REF, { reason: 'source fingerprint requires recheck', authority: 'indexer' });
     expect(svc.getCurrent(REF)).toBeNull();
 
-    const verified = await svc.verify(REF, { authority: 'live-config-check' });
+    for (const confirmedSource of [undefined, {
+      sourceArtifactId: 'config:trade.yml', sourceVersion: 'hash-v2',
+    }]) {
+      await expect(svc.verify(REF, {
+        authority: 'live-config-check',
+        ...(confirmedSource ? { confirmedSource } : {}),
+      })).rejects.toThrow();
+      expect(svc.getCurrent(REF)).toBeNull();
+    }
+
+    const verified = await svc.verify(REF, {
+      authority: 'live-config-check',
+      confirmedSource: { sourceArtifactId: 'config:trade.yml', sourceVersion: 'hash-v1' },
+      expectedRevisionId: created.revision.id,
+    });
     expect(verified.status).toBe(SourceStatus.CURRENT);
     expect(verified.verifiedAt).toBeDefined();
     expect(svc.getCurrent(REF)?.revision.id).toBe(verified.id);
+  });
+
+  it('does not stamp an unevidenced CURRENT guess as verified', async () => {
+    const created = await svc.createRevision({
+      ...REF, value: 'guessed', summary: 'unproven claim', authority: 'model',
+    });
+    await expect(svc.verify(REF, {
+      authority: 'model',
+      confirmedSource: { sourceArtifactId: 'fabricated', sourceVersion: 'unknown' },
+    })).rejects.toThrow(/primary evidence/);
+    expect(svc.getCurrent(REF)?.revision.verifiedAt).toBeUndefined();
+    expect(svc.getCurrent(REF)?.revision.id).toBe(created.revision.id);
+    expect(svc.getEvents(REF).map((event) => event.type)).toEqual(['memory.created']);
+  });
+
+  it('rejects stale re-verification with no primary source', async () => {
+    await svc.createRevision({
+      ...REF,
+      value: 'unverified-permission',
+      summary: 'permission mentioned in a conversation',
+      authority: 'conversation',
+      evidence: [{
+        sourceArtifactId: 'conversation:123',
+        sourceVersion: 'turn-1',
+        evidenceRole: EvidenceRole.SUPPORTING,
+      }],
+    });
+    await svc.markStale(REF, { authority: 'indexer', reason: 'source withdrawn' });
+    await expect(svc.verify(REF, {
+      authority: 'indexer',
+      confirmedSource: { sourceArtifactId: 'conversation:123', sourceVersion: 'turn-1' },
+    })).rejects.toThrow(/primary evidence/);
+    expect(svc.getCurrent(REF)).toBeNull();
+    expect(svc.getHistory(REF)[0]?.status).toBe(SourceStatus.STALE);
+  });
+
+  it('rejects a delayed verification after another writer superseded stale truth', async () => {
+    const first = await svc.createRevision({
+      ...REF,
+      value: 'old-command',
+      summary: 'old command permission',
+      authority: 'indexer',
+      evidence: [{
+        sourceArtifactId: 'config:commands.yml',
+        sourceVersion: 'hash-old',
+        evidenceRole: EvidenceRole.PRIMARY,
+      }],
+    });
+    await svc.markStale(REF, { authority: 'indexer', reason: 'source changed' });
+    const latest = await svc.supersede({
+      ...REF,
+      value: 'new-command',
+      summary: 'new command permission',
+      authority: 'deployed-config',
+      evidence: [{
+        sourceArtifactId: 'config:commands.yml',
+        sourceVersion: 'hash-new',
+        evidenceRole: EvidenceRole.PRIMARY,
+      }],
+    });
+    await expect(svc.verify(REF, {
+      authority: 'deployed-config',
+      expectedRevisionId: first.revision.id,
+      confirmedSource: { sourceArtifactId: 'config:commands.yml', sourceVersion: 'hash-old' },
+    })).rejects.toBeInstanceOf(ConcurrentModificationError);
+    expect(svc.getCurrent(REF)?.revision.id).toBe(latest.current.id);
   });
 
   it('a STALE revision can be superseded directly by newly verified truth', async () => {
@@ -547,8 +632,14 @@ describe('W05 memory service — acceptance', () => {
         summary: 'v0',
         authority: 'indexer',
       });
-      await svc2.supersede({ ...REF, value: 'v1', summary: 'v1', authority: 'indexer' });
-      await svc2.verify(REF, { authority: 'indexer' });
+      await svc2.supersede({
+        ...REF, value: 'v1', summary: 'v1', authority: 'indexer',
+        evidence: [{ sourceArtifactId: 'config:commands', sourceVersion: 'sha-v1', evidenceRole: EvidenceRole.PRIMARY }],
+      });
+      await svc2.verify(REF, {
+        authority: 'indexer',
+        confirmedSource: { sourceArtifactId: 'config:commands', sourceVersion: 'sha-v1' },
+      });
       await svc2.invalidate({ ...REF, reason: 'gone', authority: 'staff:lincoln' });
 
       expect(invalidated).toHaveLength(4);
