@@ -350,7 +350,8 @@ export class DiscordJsClientAdapter implements DiscordClientPort {
       this.options.slashCommandGuildId !== undefined
         ? Routes.applicationGuildCommands(this.readyUserId, this.options.slashCommandGuildId)
         : Routes.applicationCommands(this.readyUserId);
-    await this.rest.put(route, { body: [definition] });
+    // Discord POST upserts just /ai. Bulk PUT would erase unrelated commands.
+    await this.rest.post(route, { body: definition });
     this.logger.info(
       { guildScoped: this.options.slashCommandGuildId !== undefined },
       'registered /ai slash command',
