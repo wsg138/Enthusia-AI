@@ -55,6 +55,19 @@ UNVERIFIED_HANDOFF = re.compile(
 )
 
 
+# Additional review-only claims of completed investigations or evidence.
+# A lexical match does not establish that a real source check took place.
+ASSERTED_RESULT = re.compile(
+    r"\b(?:I can confirm|I finished correlating|"
+    r"I (?:finished|completed|went through|lined up) "
+    r"(?:the |a |my )?(?:first |available )?"
+    r"(?:evidence|audit|report|records?|checks?|correlation|comparison)|"
+    r"(?<!if )the evidence (?:supports?|matches?|shows?|confirms?|indicates?)|"
+    r"(?:the|our) (?:records?|logs?) (?:still |also |now |clearly )?"
+    r"(?:show|shows|confirms?|indicates?))\b", re.IGNORECASE,
+)
+
+
 PROMISE = re.compile(
     r"\b(?:I(?:'ll| will) (?:refund|restore|reimburse|ban|punish|"
     r"roll\s?back|delete|edit|transfer) (?:your |the |those |that |it\b)|"
@@ -148,10 +161,14 @@ def flag_case(draft: dict, meta: dict, duplicate_frequency: int) -> dict:
     history = " ".join(
         m.get("content", "") for m in messages if m.get("role") == "assistant"
     )
+    # Normalize only the screening view. The original record and its reviewed
+    # SHA-256 remain unchanged.
+    checked_answer = answer.replace("’", "'").replace("‘", "'")
+    checked_history = history.replace("’", "'").replace("‘", "'")
     flags = set(draft.get("review_flags", []))
-    if EVIDENCE_CLAIM.search(answer):
+    if EVIDENCE_CLAIM.search(checked_answer) or ASSERTED_RESULT.search(checked_answer):
         flags.add("unsupported_verified_result_in_target")
-    if EVIDENCE_CLAIM.search(history):
+    if EVIDENCE_CLAIM.search(checked_history) or ASSERTED_RESULT.search(checked_history):
         flags.add("unsupported_verified_result_in_context")
     if ARTIFACT.search(answer) or SYNTHETIC_LANGUAGE.search(answer):
         flags.add("synthetic_artifact_wording_in_target")
@@ -161,13 +178,13 @@ def flag_case(draft: dict, meta: dict, duplicate_frequency: int) -> dict:
         flags.add("unanchored_source_finding_in_target")
     if SOURCE_FINDING.search(history):
         flags.add("unanchored_source_finding_in_context")
-    if UNVERIFIED_HANDOFF.search(answer):
+    if UNVERIFIED_HANDOFF.search(checked_answer):
         flags.add("unverified_staff_handoff_in_target")
-    if UNVERIFIED_HANDOFF.search(history):
+    if UNVERIFIED_HANDOFF.search(checked_history):
         flags.add("unverified_staff_handoff_in_context")
-    if PROMISE.search(answer):
+    if PROMISE.search(checked_answer):
         flags.add("discretionary_action_promised")
-    if SECRETS_REQUEST.search(answer):
+    if SECRETS_REQUEST.search(checked_answer):
         flags.add("sensitive_credential_request_review")
     if duplicate_frequency >= 4:
         flags.add("repeated_target_text_4plus")
