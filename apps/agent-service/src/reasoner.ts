@@ -23,7 +23,12 @@ const classificationSchema = z.strictObject({
   claims: z.array(z.string().min(1).max(500)).max(24),
   backgroundClaims: z.array(z.string().min(1).max(500)).max(12).optional(),
   needsFamiliarityContext: z.boolean().optional(),
-  familiarityTopic: z.string().min(1).max(160).optional(),
+  // Small local models sometimes emit an empty string for an unused optional
+  // field. Treat only the blank placeholder as absent, never as a topic.
+  familiarityTopic: z.preprocess(
+    (value) => typeof value === 'string' && value.trim() === '' ? undefined : value,
+    z.string().min(1).max(160).optional(),
+  ),
   needsPrivateContext: z.boolean(),
   securitySensitive: z.boolean(),
 });
@@ -86,11 +91,21 @@ function parseJson<T>(text: string, schema: z.ZodType<T>): T {
   } catch {
     throw new Error('local reasoner returned non-JSON output');
   }
-  const result = schema.safeParse(parsed);
-  if (!result.success) {
-    throw new Error('local reasoner returned invalid JSON shape');
+  const direct = schema.safeParse(parsed);
+  if (direct.success) return direct.data;
+  // Some Qwen3 completions mirror the example's `output` property and put
+  // the actual JSON inside it. Accept only a single-key wrapper and validate
+  // the inner value against the SAME strict schema. Unknown extra keys still
+  // fail; there is no permissive extraction of model-proposed controls.
+  if (
+    typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) &&
+    Object.keys(parsed).length === 1 &&
+    Object.prototype.hasOwnProperty.call(parsed, 'output')
+  ) {
+    const wrapped = schema.safeParse((parsed as Record<string, unknown>)['output']);
+    if (wrapped.success) return wrapped.data;
   }
-  return result.data;
+  throw new Error('local reasoner returned invalid JSON shape');
 }
 
 const JSON_ESCAPES: Readonly<Record<string, string>> = {
