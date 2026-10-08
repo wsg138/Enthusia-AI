@@ -87,6 +87,11 @@ class IntakeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"split"):
             check_result(x,a)
 
+    def test_no_admission_none_literal_is_accepted(self):
+        a=assignment(1)
+        x=result(a);x["final_admission_decision"]="NONE"
+        self.assertEqual(check_result(x,a),"PROPOSE_REWRITE")
+
     def test_original_record_sha_is_accepted(self):
         a=assignment(1)
         x=result(a);x["original_target_hash"]=a["record_sha256"]
