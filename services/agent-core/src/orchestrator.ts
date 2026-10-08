@@ -97,6 +97,8 @@ export interface OrchestratorDeps {
   onPacket?: (packet: InvestigationPacket) => void;
   /** Internal logging hook; never sends errors or messages to staff. */
   onUnhandledError?: (error: unknown, traceId: string) => void;
+  /** Explicitly injected, public-only test source; null defers to normal agent. */
+  publicSourceResolver?: (request: ResolvedChatRequest) => Promise<AgentResponse | null>;
   /**
    * Best-effort deterministic learning hook for topic-specific response style.
    * It receives no raw message or memory text.
@@ -160,6 +162,10 @@ export class AgentOrchestrator {
     try {
       chatRequestSchema.parse(request); // throws on malformed requests
       const resolved: ResolvedChatRequest = { ...request, traceId };
+      if (this.deps.publicSourceResolver !== undefined) {
+        const publicAnswer = await this.deps.publicSourceResolver(resolved);
+        if (publicAnswer !== null) return publicAnswer;
+      }
       return await this.run(resolved);
     } catch (err) {
       try {
