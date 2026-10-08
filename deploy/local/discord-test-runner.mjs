@@ -13,7 +13,7 @@ import { resolve } from 'node:path';
 const TEST_GUILD = '1552729865306767471';
 const TICKET_LOGS = '1552873662745546822';
 const root = resolve(import.meta.dirname, '..', '..');
-const channel = (process.env.ENTHUSIA_DISCORD_ALLOWED_CHANNEL_IDS ?? '').trim();
+let channel = (process.env.ENTHUSIA_DISCORD_ALLOWED_CHANNEL_IDS ?? '').trim();
 const token = process.env.DISCORD_BOT_TOKEN;
 const launched = [];
 const secureId = (value) => /^\d{17,21}$/.test(value);
@@ -22,8 +22,9 @@ async function main() {
   if (!token || token.trim().length < 20) {
     throw new Error('Missing local DISCORD_BOT_TOKEN. Enter it in your current private PowerShell.');
   }
+  if (channel === '') channel = await locateTestChannel(token);
   if (!secureId(channel) || channel === TICKET_LOGS || channel.includes(',')) {
-    throw new Error('Set ENTHUSIA_DISCORD_ALLOWED_CHANNEL_IDS to ONE dedicated #ai-testing channel ID; never ticket-logs.');
+    throw new Error('Invalid AI channel ID; the known ticket-logs channel is forbidden.');
   }
   if (process.env.ENTHUSIA_DISCORD_SLASH_GUILD_ID &&
     process.env.ENTHUSIA_DISCORD_SLASH_GUILD_ID !== TEST_GUILD) {
@@ -118,6 +119,26 @@ async function main() {
       resolveDone();
     });
   });
+}
+
+async function locateTestChannel(botToken) {
+  // Read-only Discord metadata lookup. No messages, channel edits or token logs.
+  const response = await fetch(
+    'https://discord.com/api/v10/guilds/' + TEST_GUILD + '/channels',
+    { headers: { Authorization: 'Bot ' + botToken },
+      signal: AbortSignal.timeout(12000) },
+  );
+  if (!response.ok) {
+    throw new Error('Discord cannot list test channels (HTTP ' + response.status +
+      '). Set ENTHUSIA_DISCORD_ALLOWED_CHANNEL_IDS manually to #ai-testing.');
+  }
+  const entries = await response.json();
+  if (!Array.isArray(entries)) throw new Error('Discord returned invalid channel metadata.');
+  const matches = entries.filter((entry) => entry.name === 'ai-testing' && entry.type === 0);
+  if (matches.length !== 1 || !secureId(String(matches[0]?.id ?? ''))) {
+    throw new Error('Create exactly one text channel called #ai-testing in the test guild.');
+  }
+  return matches[0].id;
 }
 
 function spawnChild(label, entry, env) {
