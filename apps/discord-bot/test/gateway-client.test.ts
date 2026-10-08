@@ -127,6 +127,22 @@ describe('HttpAiGatewayClient', () => {
     await expect(client.sendChat(chatRequest())).rejects.toMatchObject({ code: 'EXTERNAL_SERVICE_ERROR' });
   });
 
+  it('preserves gateway rate limiting rather than reporting an outage', async () => {
+    const baseUrl = await startServer((_req, respond) => {
+      respond(429, JSON.stringify({ error: { code: 'RATE_LIMITED' } }));
+    });
+    const client = new HttpAiGatewayClient(baseUrl, 5000, nullLogger());
+    await expect(client.sendChat(chatRequest())).rejects.toMatchObject({ code: 'RATE_LIMITED', statusCode: 429 });
+  });
+
+  it('preserves gateway timeout status without converting it to a generic outage', async () => {
+    const baseUrl = await startServer((_req, respond) => {
+      respond(504, JSON.stringify({ error: { code: 'TOOL_TIMEOUT' } }));
+    });
+    const client = new HttpAiGatewayClient(baseUrl, 5000, nullLogger());
+    await expect(client.sendChat(chatRequest())).rejects.toMatchObject({ code: 'TOOL_TIMEOUT', statusCode: 504 });
+  });
+
   it('maps malformed responses to ValidationError', async () => {
     const baseUrl = await startServer((_req, respond) => {
       respond(200, JSON.stringify({ text: 42 }));
