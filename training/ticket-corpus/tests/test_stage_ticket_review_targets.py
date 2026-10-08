@@ -125,6 +125,13 @@ class StagingFixtureTests(unittest.TestCase):
             self.assertEqual({d["quality"] for d in drafts},{"USABLE_WITH_EDIT"})
             self.assertEqual({e["review_status"] for e in manifest["entries"]},{"HOLD"})
             self.assertEqual(len({d["candidate_id"] for d in drafts}),2)
+            source_index = [json.loads(line) for line in
+                (staged/"REVIEW-SOURCE-INDEX.private.jsonl").read_text().splitlines()]
+            self.assertEqual(len(source_index), 2)
+            self.assertEqual(source_index[0]["source_refs"], original["source_refs"])
+            self.assertTrue(all(x["review_status"]=="HOLD" for x in source_index))
+            self.assertNotIn("source_refs", drafts[0])
+            self.assertEqual(report["private_review_index_records"], 2)
             self.assertEqual([e["record_sha256"] for e in manifest["entries"]],
                              [record_digest(validate_record(d)) for d in drafts])
             with self.assertRaises(FileExistsError):
