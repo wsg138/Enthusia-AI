@@ -227,6 +227,8 @@ def digest_target(row):
 
 
 def run(staged, notes, resolutions, out_dir, w16_root, quarantine_ledger=None):
+    if quarantine_ledger is None:
+        raise ValueError("private source quarantine ledger is required for editorial derivation")
     if out_dir.exists():
         raise FileExistsError("review derivative destination already exists")
     sys.path.insert(0,str(w16_root))
@@ -267,7 +269,7 @@ def main(argv=None):
     p.add_argument("--editorial-notes",required=True,type=Path)
     p.add_argument("--source-resolutions",required=True,nargs="+",type=Path)
     p.add_argument("--w16-root",required=True,type=Path)
-    p.add_argument("--source-quarantine-ledger",type=Path,
+    p.add_argument("--source-quarantine-ledger",required=True,type=Path,
                    help="private release-pinned REJECT ledger; requires per-proposal original hashes")
     p.add_argument("--out-dir",required=True,type=Path)
     a=p.parse_args(argv)
