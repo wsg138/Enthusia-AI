@@ -80,6 +80,13 @@ class ReviewScreenTests(unittest.TestCase):
         result=flag_case(a,b,1)
         self.assertIn("unsupported_verified_result_in_context",result["flags"])
 
+    def test_test_scenario_phrasing_is_player_visible_artifact(self):
+        a,b,c=fixture()
+        a["expected_answer"]="I checked the incident evidence in this test scenario."
+        result=flag_case(a,b,1)
+        self.assertIn("synthetic_artifact_wording_in_target",result["flags"])
+        self.assertEqual(result["risk_tier"],"EVIDENCE_OR_SAFETY_REVIEW")
+
     def test_mutable_and_repeated_source_are_review_only(self):
         a,b,c=fixture()
         b["source_refs"]=[{"ref":"wsg138/Example@main:README.md"}]
