@@ -219,23 +219,30 @@ def screen(staging: Path, output: Path):
     # group only when other groups are already represented.
     selected = []
     selected_ids = set()
-    for tier in tiers:
-        cands = [c for c in cases if c["risk_tier"] == tier]
-        per_family = defaultdict(list)
-        for c in cands:
-            per_family[c["family_group"]].append(c)
-        fams = sorted(per_family)
-        for round_no in range(max((len(v) for v in per_family.values()),default=0)):
-            for fam in fams:
-                group = per_family[fam]
-                if round_no < len(group):
-                    case = group[round_no]
-                    if case["draft_id"] not in selected_ids:
-                        selected.append(case)
-                        selected_ids.add(case["draft_id"])
-                    if len(selected) >= 60: break
-            if len(selected) >= 60: break
-        if len(selected) >= 60:break
+    by_family = defaultdict(list)
+    for case in cases:
+        by_family[case["family_group"]].append(case)
+    # A high-risk-heavy sample should not suppress entire source families.
+    # Reserve one top-ranked case per family before filling the rest by risk.
+    for family in sorted(by_family, key=lambda f: (
+        tiers[by_family[f][0]["risk_tier"]], -len(by_family[f][0]["flags"]), f
+    )):
+        if len(selected) >= 60:
+            break
+        item = by_family[family][0]
+        selected.append(item)
+        selected_ids.add(item["draft_id"])
+    while len(selected) < 60:
+        remaining = [c for c in cases if c["draft_id"] not in selected_ids]
+        if not remaining:
+            break
+        counts = Counter(c["family_group"] for c in selected)
+        item = min(remaining, key=lambda c: (
+            tiers[c["risk_tier"]], counts[c["family_group"]],
+            -len(c["flags"]), c["family_group"], c["draft_id"]
+        ))
+        selected.append(item)
+        selected_ids.add(item["draft_id"])
     flag_counts = Counter(flag for case in cases for flag in case["flags"])
     tier_counts = Counter(case["risk_tier"] for case in cases)
     family_counts = Counter(case["family_group"] for case in cases)
