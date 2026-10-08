@@ -28,7 +28,7 @@ import type { DiscordBotOptions } from './config.js';
 import { extractMessageContext, extractSlashAskContext } from './context.js';
 import { formatAgentResponse } from './formatting.js';
 import type { AiGatewayClient } from './gateway-client.js';
-import { decideSlashTrigger, decideTrigger, type TriggerDecision } from './policy.js';
+import { channelIsAllowed, decideSlashTrigger, decideTrigger, type TriggerDecision } from './policy.js';
 import { DiscordRateLimitPolicy } from './rate-limit.js';
 import type {
   DiscordClientPort,
@@ -139,6 +139,14 @@ export class EnthusiaAiDiscordBot {
 
   /** Full pipeline for a `/ai ask` invocation. Exposed for tests. */
   async handleSlashAsk(interaction: DiscordSlashAskRef): Promise<HandleResult> {
+    if (!channelIsAllowed(interaction.channel, this.options)) {
+      // Fail closed without acknowledging an out-of-scope interaction.
+      // Discord may display a timeout; no channel content is sent.
+      return { outcome: 'ignored', reason: 'outside configured guild/channel allowlist' };
+    }
+    // Discord requires acknowledgement within a few seconds. Defer before
+    // model/tool work, never after waiting for the gateway round-trip.
+    await this.port.deferSlashAsk?.(interaction);
     const decision = decideSlashTrigger(interaction.question);
     return this.respondToTrigger(
       decision,

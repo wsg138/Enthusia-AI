@@ -321,13 +321,19 @@ export class DiscordJsClientAdapter implements DiscordClientPort {
     return sent.id;
   }
 
+  async deferSlashAsk(interaction: DiscordSlashAskRef): Promise<void> {
+    const raw = this.rawInteractions.get(interaction);
+    if (!raw) throw new Error('slash interaction is missing its raw Discord interaction');
+    if (!raw.deferred && !raw.replied) await raw.deferReply();
+  }
+
   async respondToSlashAsk(interaction: DiscordSlashAskRef, chunks: string[]): Promise<void> {
     const raw = this.rawInteractions.get(interaction);
     if (!raw) {
       throw new Error('slash interaction is missing its raw Discord interaction');
     }
     const toSend = chunks.length === 0 ? ['_I received an empty response from the AI. Please try again._'] : chunks;
-    await raw.deferReply();
+    if (!raw.deferred && !raw.replied) await raw.deferReply();
     const [first, ...rest] = toSend as [string, ...string[]];
     await raw.editReply(first);
     for (const chunk of rest) {
