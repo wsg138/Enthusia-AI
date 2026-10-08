@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
 import { Visibility } from '@enthusia/contracts';
 import type { ResolvedChatRequest } from '@enthusia/agent-core';
 import {
@@ -8,7 +9,6 @@ import {
 } from '../src/public-docs.js';
 
 const COMMIT = 'a'.repeat(40);
-const BLOB = 'b'.repeat(40);
 const README = [
   "# PieCloak",
   "PieCloak is Enthusia SMP's anti-ESP/base-finding layer.",
@@ -55,8 +55,10 @@ function mockClient(overrides: {
     } else if (url.endsWith('/contents/README.md?ref=' + COMMIT)) {
       const readme = overrides.readme ?? README;
       const content = overrides.content ?? Buffer.from(readme).toString('base64');
+      const bytes = Buffer.from(readme);
+      const blobSha = createHash('sha1').update('blob ' + bytes.length + '\0').update(bytes).digest('hex');
       data = {
-        sha: BLOB, size: overrides.size ?? Buffer.byteLength(readme),
+        sha: blobSha, size: overrides.size ?? Buffer.byteLength(readme),
         encoding: 'base64', content, type: 'file',
       };
     } else {
