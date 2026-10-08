@@ -65,6 +65,17 @@ async function waitLive(record, port) {
   throw new Error(record.label + ' did not become ready: ' + record.diagnostic());
 }
 
+async function checkReady(label, port) {
+  const response = await fetch('http://127.0.0.1:' + port + '/health/ready', {
+    signal: AbortSignal.timeout(5000),
+  });
+  const health = await response.json();
+  if (!response.ok || health.status !== 'ok') {
+    throw new Error(label + ' reported unready: HTTP ' + response.status +
+      ', state ' + String(health.status));
+  }
+}
+
 const safeKeys = new Set([
   'SYSTEMROOT', 'WINDIR', 'PATH', 'PATHEXT', 'TEMP', 'TMP',
   'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'PROGRAMDATA',
@@ -91,6 +102,7 @@ try {
     ...shared, ENTHUSIA_AGENT_PORT: String(agentPort), ENTHUSIA_AGENT_API_KEYS: agentKey,
   });
   await waitLive(agent, agentPort);
+  await checkReady('agent', agentPort);
   console.log('[smoke] Agent started and responded on 127.0.0.1.');
   const gateway = start('gateway', 'apps/ai-gateway/dist/main.js', {
     ...shared, ENTHUSIA_AI_GATEWAY_PORT: String(gatewayPort),
@@ -100,6 +112,7 @@ try {
     ENTHUSIA_GATEWAY_ALLOWED_SURFACES: 'discord',
   });
   await waitLive(gateway, gatewayPort);
+  await checkReady('gateway', gatewayPort);
   console.log('[smoke] Gateway started and responded on 127.0.0.1.');
   console.log('[smoke] No Discord login or model prompt was attempted.');
 } finally {
