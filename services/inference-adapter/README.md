@@ -28,6 +28,7 @@ change `ENTHUSIA_INFERENCE_BASE_URL` — no application code changes.
 |---|---|---|
 | `ENTHUSIA_INFERENCE_BASE_URL` | `http://localhost:8080` | OpenAI-compatible endpoint |
 | `ENTHUSIA_INFERENCE_MODEL` | `""` (server default) | Sent as `model` when non-empty |
+| `ENTHUSIA_INFERENCE_THINKING_MODE` | `default` | Opt-in `disabled` sends Ollama-compatible `think:false` for Qwen3 test inference; other runtimes retain the standard request by default |
 | `ENTHUSIA_INFERENCE_API_KEY` | unset in dev/test | Required in production; sent as `Bearer`, **never logged** |
 | `ENTHUSIA_INFERENCE_TIMEOUT_MS` | `120000` | Bounded per-attempt generation timeout |
 | `ENTHUSIA_INFERENCE_MAX_RETRIES` | `3` | Retries on 5xx / 429 / network errors |
@@ -101,3 +102,22 @@ const report = await checkInferenceHealth(client);
 - `test/integration.smoke.test.ts` — real-model smoke test, skipped unless
   `ENTHUSIA_INFERENCE_SMOKE_URL` is set (never downloads models, never runs
   in CI by default).
+
+### Existing PC Ollama local testing (no Discord deployment)
+
+When a local Ollama service runs on `127.0.0.1:11434`, the adapter can use its
+OpenAI-compatible endpoints (the adapter **appends** `/v1`; do not add it to the base URL):
+
+```ini
+ENTHUSIA_INFERENCE_BASE_URL=http://127.0.0.1:11434
+ENTHUSIA_INFERENCE_MODEL=qwen3:8b
+ENTHUSIA_INFERENCE_THINKING_MODE=disabled
+```
+
+The last option is intentionally **opt-in**: it sends the Ollama-specific
+`think:false` request field to prevent Qwen3's internal thinking tokens from
+consuming a short output budget without returning player-facing text. It is
+not an OpenAI-standard field; use `default` for llama.cpp/other runtimes.
+This setting changes local inference only. It does not configure or start a
+Discord bot, grant server evidence tools, authorize ticket actions or permit
+fine-tuning or production deployment.
