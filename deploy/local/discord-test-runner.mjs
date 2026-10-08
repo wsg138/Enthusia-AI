@@ -105,6 +105,9 @@ async function main() {
     ENTHUSIA_DISCORD_STAFF_CHANNELS: '',
     ENTHUSIA_DISCORD_STAFF_ROLES: '',
     ENTHUSIA_DISCORD_USE_MOCK_GATEWAY: 'false',
+    // The isolated Agent may use most of its 120s deadline for local Qwen3.
+    // The Discord client must outlive the Gateway's own timeout.
+    ENTHUSIA_DISCORD_GATEWAY_TIMEOUT_MS: '130000',
     ENTHUSIA_DISCORD_SLASH_ONLY: 'false',
     ENTHUSIA_DISCORD_MENTION_ONLY: 'true',
     DISCORD_BOT_TOKEN: token,
