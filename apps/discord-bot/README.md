@@ -66,3 +66,47 @@ leave all auto-response channel ID lists empty until a dedicated AI test
 channel is approved. The bot currently requests privileged Member and
 Message Content gateway intents; both must be enabled in the Developer Portal
 for the chosen application. Production deployment is independent of a merge.
+
+## Owner test Discord local launch (Qwen3 8B)
+
+Owner-verified **test guild** (not the real server): \`1552729865306767471\`.
+The \`ticket-logs\` channel is prohibited for AI testing. On the owner's PC,
+\`C:\Users\racec\Blackboard\Enthusia-AI-Training\local-ai-preflight\Start-EnthusiaAi-Test.ps1\`
+sets up a clean separate test working copy, builds the mono-repo, and launches
+\`deploy/local/discord-test-runner.mjs\` without persisting credentials.
+
+**Only from the private PowerShell process where the token was entered:**
+\`\`\`powershell
+& "$env:USERPROFILE\Blackboard\Enthusia-AI-Training\local-ai-preflight\Start-EnthusiaAi-Test.ps1"
+\`\`\`
+
+The launcher prompts for the numeric \`#ai-testing\` Discord channel ID; it
+refuses the known \`ticket-logs\` channel ID. It scopes *all* response triggers,
+including mentions and \`/ai ask\`, to that guild and one channel. This is
+separate from \`ENTHUSIA_DISCORD_TEST_CHANNELS\` (which auto-triggers on every
+message); the launcher keeps that auto-trigger list EMPTY. Use slash commands
+to test. The bot will ignore triggers elsewhere; slash commands outside the
+allowed test channel may show Discord's generic "application did not respond"
+status because no reply is intentionally sent there.
+
+The launcher uses preinstalled local Ollama \`qwen3:8b\` with
+\`ENTHUSIA_INFERENCE_THINKING_MODE=disabled\`, ephemeral internal bearer keys,
+and NO live Ticket Bot/SFTP/moderation/OpenAI credentials. Gateway and agent
+run at local \`127.0.0.1:4100\` and \`127.0.0.1:4200\` URLs respectively, with
+authenticated requests even in development; the existing Node services'
+listener ports are not otherwise publicly authorized. The launcher refuses
+those ports when already occupied and stops only its own children on exit.
+It does not train, rent GPUs, create users, close tickets, or change Bloom.
+Only use it on a trusted Windows PC; other machines on the LAN should not be
+given internal service bearer keys. No test conversations should include
+secrets or actual private tickets.
+
+**Normal production** remains gated by separate deploy review. This test
+helper deliberately reuses an existing Discord application already installed
+in the test guild. The bot token is never passed on the command line or
+checked into source. Running two Discord gateway processes with the same bot
+token concurrently is unsupported.
+
+**Important:** This local preflight does not imply that the full AI
+reasoner reliably produces strict JSON from Qwen3 8B. Record actual test
+results and errors before considering broader bot access or training.
