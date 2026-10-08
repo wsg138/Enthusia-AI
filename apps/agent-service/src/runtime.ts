@@ -44,7 +44,7 @@ export interface TicketBotRuntimeConfig {
 
 export type AgentRuntimeOptions = Pick<
   OrchestratorDeps,
-  'onVerifiedTopicHelp' | 'onUnhandledError'
+  'onVerifiedTopicHelp' | 'onUnhandledError' | 'publicSourceResolver'
 >;
 
 export interface ModerationHistoryRuntimeConfig {
@@ -166,6 +166,9 @@ export function createAgentRuntime(
         : {}),
       ...(options.onUnhandledError !== undefined
         ? { onUnhandledError: options.onUnhandledError }
+        : {}),
+      ...(options.publicSourceResolver !== undefined
+        ? { publicSourceResolver: options.publicSourceResolver }
         : {}),
     }),
     registry,
