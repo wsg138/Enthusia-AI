@@ -44,7 +44,7 @@ export interface TicketBotRuntimeConfig {
 
 export type AgentRuntimeOptions = Pick<
   OrchestratorDeps,
-  'onVerifiedTopicHelp'
+  'onVerifiedTopicHelp' | 'onUnhandledError'
 >;
 
 export interface ModerationHistoryRuntimeConfig {
@@ -163,6 +163,9 @@ export function createAgentRuntime(
       registry,
       ...(options.onVerifiedTopicHelp !== undefined
         ? { onVerifiedTopicHelp: options.onVerifiedTopicHelp }
+        : {}),
+      ...(options.onUnhandledError !== undefined
+        ? { onUnhandledError: options.onUnhandledError }
         : {}),
     }),
     registry,
