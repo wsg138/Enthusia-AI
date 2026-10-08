@@ -54,6 +54,13 @@ describe('resolveDiscordBotOptions', () => {
     expect(options.slashCommandGuildId).toBe('guild-9');
   });
 
+  it('allows the isolated Discord client to wait longer than a slow local model', () => {
+    const options = resolveDiscordBotOptions({
+      ENTHUSIA_DISCORD_GATEWAY_TIMEOUT_MS: '130000',
+    });
+    expect(options.gatewayTimeoutMs).toBe(130000);
+  });
+
   it('falls back to defaults on invalid numbers', () => {
     const options = resolveDiscordBotOptions({ ENTHUSIA_DISCORD_PER_USER_LIMIT: 'banana' });
     expect(options.perUserRateLimit.maxRequests).toBe(5);
