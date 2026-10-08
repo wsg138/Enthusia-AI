@@ -110,6 +110,14 @@ async function main(): Promise<void> {
       ...(familiarity.onVerifiedTopicHelp !== undefined
         ? { onVerifiedTopicHelp: familiarity.onVerifiedTopicHelp }
         : {}),
+      onUnhandledError: (error, traceId) => {
+        const message = error instanceof Error ? error.message : '';
+        const knownModelPhase = /^(?:classifyIntent|planEvidence|nextStep): local reasoner returned (?:invalid JSON shape|non-JSON output)$/.test(message);
+        logger.error({
+          traceId,
+          category: knownModelPhase ? message : 'unexpected_agent_failure',
+        }, 'agent failed to complete request');
+      },
     },
   );
 
