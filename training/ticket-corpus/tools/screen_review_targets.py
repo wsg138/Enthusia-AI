@@ -28,7 +28,7 @@ EVIDENCE_CLAIM = re.compile(
     re.IGNORECASE,
 )
 ARTIFACT = re.compile(
-    r"\b(?:in this fixture|fixture(?:-only)? (?:evidence|shows)|"
+    r"\b(?:in (?:this|the) test scenario|in this fixture|fixture(?:-only)? (?:evidence|shows)|"
     r"synthetic (?:fixture|example|scenario)|training (?:example|dataset)|"
     r"(?:source_refs|scenario_facts|staff_handoff)|"
     r"as an ai language model)\b",
