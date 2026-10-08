@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 from enthusia_datasets.record import validate_record
-from enthusia_finetune import assembly
+from enthusia_finetune import assembly, trainer
 from enthusia_finetune.review_admission import (
     AdmissionError, ReviewAdmission, record_digest, worker_derived, SCHEMA
 )
@@ -225,6 +225,30 @@ class ManifestAdmissionTests(unittest.TestCase):
             self.assertEqual([x["id"] for x in val], ["W02-0001"])
             self.assertEqual(result["ticket_review_admission"]["manifest_id"],"fixture-review-v1")
             self.assertTrue(any("not independently approved" in x["reason"] for x in result["exclusions"]))
+
+    def test_direct_gpu_runner_refuses_unapproved_worker(self):
+        r = validate_record(worker_record())
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td)/"train.jsonl"
+            p.write_text(json.dumps(r)+"\n", encoding="utf-8")
+            with self.assertRaisesRegex(trainer.TrainingInputError, "independent review manifest"):
+                trainer.prepare_jsonl(str(p))
+
+    def test_direct_gpu_runner_checks_manifest_and_split(self):
+        r = validate_record(worker_record())
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            data = root/"train.jsonl"
+            data.write_text(json.dumps(r)+"\n", encoding="utf-8")
+            manifest_path = save(root/"approved.json", manifest(entry(r, split="train")))
+            accepted = trainer.prepare_jsonl(
+                str(data), ticket_review_manifest=str(manifest_path),
+                expected_split="train")
+            self.assertEqual(accepted.summary.records, 1)
+            with self.assertRaisesRegex(trainer.TrainingInputError, "does not match requested"):
+                trainer.prepare_jsonl(
+                    str(data), ticket_review_manifest=str(manifest_path),
+                    expected_split="validation")
 
     def test_no_manifest_record_dropped_even_if_quality_ideal(self):
         a = worker_record("W01-0001",family="a",seed="s1")
