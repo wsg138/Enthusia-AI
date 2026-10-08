@@ -942,14 +942,15 @@ describe('ticket events', () => {
     };
     const off = router.subscribe('ticket.updated', good);
     router.subscribe('ticket.updated', bad);
-    await router.ingest({
+    await expect(router.ingest({
       type: 'ticket.updated',
       event_id: 'e-5',
       ticket_id: 'T-1234',
       occurred_at: '2026-10-03T10:00:00.000Z',
       source: 'ticket-bot',
       payload: { status: 'pending' },
-    });
+    })).rejects.toThrow('retry delivery required');
+    // Other subscribers still execute, but the delivery is not falsely acked.
     expect(seen).toEqual(['good']);
     expect(errors).toHaveLength(1);
     off();
@@ -1165,7 +1166,8 @@ describe('ticket tools', () => {
     expect(result.error?.retryable).toBe(false);
   });
 
-  it('ticket.request_close submits an action request and returns the result', async () => {
+  it('ticket.request_close verifies persisted status before allowing a success claim', async () => {
+    recorded.length = 0;
     const tools = createTicketTools(makeClient());
     const tool = tools.find((t) => t.meta.name === 'ticket.request_close')!;
     const result = await tool.execute(
@@ -1173,9 +1175,21 @@ describe('ticket tools', () => {
       ctxFor(Visibility.STAFF),
     );
     expect(result.error).toBeUndefined();
-    const payload = result.result as ActionRequestResult;
+    const payload = result.result as ActionRequestResult & {
+      verification: string;
+      canReportSuccess: boolean;
+    };
     expect(payload.requestId).toBe('ar-1');
     expect(payload.action).toBe('close');
+    expect(payload.verification).toBe('confirmed');
+    expect(payload.canReportSuccess).toBe(true);
+    expect(
+      recorded.some(
+        (request) =>
+          request.method === 'GET' &&
+          request.path === '/v1/actions/requests/ar-1',
+      ),
+    ).toBe(true);
   });
 
   it('ticket lifecycle requests deny player actors before submission', async () => {
