@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from . import config as config_mod
+from .review_admission import ReviewAdmission, worker_derived
 
 TRAINABLE_QUALITIES = frozenset({"GOOD", "IDEAL"})
 TRAINABLE_VISIBILITIES = frozenset({"public", "staff"})
@@ -157,11 +158,19 @@ def _training_example(raw: Any, *, path: str, lineno: int) -> tuple[dict[str, An
     }, quality
 
 
-def prepare_jsonl(path: str) -> PreparedDataset:
+def prepare_jsonl(
+    path: str, *,
+    ticket_review_manifest: str | None = None,
+    expected_split: str | None = None,
+) -> PreparedDataset:
     source = Path(path).expanduser().resolve()
     if not source.is_file():
         raise TrainingInputError(f"training partition not found: {source}")
 
+    admission = (
+        ReviewAdmission.from_path(ticket_review_manifest)
+        if ticket_review_manifest else None
+    )
     examples: list[dict[str, Any]] = []
     quality_counts: dict[str, int] = {}
     with source.open(encoding="utf-8") as handle:
@@ -175,6 +184,22 @@ def prepare_jsonl(path: str) -> PreparedDataset:
                 raise TrainingInputError(
                     f"{source}:{lineno}: invalid JSON: {exc}"
                 ) from exc
+            if worker_derived(raw):
+                if admission is None:
+                    raise TrainingInputError(
+                        f"{source}:{lineno}: worker-derived ticket requires an "
+                        "independent review manifest even for direct GPU training"
+                    )
+                approved_split, reason = admission.eligible_split(raw)
+                if reason:
+                    raise TrainingInputError(
+                        f"{source}:{lineno}: review admission: {reason}"
+                    )
+                if expected_split is not None and approved_split != expected_split:
+                    raise TrainingInputError(
+                        f"{source}:{lineno}: approved split {approved_split!r} "
+                        f"does not match requested {expected_split!r}"
+                    )
             example, quality = _training_example(
                 raw, path=str(source), lineno=lineno
             )
@@ -208,9 +233,18 @@ def build_training_plan(
     train_json: str,
     validation_json: str | None,
     output_dir: str | None = None,
+    ticket_review_manifest: str | None = None,
 ) -> dict[str, Any]:
-    train = prepare_jsonl(train_json)
-    validation = prepare_jsonl(validation_json) if validation_json else None
+    train = prepare_jsonl(
+        train_json, ticket_review_manifest=ticket_review_manifest,
+        expected_split="train",
+    )
+    validation = (
+        prepare_jsonl(
+            validation_json, ticket_review_manifest=ticket_review_manifest,
+            expected_split="validation",
+        ) if validation_json else None
+    )
     out = output_dir or cfg.output["adapter_dir"]
 
     return {
@@ -321,12 +355,14 @@ def run_training(
     validation_json: str | None,
     output_dir: str | None = None,
     resume_from_checkpoint: str | None = None,
+    ticket_review_manifest: str | None = None,
 ) -> dict[str, Any]:
     plan = build_training_plan(
         cfg,
         train_json=train_json,
         validation_json=validation_json,
         output_dir=output_dir,
+        ticket_review_manifest=ticket_review_manifest,
     )
 
     # Lazy imports: normal CI and prepare-only workflows do not install or load
@@ -346,9 +382,15 @@ def run_training(
     if not torch.cuda.is_available():  # pragma: no cover - GPU-host guard
         raise RuntimeError("CUDA GPU is required for this training command")
 
-    train_prepared = prepare_jsonl(train_json)
+    train_prepared = prepare_jsonl(
+        train_json, ticket_review_manifest=ticket_review_manifest,
+        expected_split="train",
+    )
     validation_prepared = (
-        prepare_jsonl(validation_json) if validation_json else None
+        prepare_jsonl(
+            validation_json, ticket_review_manifest=ticket_review_manifest,
+            expected_split="validation",
+        ) if validation_json else None
     )
     train_dataset = Dataset.from_list(train_prepared.examples)
     eval_dataset = (
@@ -449,6 +491,8 @@ def build_cli() -> argparse.ArgumentParser:
     parser.add_argument("--config", required=True)
     parser.add_argument("--train-json", required=True)
     parser.add_argument("--validation-json")
+    parser.add_argument("--ticket-review-manifest",
+        help="private independent approval manifest for worker-derived tickets")
     parser.add_argument("--output-dir")
     parser.add_argument("--resume-from-checkpoint")
     parser.add_argument(
@@ -467,6 +511,7 @@ def main(argv: list[str] | None = None) -> int:
         train_json=args.train_json,
         validation_json=args.validation_json,
         output_dir=args.output_dir,
+        ticket_review_manifest=args.ticket_review_manifest,
     )
     if args.dry_run:
         print(json.dumps(plan, indent=2, sort_keys=True))
@@ -478,6 +523,7 @@ def main(argv: list[str] | None = None) -> int:
         validation_json=args.validation_json,
         output_dir=args.output_dir,
         resume_from_checkpoint=args.resume_from_checkpoint,
+        ticket_review_manifest=args.ticket_review_manifest,
     )
     print(json.dumps(manifest, indent=2, sort_keys=True, default=str))
     return 0
