@@ -45,8 +45,8 @@ export class InMemoryTicketEventDeduplicationStore
 
   async claim(key: string): Promise<boolean> {
     if (this.claimed.has(key)) return false;
+    this.makeRoomBeforeClaim();
     this.claimed.set(key, 'inflight');
-    this.evictOldestIfNeeded();
     return true;
   }
 
@@ -65,8 +65,8 @@ export class InMemoryTicketEventDeduplicationStore
     return this.claimed.size;
   }
 
-  private evictOldestIfNeeded(): void {
-    if (this.claimed.size <= this.maxEntries) return;
+  private makeRoomBeforeClaim(): void {
+    if (this.claimed.size < this.maxEntries) return;
     // Never evict an in-flight claim; doing so could dispatch concurrently.
     // A bounded test store may reject further deliveries until a handler ends.
     for (const [key, state] of this.claimed) {
