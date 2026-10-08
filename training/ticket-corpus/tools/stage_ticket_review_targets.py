@@ -24,7 +24,7 @@ import re
 import sys
 
 SCHEMA = "enthusia-ticket-review-admission/v1"
-SOURCE_PATTERN = re.compile(r"^W[0-9]{2}-[a-z0-9-]+\.jsonl$")
+SOURCE_PATTERN = re.compile(r"^W[0-9]{2}-(?!batch[0-9])[a-z0-9-]+\.jsonl$")
 CHECKED_CLAIM = re.compile(
     r"\b(?:I checked|I've checked|I found|I verified|the logs (?:show|confirm)|"
     r"the database (?:shows|confirms)|the checks show|I pulled (?:the )?logs)\b",
