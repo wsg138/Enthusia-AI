@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import os
 import sys
 import tempfile
 import unittest
@@ -111,7 +112,7 @@ class StagingFixtureTests(unittest.TestCase):
             audit = make_audit(root,original["candidate_id"])
             staged = root/"staged"
             # The same validator as W16 is loaded by stage().
-            w16_root = Path(__file__).resolve().parents[3]/"datasets"
+            w16_root = Path(os.environ["ENTHUSIA_W16_ROOT"]) if "ENTHUSIA_W16_ROOT" in os.environ else Path(__file__).resolve().parents[2]/"datasets"
             report = stage(output,audit,staged,w16_root)
             self.assertEqual(report["approved_training_records"],0)
             self.assertEqual(report["draft_prompt_completion_slices"],2)
@@ -129,7 +130,7 @@ class StagingFixtureTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             source = root/"outputs";source.mkdir()
-            w16_root = Path(__file__).resolve().parents[3]/"datasets"
+            w16_root = Path(os.environ["ENTHUSIA_W16_ROOT"]) if "ENTHUSIA_W16_ROOT" in os.environ else Path(__file__).resolve().parents[2]/"datasets"
             with self.assertRaises(FileNotFoundError):
                 stage(source,root,root/"staged",w16_root)
 
