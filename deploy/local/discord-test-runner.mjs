@@ -105,7 +105,8 @@ async function main() {
     ENTHUSIA_DISCORD_STAFF_CHANNELS: '',
     ENTHUSIA_DISCORD_STAFF_ROLES: '',
     ENTHUSIA_DISCORD_USE_MOCK_GATEWAY: 'false',
-    ENTHUSIA_DISCORD_SLASH_ONLY: 'true',
+    ENTHUSIA_DISCORD_SLASH_ONLY: 'false',
+    ENTHUSIA_DISCORD_MENTION_ONLY: 'true',
     DISCORD_BOT_TOKEN: token,
   });
   // Clear the runner's own env copy after passing it to the Discord child.
