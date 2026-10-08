@@ -97,6 +97,19 @@ export interface DiscordSlashAskRef {
 }
 
 /** One outbound Discord message. */
+export interface DiscordEmbedCard {
+  title: string;
+  description: string;
+  color: number;
+  fields?: Array<{ name: string; value: string; inline?: boolean }>;
+  footer?: { text: string };
+}
+
+export interface DiscordRichResponse {
+  content?: string;
+  embed: DiscordEmbedCard;
+}
+
 export interface OutgoingDiscordMessage {
   content: string;
   /** When set, the message is sent as a reply to this message. */
@@ -127,11 +140,19 @@ export interface DiscordClientPort {
    */
   sendMessage(channelId: Snowflake, message: OutgoingDiscordMessage): Promise<Snowflake>;
 
+  /** Rich embed send. Optional so legacy/mock clients remain functional. */
+  sendRichMessage?(channelId: Snowflake, message: DiscordRichResponse, replyToMessageId?: Snowflake): Promise<Snowflake>;
+
+  /** Best-effort reaction status on a specific incoming message. */
+  addMessageReaction?(message: DiscordMessageRef, emoji: string): Promise<void>;
+  removeMessageReaction?(message: DiscordMessageRef, emoji: string): Promise<void>;
+
   /**
    * Slash-command flow: acknowledge the interaction, then deliver each chunk
    * in order (first chunk edits the deferred reply, the rest are follow-ups).
    */
   respondToSlashAsk(interaction: DiscordSlashAskRef, chunks: string[]): Promise<void>;
+  respondToSlashAskRich?(interaction: DiscordSlashAskRef, message: DiscordRichResponse): Promise<void>;
 
   /** Acknowledge an allowed slash command before waiting for slow model inference. */
   deferSlashAsk?(interaction: DiscordSlashAskRef): Promise<void>;
