@@ -34,7 +34,28 @@ ARTIFACT = re.compile(
     r"as an ai language model)\b",
     re.IGNORECASE,
 )
-# Review-only signals. These patterns do NOT establish incident facts or\n# prove a handoff did not occur; a reviewer must check the as-of-turn trace.\nSYNTHETIC_LANGUAGE = re.compile(r"\\b(?:synthetic|fixture)\\b", re.IGNORECASE)\nSOURCE_FINDING = re.compile(\n    r"\\b(?:server(?:-side)? (?:evidence|timing|logs?|records?) |"\n    r"(?:the )?available (?:records?|logs?|evidence) |"\n    r"(?:the )?latest incident |"\n    r"(?:our|the) (?:server|proxy) (?:checks?|records?) )"\n    r"(?:supports?|shows?|confirms?|indicates?|overlaps?|matches?|proves?)\\b",\n    re.IGNORECASE,\n)\nUNVERIFIED_HANDOFF = re.compile(\n    r"\\b(?:I(?:'m| am) (?:handing|sending|passing|escalating|forwarding)"\n    r"(?: (?:this|the|your|it|a|an|case|ticket|issue|report|request|incident|to|over|along|up)\\b){0,9}"\n    r"(?:\\s+to\\s+(?:staff|moderators?|admins?|the team))?|"\n    r"I(?:'ve| have) (?:already )?(?:handed|sent|passed|escalated|forwarded)"\n    r"(?: (?:this|the|your|it|case|ticket|issue|report|request|incident|to|over|along|up)\\b){0,9})\\b",\n    re.IGNORECASE,\n)\n\n\nPROMISE = re.compile(
+# Review-only signals. These patterns do NOT establish incident facts or
+# prove a handoff did not occur; a reviewer must check the as-of-turn trace.
+SYNTHETIC_LANGUAGE = re.compile(r"\b(?:synthetic|fixture)\b", re.IGNORECASE)
+SOURCE_FINDING = re.compile(
+    r"\b(?:server(?:-side)? (?:evidence|timing|logs?|records?) |"
+    r"(?:the )?available (?:records?|logs?|evidence) |"
+    r"(?:the )?latest incident |"
+    r"(?:our|the) (?:server|proxy) (?:checks?|records?) )"
+    r"(?:supports?|shows?|confirms?|indicates?|overlaps?|matches?|proves?)\b",
+    re.IGNORECASE,
+)
+UNVERIFIED_HANDOFF = re.compile(
+    r"\b(?:I(?:'m| am) (?:handing|sending|passing|escalating|forwarding)"
+    r"(?: (?:this|the|your|it|a|an|case|ticket|issue|report|request|incident|to|over|along|up)\b){0,9}"
+    r"(?:\s+to\s+(?:staff|moderators?|admins?|the team))?|"
+    r"I(?:'ve| have) (?:already )?(?:handed|sent|passed|escalated|forwarded)"
+    r"(?: (?:this|the|your|it|case|ticket|issue|report|request|incident|to|over|along|up)\b){0,9})\b",
+    re.IGNORECASE,
+)
+
+
+PROMISE = re.compile(
     r"\b(?:I(?:'ll| will) (?:refund|restore|reimburse|ban|punish|"
     r"roll\s?back|delete|edit|transfer) (?:your |the |those |that |it\b)|"
     r"I(?:'ve| have) (?:refunded|restored|reimbursed|punished|banned|"
