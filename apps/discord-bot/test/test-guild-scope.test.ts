@@ -34,6 +34,7 @@ describe('isolated Discord testing scope', () => {
       channel: { id: 'ticket-logs', kind: 'guild-text', guild: { id: 'guild-test', name: 'Test' } },
     }))).outcome).toBe('ignored');
     expect(port.slashResponses).toHaveLength(0);
+    expect(port.deferredSlashes).toHaveLength(0);
   });
   it('allows slash commands in the exact test guild and channel', async () => {
     const { bot, port } = setup();
@@ -43,6 +44,7 @@ describe('isolated Discord testing scope', () => {
     }));
     expect(result.outcome).toBe('responded');
     expect(port.slashResponses).toHaveLength(1);
+    expect(port.deferredSlashes).toHaveLength(1);
   });
   it('does not answer ordinary messages in slash-only mode', async () => {
     const port = new MockDiscordClientPort();
