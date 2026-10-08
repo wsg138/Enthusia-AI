@@ -184,7 +184,9 @@ def prepare_jsonl(
                 raise TrainingInputError(
                     f"{source}:{lineno}: invalid JSON: {exc}"
                 ) from exc
-            if worker_derived(raw):
+            if worker_derived(raw) or admission is not None:
+                # When a manifest is explicitly supplied, every record in
+                # this partition must match it. Do not mix unapproved files.
                 if admission is None:
                     raise TrainingInputError(
                         f"{source}:{lineno}: worker-derived ticket requires an "
