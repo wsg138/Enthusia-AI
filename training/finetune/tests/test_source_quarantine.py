@@ -120,6 +120,8 @@ class QuarantineTests(unittest.TestCase):
         row["id"] = row["candidate_id"] = "W02-0001-a01"
         row["source_candidate_id"] = "W02-0001"
         row["family_group"] = "fake-other-family"
+        row["source_candidate_sha256"] = "d"*64
+        row["source_file_sha256"] = "e"*64
         split, why = gate(row, quarantine=quarantine).eligible_split(validate_record(row))
         self.assertEqual((split, why), ("train", None))
 
