@@ -100,6 +100,7 @@ def prepare(
     ledger_path: str,
     run_eval_before: bool = True,
     split_seed: int = 1337,
+    ticket_review_manifest: str | None = None,
 ) -> PipelineResult:
     """Run every $0 local stage: budget -> assembly -> eval-before -> plans."""
     result = PipelineResult(stage="prepare", config_name=cfg.name)
@@ -124,6 +125,7 @@ def prepare(
         dataset_version=dataset_version,
         generator=f"enthusia-finetune/{cfg.name}",
         split_config=asm.SplitConfig(seed=split_seed),
+        ticket_review_manifest=ticket_review_manifest,
     )
     result.dataset = {
         "version": manifest["dataset_version"],
@@ -264,6 +266,8 @@ def build_cli() -> argparse.ArgumentParser:
     p.add_argument("--out-dir", required=True)
     p.add_argument("--dataset-version", required=True)
     p.add_argument("--seed", type=int, default=1337)
+    p.add_argument("--ticket-review-manifest", default=None,
+                   help="private independent review/admission manifest for worker-derived synthetic tickets")
 
     p = sub.add_parser("export-plan", help="Print the GGUF export plan (dry-run).")
     p.add_argument("--config", required=True)
@@ -275,6 +279,8 @@ def build_cli() -> argparse.ArgumentParser:
     p.add_argument("--out-dir", default=None)
     p.add_argument("--dataset-version", default=None)
     p.add_argument("--ledger", default="budget-ledger.json")
+    p.add_argument("--ticket-review-manifest", default=None,
+                   help="private independently approved ticket record manifest")
     p.add_argument("--adapter-dir", default=None)
     p.add_argument("--eval-before", default=None)
     p.add_argument("--eval-after", default=None)
@@ -305,6 +311,7 @@ def main(argv: list[str] | None = None) -> int:
             args.out_dir,
             dataset_version=args.dataset_version,
             split_config=asm.SplitConfig(seed=args.seed),
+            ticket_review_manifest=args.ticket_review_manifest,
         )
         print(json.dumps(manifest["counts"], indent=2))
         return 0
@@ -337,6 +344,7 @@ def main(argv: list[str] | None = None) -> int:
                 dataset_version=args.dataset_version,
                 ledger_path=args.ledger,
                 run_eval_before=not args.no_eval_before,
+                ticket_review_manifest=args.ticket_review_manifest,
             )
             print(json.dumps(result.as_dict(), indent=2))
             return 0
