@@ -189,12 +189,71 @@ recommendations (both assistant slices per source) are not accidentally
 omitted during subsequent proposal application. Per-proposal source and
 original reviewed-target hashes remain mandatory when the ledger is supplied.
 
-The original private `editorial-derivative-v3` remains the authoritative
-668-row all-HOLD release. The 37 hash-checked proposed changes across
-22 non-rejected source tickets are merely private editorial notes; they are
-**not** an independently validated derivative or training approval.
-The PC execution gate blocked creation of `editorial-derivative-v4`;
-do not claim that v4, post-edit W16/W19 CPU preflight or a fresh screen exists.
+**Historical status before the PC connection recovered:** v3 was the
+current release and the 37 v8 proposals were unapplied. The old PC execution
+block and lack of v4 validation described that earlier stage only. See the
+executed v4/v5 status below for the current state.
 
 Passing synthetic code tests cannot establish actual source verification,
 privacy/rights, historical incident facts, or authorized staff tool actions.
+
+
+## Executed immutable HOLD-only derivatives v4 and v5 — 2026-10-08
+
+This update supersedes the earlier pending/blocked status. The authorized
+Blackboard PC connection recovered. The coordinator mirrored the exact
+merged PR #103 editorial and screening tools into the owner's **private**
+`TicketStageTest/tools` directory, then executed the guarded CPU-only
+workflow there. Private inputs, conversation text, and outputs were never
+committed to GitHub.
+
+**v4** was derived from v3 using the v3-release-bound private six-source
+quarantine ledger and `EDITORIAL-PROPOSALS-V8.private.jsonl`. The tool
+reported **668 drafts, 37 rewritten target answers, 15 earlier-assistant
+context replays, zero source-ref changes and zero approvals**. An independent
+read-only before/after structural comparison confirmed exactly those
+37+15 edits; no other target fields or source-index fields changed and
+all 12 slices from the six rejected source tickets were byte-for-byte
+unchanged.
+
+**v5** was derived from v4 using 44 case-specific private HOLD-only
+`EDITORIAL-PROPOSALS-V9.private.jsonl` corrections for the 44
+non-quarantined high-priority replies in `screening-v8`. Before that run,
+the original six REJECT recommendations were re-frozen through the existing
+ledger builder against v4's exact all-HOLD manifest into an immutable
+`parallel-review-coordinator/quarantine-v2/SOURCE-QUARANTINE.private.json`
+(SHA-256
+`0e8f54b06bbb6d2c3dc7c21187c3fe7026fecb1d726a0e22a68581af32cb9b9f`).
+The v4-to-v5 derivative reported **668 drafts, 44 rewritten target answers,
+zero prior-context replays, zero source-ref changes and zero approvals**.
+A separate structural comparison confirmed 44 target-only edits, all source
+index values unchanged, and all 12 quarantined slices unchanged.
+
+`TicketStageTest/validate_editorial_release_v4.py` and `v5.py`
+each performed local W16 normalization, normalized target SHA-256 checks,
+W19 HOLD-only admission checks, and W16's existing credential-pattern scan.
+For **both** immutable derivatives:
+
+- 668/668 draft/manifest hashes matched; no schema/digest or known
+  staff-only structural errors were reported.
+- W19 refused **all 668/668** as `not independently approved`.
+- Existing scanner found **0 credential-pattern matches**; this does **not**
+  imply comprehensive privacy, licensing or staff-visibility clearance.
+
+Latest private review candidate:
+`SyntheticWorkers/editorial-derivative-v5/` with
+`SyntheticWorkers/screening-v9/`. Original v3 and v4 immutable releases
+remain unchanged and available for comparison and rollback.
+
+The 44 v9 edits are **provisional editorial corrections only**. None has
+independent source/action-log verification, privacy/rights clearance or a
+trainable split. Six rejected source tickets stay quarantined. The v8
+50-case review packet remains private at
+`parallel-review-coordinator/PRIORITIZED-EVIDENCE-PACKET-V8.private.jsonl`;
+its historical original risk ratings are not fresh v9 approvals.
+
+**Next permitted work:** independent per-record/as-of-turn factual review,
+rights/privacy and staff-only visibility assessment, source-lineage/split
+audit and controlled further HOLD-only edits. Do not train, run a paid GPU,
+release a model, alter production, or touch W20 holdout data as a result
+of any of these screening scores or CPU checks.
