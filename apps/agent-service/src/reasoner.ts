@@ -298,6 +298,10 @@ export class InferenceReasoner implements Reasoner {
     classification: IntentClassification,
     availableTools: ToolMetadata[],
   ): Promise<EvidencePlanStep[]> {
+    // No registered sources means no verifiable evidence plan is possible.
+    // Avoid asking smaller models to invent tools or return prose instead
+    // of a plan. Normal strict model validation still applies when tools exist.
+    if (availableTools.length === 0) return [];
     const raw = await this.completeJson(
       {
         messages: [
