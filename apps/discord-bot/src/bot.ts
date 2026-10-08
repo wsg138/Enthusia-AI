@@ -279,7 +279,14 @@ export class EnthusiaAiDiscordBot {
     );
     const card = rich?.sendRich ? formatRichAgentResponse(response) : null;
     if (card && rich?.sendRich) {
-      await rich.sendRich(card);
+      try {
+        await rich.sendRich(card);
+      } catch {
+        // Lack of Embed Links permission or an unsupported Discord surface
+        // must not prevent a valid, already-verified answer.
+        log.warn('rich response unavailable; falling back to plain text');
+        await sendChunks(chunks);
+      }
     } else {
       await sendChunks(chunks);
     }
