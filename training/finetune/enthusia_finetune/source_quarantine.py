@@ -72,16 +72,24 @@ class SourceQuarantine:
     def reason(self, record: dict) -> str | None:
         cid = record.get("candidate_id")
         matched = SLICE_ID.fullmatch(cid) if isinstance(cid, str) else None
-        if matched is None:
-            return None
-        source = matched.group(1)
-        if record.get("source_candidate_id") != source:
+        from_id = matched.group(1) if matched else None
+        source = record.get("source_candidate_id")
+        if from_id is not None and source != from_id:
             return "source-ticket lineage mismatch"
+        # Source provenance, not a mutable draft suffix, is the quarantine
+        # authority. Detect mislabeled or renamed derivatives too.
+        if not isinstance(source, str) or not source:
+            return "missing source-ticket provenance"
+        hashes = {
+            row["source_candidate_sha256"]: sid
+            for sid, row in self.sources.items()
+        }
+        blocked_source = hashes.get(record.get("source_candidate_sha256"))
+        if blocked_source is not None and blocked_source != source:
+            return "quarantined source identity mismatch"
         blocked = self.sources.get(source)
         if blocked is None:
             return None
-        # Refuse conflicting source provenance rather than silently
-        # treating a swapped/mislabeled record as safely non-quarantined.
         for field in ("source_candidate_sha256", "source_file_sha256", "source_revision"):
             if record.get(field) != blocked[field]:
                 return "quarantined source provenance mismatch"
