@@ -45,6 +45,8 @@ export interface DiscordJsClientOptions {
   token: string;
   /** Register `/ai` for one guild (fast) instead of globally (slow). */
   slashCommandGuildId?: string;
+  /** Test-only slash command mode requiring no privileged gateway intents. */
+  slashOnly?: boolean;
 }
 
 export const AI_COMMAND_NAME = 'ai';
@@ -262,13 +264,15 @@ export class DiscordJsClientAdapter implements DiscordClientPort {
     private readonly logger: EnthusiaLogger,
   ) {
     this.client = new Client({
-      intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        // Privileged intent: required to read message content.
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers,
-      ],
+      intents: options.slashOnly
+        ? [GatewayIntentBits.Guilds]
+        : [
+          GatewayIntentBits.Guilds,
+          GatewayIntentBits.GuildMessages,
+          // Privileged intents used only by full message/role context mode.
+          GatewayIntentBits.MessageContent,
+          GatewayIntentBits.GuildMembers,
+        ],
     });
     this.rest = new REST({ version: '10' }).setToken(options.token);
 
@@ -277,7 +281,7 @@ export class DiscordJsClientAdapter implements DiscordClientPort {
       this.logger.info({ botUserId: this.readyUserId }, 'Discord client ready');
     });
     this.client.on(Events.MessageCreate, (message) => {
-      if (this.messageHandler === null) {
+      if (this.options.slashOnly || this.messageHandler === null) {
         return;
       }
       try {
