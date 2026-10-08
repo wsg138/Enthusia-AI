@@ -45,23 +45,19 @@ async function main() {
   const installed = (health.models ?? []).some((m) => m.name === 'qwen3:8b');
   if (!installed) throw new Error('Ollama Qwen3 8B is not available locally.');
 
-  // Keep only host environment needed by Node/Windows. Do not forward unrelated
-  // Discord, production, moderation, remote access or other service credentials.
+  // Pass only OS/runtime variables, never arbitrary inherited secrets.
+  const allowedEnvironment = new Set([
+    'SYSTEMROOT', 'WINDIR', 'PATH', 'PATHEXT', 'TEMP', 'TMP',
+    'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'PROGRAMDATA',
+    'HOMEDRIVE', 'HOMEPATH', 'HOME', 'OS', 'LANG', 'TZ',
+  ]);
   const safe = Object.fromEntries(
-    Object.entries(process.env).filter(([key]) => {
-      const name = key.toUpperCase();
-      return !name.startsWith('DISCORD') &&
-        !name.startsWith('ENTHUSIA_') &&
-        !name.startsWith('OPENAI_') &&
-        !name.startsWith('ANTHROPIC_') &&
-        !name.startsWith('GITHUB_') &&
-        !name.startsWith('AWS_') &&
-        name !== 'NODE_OPTIONS';
-    }),
+    Object.entries(process.env).filter(([key]) => allowedEnvironment.has(key.toUpperCase())),
   );
   const shared = {
     ...safe,
     NODE_ENV: 'development',
+    ENTHUSIA_LOCAL_BIND_HOST: '127.0.0.1',
     ENTHUSIA_SERVICE_NAME: 'enthusia-ai-local-test',
     ENTHUSIA_LOG_LEVEL: 'warn',
     ENTHUSIA_INFERENCE_BASE_URL: 'http://127.0.0.1:11434',
