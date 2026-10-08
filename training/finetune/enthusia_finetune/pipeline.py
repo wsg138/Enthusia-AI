@@ -76,6 +76,7 @@ def _training_command(
     config_path: str,
     train_path: str,
     validation_path: str | None,
+    ticket_review_manifest: str | None = None,
 ) -> str:
     args = [
         "python",
@@ -88,6 +89,8 @@ def _training_command(
     ]
     if validation_path:
         args.extend(["--validation-json", validation_path])
+    if ticket_review_manifest:
+        args.extend(["--ticket-review-manifest", ticket_review_manifest])
     return " ".join(shlex.quote(str(arg)) for arg in args)
 
 
@@ -173,6 +176,7 @@ def prepare(
             config_path=resolved_config_path,
             train_path=train_path,
             validation_path=validation_path,
+            ticket_review_manifest=ticket_review_manifest,
         ),
         "config_path": resolved_config_path,
         "train_path": train_path,
