@@ -130,3 +130,49 @@ and record a reviewer disposition. Additional 91 evidence-risk completions
 still need investigation, controlled edits or rejection. Only a *separate*
 explicit APPROVED manifest after successful independent review can make an
 edited target W19 training-eligible. Do not change HOLD flags automatically.
+
+
+## Private v8 editorial proposals and quarantined-source gate
+
+Following merged PR #100, a fresh 28-case risk queue from private
+`screening-v7` exposed 22 source tickets requiring provisional copy edits.
+The remaining six source tickets are **REJECT recommendations**; do not rewrite
+either sibling slice to make those sources appear trainable.
+
+The owner-private coordinator packet contains **37 proposed answer edits
+across 22 non-rejected source tickets**: 22 second-turn target edits and 15
+earlier assistant-turn edits. Each proposed edit is pinned to the exact
+original W16 reviewed-target digest and source-candidate digest from the
+immutable `editorial-derivative-v3` manifest. Editing an earlier assistant
+turn requires deterministic replay into its sibling follow-up prompt.
+
+Private input only:
+`SyntheticWorkers/parallel-review-coordinator/EDITORIAL-PROPOSALS-V8.private.jsonl`.
+
+For the next *new* immutable review derivative, pass:
+`--source-quarantine-ledger PRIVATE/SyntheticWorkers/parallel-review-coordinator/quarantine-v1/SOURCE-QUARANTINE.private.json`
+to `tools/apply_review_proposals.py`, with
+`--staged-dir PRIVATE/SyntheticWorkers/editorial-derivative-v3`,
+the pinned editorial notes path, trusted pre-existing source resolution
+files, and a fresh `--out-dir`.
+
+When this ledger is supplied, the tool:
+- verifies the private ledger matches the exact immutable input HOLD-manifest
+  bytes and contains both sibling slices for every rejected source;
+- fails if any submitted proposal edits a rejected source ticket;
+- requires each proposed edit to pin and match its original W16 target digest,
+  exact source digest and source-ticket ID;
+- retains all other HOLD-only W16/W19 constraints and as-of-turn replay.
+
+A validated proposal is **not** an approved target. All outputs remain
+`HOLD`, `split=none`, zero approved uses, rights/privacy uncleared.
+Re-run private W16/W19 preflight and HOLD-only screening on any generated
+derivative, to a *new* versioned directory, before substantive human review.
+Do not leak private transcript, source-index or editorial content into GitHub.
+
+**Execution status:** 37 private proposals have been constructed and read-only
+checked against the original 668-entry HOLD manifest and six-source rejection
+ledger with no conflicts. The authorized PC refused local script updates and
+derivative generation under tool safety checks, so the new v4 derivative,
+its W16/W19 checks and re-screening have **not** been executed. The existing
+v3 all-HOLD release remains authoritative; do not claim v4 exists.
