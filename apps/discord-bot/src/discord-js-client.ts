@@ -247,6 +247,43 @@ export function normalizeSlashAsk(
   };
 }
 
+/**
+ * Discord.js may fulfill login() before it emits ClientReady. Slash-command
+ * registration needs the application identity supplied by that event.
+ *
+ * Listener cleanup and a bounded timeout prevent hanging if Discord never
+ * reaches the ready state. No Discord REST calls happen in this helper.
+ */
+export interface DiscordReadySignal {
+  isReady(): boolean;
+  on(event: typeof Events.ClientReady, listener: () => void): unknown;
+  off(event: typeof Events.ClientReady, listener: () => void): unknown;
+}
+
+export async function waitForDiscordClientReady(
+  client: DiscordReadySignal,
+  timeoutMs = 30_000,
+): Promise<void> {
+  if (client.isReady()) return;
+  await new Promise<void>((resolveReady, rejectReady) => {
+    const cleanup = (): void => {
+      clearTimeout(timer);
+      client.off(Events.ClientReady, onReady);
+    };
+    const onReady = (): void => {
+      cleanup();
+      resolveReady();
+    };
+    const timer = setTimeout(() => {
+      cleanup();
+      rejectReady(new Error('Discord gateway did not become ready within the startup timeout'));
+    }, timeoutMs);
+    client.on(Events.ClientReady, onReady);
+    // Handle a ready transition occurring during listener installation.
+    if (client.isReady()) onReady();
+  });
+}
+
 export class DiscordJsClientAdapter implements DiscordClientPort {
   private readonly client: Client;
   private readonly rest: REST;
@@ -318,6 +355,14 @@ export class DiscordJsClientAdapter implements DiscordClientPort {
 
   async login(): Promise<void> {
     await this.client.login(this.options.token);
+    await waitForDiscordClientReady(this.client);
+    // Ready means Discord has authenticated the bot and assigned its user ID.
+    // Retain the existing ClientReady listener's ID, but recover defensively
+    // if the client was already ready when login resolved.
+    this.readyUserId = this.client.user?.id ?? this.readyUserId;
+    if (this.readyUserId === null) {
+      throw new Error('Discord client ready without a bot application identity');
+    }
   }
 
   onMessage(handler: (message: DiscordMessageRef) => void | Promise<void>): void {
