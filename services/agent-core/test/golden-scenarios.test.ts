@@ -314,7 +314,7 @@ describe('W12 golden scenarios', () => {
     expect(knowledge.callCount).toBe(1);
   });
 
-  it('malformed request degrades to a safe staff-escalated response', async () => {
+  it('malformed request degrades safely without a fictional staff notification', async () => {
     const { registry } = mockRegistry([]);
     const reasoner = new MockReasoner({
       classification: simpleClassification(),
@@ -324,8 +324,9 @@ describe('W12 golden scenarios', () => {
     const orchestrator = new AgentOrchestrator({ reasoner, registry });
     const response = await orchestrator.handleChat(makeRequest(''));
 
-    expect(response.text).toContain('Something went wrong');
-    expect(response.escalation?.target).toBe('human');
+    expect(response.text).toContain('I could not finish that request');
+    expect(response.text).not.toContain('staff review');
+    expect(response.escalation).toBeNull();
   });
 
   it('error envelopes do not count as evidence', async () => {
