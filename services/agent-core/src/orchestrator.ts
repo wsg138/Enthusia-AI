@@ -95,6 +95,8 @@ export interface OrchestratorDeps {
   reasonerTimeoutMs?: number;
   /** Hook receiving the W13 investigation packet on openai escalations. */
   onPacket?: (packet: InvestigationPacket) => void;
+  /** Internal logging hook; never sends errors or messages to staff. */
+  onUnhandledError?: (error: unknown, traceId: string) => void;
   /**
    * Best-effort deterministic learning hook for topic-specific response style.
    * It receives no raw message or memory text.
@@ -150,8 +152,8 @@ export class AgentOrchestrator {
 
   /**
    * Handle one chat request end to end, returning an {@link AgentResponse}.
-   * Never throws: unexpected failures degrade to a safe staff-escalated
-   * response rather than an exception.
+   * Never throws: unexpected failures return a truthful generic error;
+   * staff must not be told they were notified unless a real notification ran.
    */
   async handleChat(request: ChatRequest): Promise<AgentResponse> {
     const traceId = resolveTraceId(request);
@@ -160,15 +162,17 @@ export class AgentOrchestrator {
       const resolved: ResolvedChatRequest = { ...request, traceId };
       return await this.run(resolved);
     } catch (err) {
+      try {
+        this.deps.onUnhandledError?.(err, traceId);
+      } catch {
+        // Logging must never block the user-facing error response.
+      }
       return {
-        text: 'Something went wrong while handling your request. I\u2019ve flagged it for staff review.',
+        text: 'I could not finish that request. Please try again in a moment.',
         actions: [],
         sources: [],
         memoryUpdates: [],
-        escalation: {
-          reason: `orchestrator failure: ${err instanceof Error ? err.message : String(err)}`,
-          target: 'human',
-        },
+        escalation: null,
         traceId,
       };
     }
