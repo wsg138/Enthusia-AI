@@ -27,7 +27,7 @@ def worker_record(cid="W01-0001", *, family="family-A", seed="fake-seed-A"):
             {"role": "assistant", "content": "Which stall and what error?"},
             {"role": "user", "content": "stall 3, no access"},
         ],
-        "expected_answer": "I'll check the available ownership evidence.",
+        "expected_answer": f"I'll check the available ownership evidence for {cid}.",
         "quality": "GOOD",
         "family_group": family,
         "seed_refs": [seed],
