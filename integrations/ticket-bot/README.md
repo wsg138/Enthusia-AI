@@ -30,15 +30,23 @@ Enthusia AI **REQUESTS** actions; the Ticket Bot validates and executes them.
     else *before* any network I/O. There is no PUT/PATCH/DELETE anywhere.
 - **`src/events.ts`** — one-directional event consumption (Ticket Bot → Enthusia AI):
   `parseTicketEvent` (zod-validated), `TicketEventRouter` (typed + wildcard
-  subscriptions), `verifyWebhookSignature` (HMAC-SHA256).
+  subscriptions), duplicate `event_id` suppression, and `verifyWebhookSignature`
+  (HMAC-SHA256).
+- **`src/event-dedup.ts`** — an atomic claim interface for at-least-once webhook
+  delivery. The default store is bounded and process-local for tests/shadow use;
+  production ingress must inject a durable uniqueness-backed implementation.
 - **`src/context.ts`** — `ticketToAgentContext`: pure adapter from ticket data to
   agent context (no I/O, no mutation). Classifies output as `PLAYER_SELF` (§17);
   the orchestrator's visibility ceiling decides disclosure.
 - **`src/tools.ts`** — agent tools shaped to W12's `Tool` interface
   (`meta` + `execute`, §16.2 provenance envelopes):
   `ticket.get_context`, `ticket.request_close`, `ticket.request_escalation`.
-  All are `privacySensitive: true`, `maxVisibility: STAFF`. There is deliberately
-  **no** `ticket.close` / `ticket.mutate` tool. The interface is defined
+  Lifecycle request tools re-read the Ticket Bot's persisted action-request status
+  and add `verification` + `canReportSuccess`. Only a matching persisted
+  `accepted` result sets `canReportSuccess: true`; pending, rejected, mismatched,
+  or unreadable status remains non-success. All are `privacySensitive: true`,
+  `maxVisibility: STAFF`. There is deliberately **no** `ticket.close` /
+  `ticket.mutate` tool. The interface is defined
   structurally here so these tools can register into W12's `ToolRegistry`
   (`registry.register(tool)`) without this package depending on W12's code.
 
@@ -71,12 +79,28 @@ if (req.status === 'pending') {
 // Consume lifecycle events:
 const router = new TicketEventRouter();
 router.subscribe('ticket.closed', (e) => console.log('closed:', e.ticketId));
-await router.ingest(rawWebhookPayload); // validates, then dispatches
+await router.ingest(rawWebhookPayload); // validates, deduplicates, then dispatches
 
 // Agent tools (register into the orchestrator's ToolRegistry):
 const tools = createTicketTools(client);
 for (const tool of tools) registry.register(tool);
 ```
+
+## Runtime safety gates
+
+- Ticket action submission still performs the authenticated `/v1/capabilities`
+  handshake before POSTing an action request.
+- The close/escalation agent tools then re-read the persisted action-request
+  record. A user-facing completion claim is permitted only when that read
+  matches the submitted request and reports `accepted`.
+- Duplicate Ticket Bot events are suppressed by stable `event_id` before
+  subscriber side effects run. The built-in store is process-local and bounded;
+  production webhook ingress must inject a durable store with an atomic unique
+  claim before at-least-once delivery is enabled.
+- If deduplication persistence is unavailable, ingress fails closed and does not
+  dispatch the event. If action-status verification is unavailable, the tool
+  returns `verification: "unverified"` and `canReportSuccess: false` rather
+  than guessing that the lifecycle action completed.
 
 ## Error mapping
 

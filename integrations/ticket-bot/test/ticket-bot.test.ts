@@ -1165,7 +1165,8 @@ describe('ticket tools', () => {
     expect(result.error?.retryable).toBe(false);
   });
 
-  it('ticket.request_close submits an action request and returns the result', async () => {
+  it('ticket.request_close verifies persisted status before allowing a success claim', async () => {
+    recorded.length = 0;
     const tools = createTicketTools(makeClient());
     const tool = tools.find((t) => t.meta.name === 'ticket.request_close')!;
     const result = await tool.execute(
@@ -1173,9 +1174,21 @@ describe('ticket tools', () => {
       ctxFor(Visibility.STAFF),
     );
     expect(result.error).toBeUndefined();
-    const payload = result.result as ActionRequestResult;
+    const payload = result.result as ActionRequestResult & {
+      verification: string;
+      canReportSuccess: boolean;
+    };
     expect(payload.requestId).toBe('ar-1');
     expect(payload.action).toBe('close');
+    expect(payload.verification).toBe('confirmed');
+    expect(payload.canReportSuccess).toBe(true);
+    expect(
+      recorded.some(
+        (request) =>
+          request.method === 'GET' &&
+          request.path === '/v1/actions/requests/ar-1',
+      ),
+    ).toBe(true);
   });
 
   it('ticket lifecycle requests deny player actors before submission', async () => {

@@ -79,7 +79,20 @@ export {
   parseTicketEvent,
   verifyWebhookSignature,
 } from './events.js';
-export type { TicketEvent, TicketEventHandler, TicketEventType } from './events.js';
+export type {
+  TicketEvent,
+  TicketEventHandler,
+  TicketEventRouterOptions,
+  TicketEventType,
+} from './events.js';
+export {
+  InMemoryTicketEventDeduplicationStore,
+  ticketEventDeduplicationKey,
+} from './event-dedup.js';
+export type {
+  TicketEventDeduplicationStore,
+  TicketEventIdentity,
+} from './event-dedup.js';
 
 export { ticketReportTarget } from './report-target.js';
 export type { TicketReportTarget } from './report-target.js';
@@ -110,3 +123,9 @@ export type {
   TicketToolParameterProperty,
   TicketToolParametersSchema,
 } from './tools.js';
+export { verifyTicketActionRequest } from './action-verification.js';
+export type {
+  ActionRequestStatusReader,
+  TicketActionVerification,
+  VerifiedTicketActionResult,
+} from './action-verification.js';

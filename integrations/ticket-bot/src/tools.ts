@@ -35,6 +35,7 @@ import { TicketBotClient } from './client.js';
 import { ticketToAgentContext } from './context.js';
 import type { AgentTicketContext } from './context.js';
 import type { ActionRequestResult, TicketBotCapabilities } from './types.js';
+import { verifyTicketActionRequest } from './action-verification.js';
 
 /** Parameter declaration — mirrors W12's ToolParameterProperty. */
 export interface TicketToolParameterProperty {
@@ -287,7 +288,8 @@ export class RequestTicketCloseTool
     description:
       'Request that the Ticket Bot close a ticket, with a justification. ' +
       'This is a REQUEST, not a close: the Ticket Bot validates permissions, ' +
-      'state, confirmation, and transcript/archive rules before executing.',
+      'state, confirmation, and transcript/archive rules before executing. ' +
+      'Only canReportSuccess=true permits a user-facing success claim.',
     parameters: {
       type: 'object',
       properties: {
@@ -313,12 +315,13 @@ export class RequestTicketCloseTool
       checkStaffActionAuthorization(ctx);
       const ticketId = requireParam(params, 'ticketId');
       const reason = requireParam(params, 'reason');
-      const result: ActionRequestResult = await this.client.requestClose(
+      const submitted: ActionRequestResult = await this.client.requestClose(
         ticketId,
         reason,
         ctx.traceId,
       );
-      return successEnvelope(this.meta.name, ctx, result);
+      const verified = await verifyTicketActionRequest(this.client, submitted);
+      return successEnvelope(this.meta.name, ctx, verified);
     } catch (err) {
       return errorEnvelope(this.meta.name, ctx, err);
     }
@@ -335,7 +338,8 @@ export class RequestTicketEscalationTool
     description:
       'Request that the Ticket Bot escalate a ticket (optionally to a ' +
       'specific staff member), with a justification. This is a REQUEST: the ' +
-      'Ticket Bot validates and executes it.',
+      'Ticket Bot validates and executes it. Only canReportSuccess=true permits ' +
+      'a user-facing success claim.',
     parameters: {
       type: 'object',
       properties: {
@@ -371,12 +375,13 @@ export class RequestTicketEscalationTool
       if (params.assigneeId !== undefined) {
         options.assigneeId = params.assigneeId;
       }
-      const result: ActionRequestResult = await this.client.requestEscalation(
+      const submitted: ActionRequestResult = await this.client.requestEscalation(
         ticketId,
         reason,
         options,
       );
-      return successEnvelope(this.meta.name, ctx, result);
+      const verified = await verifyTicketActionRequest(this.client, submitted);
+      return successEnvelope(this.meta.name, ctx, verified);
     } catch (err) {
       return errorEnvelope(this.meta.name, ctx, err);
     }

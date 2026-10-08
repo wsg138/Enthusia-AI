@@ -21,6 +21,11 @@ import { z } from 'zod';
 import { ValidationError } from '@enthusia/contracts';
 import type { TicketParticipant, TicketStatus } from './types.js';
 import { TICKET_STATUSES } from './types.js';
+import {
+  InMemoryTicketEventDeduplicationStore,
+  ticketEventDeduplicationKey,
+} from './event-dedup.js';
+import type { TicketEventDeduplicationStore } from './event-dedup.js';
 
 /** Event types the Ticket Bot publishes and Enthusia AI consumes. */
 export type TicketEventType =
@@ -188,35 +193,46 @@ export function parseTicketEvent(raw: unknown): TicketEvent {
 
 export type TicketEventHandler = (event: TicketEvent) => void | Promise<void>;
 
+export interface TicketEventRouterOptions {
+  onHandlerError?: (err: unknown, event: TicketEvent) => void;
+  onDuplicate?: (event: TicketEvent) => void;
+  /**
+   * Default is bounded process-local deduplication. Production webhook ingress
+   * should inject a durable store with an atomic uniqueness claim.
+   * Pass null only for trusted replay tooling that intentionally re-dispatches.
+   */
+  deduplicationStore?: TicketEventDeduplicationStore | null;
+}
+
 /**
  * Fan-out router for validated ticket events.
  *
- * Subscribers register for one event type or for '*' (all events). A
- * throwing handler does not break other handlers: errors are collected
- * and reported to the optional `onHandlerError` callback.
+ * Ingress is idempotent by event_id when a deduplication store is enabled.
+ * A throwing handler does not break other handlers; handler failures are
+ * surfaced through `onHandlerError` and never converted into lifecycle truth.
  */
 export class TicketEventRouter {
   private readonly handlers = new Map<string, Set<TicketEventHandler>>();
   private readonly onHandlerError: (err: unknown, event: TicketEvent) => void;
+  private readonly onDuplicate: (event: TicketEvent) => void;
+  private readonly deduplicationStore: TicketEventDeduplicationStore | null;
+  private duplicateCount = 0;
 
-  constructor(options: {
-    onHandlerError?: (err: unknown, event: TicketEvent) => void;
-  } = {}) {
-    this.onHandlerError =
-      options.onHandlerError ??
-      ((err) => {
-        // Default: surface via console, never swallow silently.
-        console.error('[ticket-bot] event handler failed:', err);
-      });
+  constructor(options: TicketEventRouterOptions = {}) {
+    this.onHandlerError = options.onHandlerError ?? defaultHandlerError;
+    this.onDuplicate = options.onDuplicate ?? (() => undefined);
+    this.deduplicationStore =
+      options.deduplicationStore === undefined
+        ? new InMemoryTicketEventDeduplicationStore()
+        : options.deduplicationStore;
   }
 
   /** Subscribe to one event type, or '*' for every event. */
   subscribe(type: TicketEventType | '*', handler: TicketEventHandler): () => void {
-    const key = type;
-    let set = this.handlers.get(key);
+    let set = this.handlers.get(type);
     if (!set) {
       set = new Set();
-      this.handlers.set(key, set);
+      this.handlers.set(type, set);
     }
     set.add(handler);
     return () => this.unsubscribe(type, handler);
@@ -226,24 +242,19 @@ export class TicketEventRouter {
     this.handlers.get(type)?.delete(handler);
   }
 
-  /** Dispatch a validated event to matching handlers (typed + wildcard). */
+  /** Dispatch an already-validated event. Callers bypassing ingest own deduplication. */
   async dispatch(event: TicketEvent): Promise<void> {
     const targets = [
       ...(this.handlers.get(event.type) ?? []),
       ...(this.handlers.get('*') ?? []),
     ];
-    for (const handler of targets) {
-      try {
-        await handler(event);
-      } catch (err) {
-        this.onHandlerError(err, event);
-      }
-    }
+    for (const handler of targets) await this.runHandler(handler, event);
   }
 
-  /** Parse a raw payload and dispatch it. Convenience for webhook ingress. */
+  /** Parse, deduplicate, and dispatch one webhook/queue delivery. */
   async ingest(raw: unknown): Promise<TicketEvent> {
     const event = parseTicketEvent(raw);
+    if (!(await this.claim(event))) return event;
     await this.dispatch(event);
     return event;
   }
@@ -253,6 +264,37 @@ export class TicketEventRouter {
     for (const set of this.handlers.values()) n += set.size;
     return n;
   }
+
+  get duplicatesSuppressed(): number {
+    return this.duplicateCount;
+  }
+
+  private async claim(event: TicketEvent): Promise<boolean> {
+    if (this.deduplicationStore === null) return true;
+    const firstDelivery = await this.deduplicationStore.claim(
+      ticketEventDeduplicationKey(event),
+    );
+    if (firstDelivery) return true;
+    this.duplicateCount += 1;
+    this.onDuplicate(event);
+    return false;
+  }
+
+  private async runHandler(
+    handler: TicketEventHandler,
+    event: TicketEvent,
+  ): Promise<void> {
+    try {
+      await handler(event);
+    } catch (err) {
+      this.onHandlerError(err, event);
+    }
+  }
+}
+
+function defaultHandlerError(err: unknown): void {
+  // Default: surface via console, never swallow silently.
+  console.error('[ticket-bot] event handler failed:', err);
 }
 
 /**
