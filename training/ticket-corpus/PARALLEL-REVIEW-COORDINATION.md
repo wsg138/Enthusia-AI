@@ -174,3 +174,51 @@ against as-of-turn evidence and current policy; enforce quarantine in any
 future admissions; address remaining quality/repetition/source warnings
 across the other drafts; freeze leakage-safe connected families; only then
 consider an explicitly approved release and paid training.
+
+
+## Lineage-wide source quarantine and screening-v7 (2026-10-08)
+
+The six worker `REJECT` recommendations refer to six **source tickets**, each
+with two assistant-slice targets. Quarantine therefore blocks **12 slices**,
+including the earlier slice of each rejected source, pending a separately
+recorded, independent re-adjudication. A target-only REJECT flag is insufficient.
+
+The private, immutable source ledger was frozen on the authorized PC using
+`tools/build_rejected_source_quarantine.py`. It cross-checks the six rejection
+recommendations with both sibling IDs, source-index lineage, all-HOLD manifest,
+canonical target digests, original source file hashes/revisions and exact
+non-trainable state. It refuses overwrite or missing/duplicate/mismatched
+sources. Ledger lives only at:
+
+`SyntheticWorkers/parallel-review-coordinator/quarantine-v1/SOURCE-QUARANTINE.private.json`
+
+W19 multi-slice worker admission requires that private source ledger to be
+referenced and SHA-256 pinned in a future *independently approved* review
+manifest. An individually approved earlier slice from a rejected source cannot
+override the source-ticket quarantine. Incorrect ledger/release hash,
+missing ledger, conflicting source provenance, and source-level REJECT all fail
+closed. Creating the ledger **does not create approvals**.
+
+Re-screening immutable `editorial-derivative-v3` to a separate private
+`SyntheticWorkers/screening-v7/` found:
+
+| Review tier | v6 | v7 |
+| --- | ---: | ---: |
+| Evidence/safety | 6 | 28 |
+| Style/provenance | 258 | 253 |
+| Standard independent review | 404 | 387 |
+
+New v7 textual warning occurrences: 10 synthetic/fixture mentions, 11
+unverified handoff/action-wording cues, and 6 unanchored source-result
+assertions (overlaps are possible). The 6 original supported-tool-result cues,
+123 repeated target phrases and 68 nonversioned reference warnings remain.
+These counts show increased *detection coverage*, not reduced corpus quality
+or independent evidence. Regex only creates review leads and will flag some
+phrases that are appropriate once evidence is actually anchored; an independent
+reviewer must check the exact as-of-turn prompt and tool/event record. All
+668 remain HOLD, `split=none`, no approved uses, rights/privacy uncleared.
+
+Priority for the next private editorial packet: review 28 evidence-risk cases,
+then 253 style/provenance, then all 387 otherwise warning-free cases. Freeze
+source-connected family split assignments **only after** authorized human
+source/privacy/rights/factual review; do not infer correctness from v7 flags.
