@@ -1,0 +1,5 @@
+{
+  "private": true,
+  "type": "commonjs",
+  "description": "Bloom Node generic one-file startup scripts; .mjs supervisor modules remain ESM"
+}
