@@ -72,7 +72,7 @@ export class PieCloakPublicDocsPilot {
     if (!isPieCloakQuestion(request.message)) return null;
     const unavailable: AgentResponse = {
       text: "I couldn't verify PieCloak's public documentation right now, so I won't guess about its rules or current deployment.",
-      actions: [], sources: [], memoryUpdates: [], escalation: null, traceId: request.traceId,
+      actions: [], sources: [], memoryUpdates: [], escalation: null, traceId: request.traceId, outcome: 'unverified',
     };
     try {
       const repo = recordOf(await this.getJson(ROOT));
@@ -116,6 +116,7 @@ export class PieCloakPublicDocsPilot {
         memoryUpdates: [],
         escalation: null,
         traceId: request.traceId,
+        outcome: 'answered',
       };
     } catch {
       // Includes network errors, malformed JSON and GitHub rate limiting.
