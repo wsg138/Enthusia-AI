@@ -48,3 +48,32 @@ Investigation:
 - Tests: **1,132 passing, one preexisting integration smoke skipped**, clean Discord TypeScript build, targeted lint clean. Test checkout fast-forwarded cleanly on owner's PC; no token needed, no bot session stopped or restarted. Draft PR #118 remains HOLD.
 
 Owner acceptance: Stop the existing isolated launcher with Ctrl+C, rerun it (same existing token entered in private prompt), and mention the AI in #ai-testing asking the **same Warzones question**. The answer should be a short, source-limited reply instead of a Gateway error; if it still fails, share the **non-secret** console errors including any \`gatewayStatus\`, \`code\`, \`statusCode\`, and elapsed time. Avoid copy/pasting tokens. Current pilot only indexes PieCloak's public README; it **cannot yet verify** the actual Warzones combat rotator behavior. The absence of Warzones source knowledge is a separate planned integration, not a reason for the Discord transport to fail.
+
+
+## 2026-10-08 20:18 EDT: returned Agent fallback mislabelled as successful
+
+Owner's third screenshot:
+- The @mention was accepted and a response was posted as a Discord embed.
+- The Agent replied "I could not finish that request. Please try again in a moment."
+- The message showed a ✅ reaction even though the result was an internal **Agent** failure. The prior bot chose ✅ based only on HTTP success and the embed being delivered. This is a known protocol issue, independent of the previously fixed Gateway timeout.
+- Do **not** infer from the screenshot whether Qwen's classification failed, was malformed, timed out, or something else; no contemporaneous Agent error category was shared.
+
+### Fixes (isolated test branch; no production deployment)
+
+1. The shared AgentResponse API contract now has a backward-compatible optional outcome: answered, unverified, error. The Agent explicitly marks internal exceptions as error and no-evidence results as unverified; the validated public-docs pilots return answered or unverified. The Gateway and Discord HTTP adapter carry this signal end-to-end.
+2. An answered @mention receives ✅, missing-source result receives ⚠️, and an internal Agent error receives ❌. Embed colors/headlines match. 200 OK by itself **never proves the underlying question was answered**.
+3. Located the public Warzones Rotator documentation in **wsg138/MaceGuard/README.md**. Added the same narrow allowlisted read-only pilot used for PieCloak, now pointed at exactly the MaceGuard repository and its main-branch README. It verifies public repo visibility, exact main commit, Git blob SHA, document-size bounds, and required gameplay sections. It cannot browse arbitrary repos, use credentials, consult private server data, or claim live active modifiers. It replies with a short bullet-point summary of kit/modifier rotation, player combat rules, manual overrides and public commands. The source link is a named embed hyperlink, not a bare URL preview. This remains a *pilot*, not the generalized W07/W08 knowledge system.
+4. The doc source used for test: https://github.com/wsg138/MaceGuard/blob/38e4255cf1940c2397da5a4e2cecc6c56498c8b4/README.md (pinned public GitHub HEAD during this local test, not proof of deployed plugin).
+5. The run with the original Warzones question through localhost Agent + Gateway now produced an evidence-backed answer with **HTTP 200 in 483 ms** and explicit outcome=answered. No Discord token was used. Latest Vitest **1,142 passed, 1 preexisting smoke skipped**. Discord/Agent TypeScript checks and targeted lint passed; the isolated Windows checkout is clean and current.
+
+### Owner acceptance
+
+Stop the already-running test PowerShell with Ctrl+C and relaunch the existing Start-EnthusiaAi-Test.ps1, privately entering the same token. Mention the bot in the approved #ai-testing channel:
+
+- "@Enthusia AI Can you explain how the Warzones combat rotator system works?"
+
+Expected result is a **short orange Warzones embed**, bullets for rotation/combat rules/overrides, named source link to the pinned MaceGuard README, and the final ✅ reaction.
+
+For follow-up validation of error honesty, use the bot's existing source-limited capabilities on an unrelated server-specific question; if source proof is missing, it should show a safe unverified message and ⚠️, not ✅. Do not intentionally break production services or share credentials to exercise errors.
+
+Draft PR #118 remains HOLD pending owner-confirmed Discord result and independent reviews. No production services/configs, ticket tools, staff permissions or saved tokens changed.
