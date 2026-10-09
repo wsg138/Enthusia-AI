@@ -11,7 +11,7 @@ import {
 } from '@enthusia/agent-core';
 
 const SOURCE = 'github-public-documentation';
-const APPROVED = ['github:wsg138/MaceGuard:', 'github:wsg138/PieCloak:'];
+const APPROVED = ['github:wsg138/MaceGuard:README.md', 'github:wsg138/PieCloak:README.md'];
 const SHA = /^[0-9a-f]{40}$/i;
 
 export interface KnowledgeExcerpt {
@@ -146,7 +146,7 @@ export function validatePublicKnowledge(data: unknown): KnowledgeSearchResult | 
         hit.deploymentVerified !== false || typeof hit.text !== 'string' ||
         hit.text.length < 1 || hit.text.length > 1100 ||
         typeof sourceLocator !== 'string' ||
-        !APPROVED.some((prefix) => sourceLocator.startsWith(prefix)) ||
+        !APPROVED.includes(sourceLocator) ||
         typeof hit.version !== 'string' || !SHA.test(hit.version) ||
         typeof hit.commitSha !== 'string' || !SHA.test(hit.commitSha) ||
         typeof hit.artifactId !== 'string' || hit.artifactId.length > 160 ||
