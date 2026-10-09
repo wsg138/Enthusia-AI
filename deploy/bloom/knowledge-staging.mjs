@@ -94,10 +94,22 @@ export async function createKnowledgeStaging(options) {
   let server;
   try {
     await retrieval.rebuildIndexes();
+    // Defense in depth: this pilot indexes only the two public README files.
+    // The underlying W08 engine supports many types of files, but the pilot
+    // must never persist incidental STAFF source code into its public volume.
+    const publicOnlyClient = {
+      getRepoMeta: (...args) => options.client.getRepoMeta(...args),
+      getBranchHeadSha: (...args) => options.client.getBranchHeadSha(...args),
+      getRecursiveTree: async (...args) => (await options.client.getRecursiveTree(...args))
+        .filter((entry) => entry.type === 'blob' && entry.path === 'README.md'),
+      getBlob: (...args) => options.client.getBlob(...args),
+      listIssues: async () => [],
+      listPullRequests: async () => [],
+    };
     const indexer = new GitHubIndexer({
       token: 'managed-out-of-process', repos: PUBLIC_DOCS,
       maxFileBytes: 128 * 1024,
-    }, { client: options.client, registry, retrieval });
+    }, { client: publicOnlyClient, registry, retrieval });
     const refresh = async () => {
       if (refreshing || closed) return false;
       refreshing = true;
