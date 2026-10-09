@@ -1,0 +1,32 @@
+# Dockerfile-specific build-context exclusion. Private files must never
+# enter the Docker build context or its COPY layers.
+.git
+.git/**
+**/.git
+**/.git/**
+**/.env
+**/.env.*
+**/*secret*
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*.sqlite
+**/*.sqlite3
+**/*.db
+**/*.log
+**/logs/**
+**/secrets/**
+**/node_modules/**
+node_modules/**
+**/dist/**
+**/coverage/**
+**/.venv/**
+**/__pycache__/**
+**/models/**
+**/*.gguf
+**/*.safetensors
+**/training/data/private/**
+**/captures/**
+**/runtime/**
+**/.runtime/**
