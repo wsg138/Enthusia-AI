@@ -1,0 +1,136 @@
+{
+  "_comment": "DESIGN CANDIDATE ONLY (W21/#119). NOT VALIDATED IN BLOOM. Image intentionally DOES NOT EXIST. Installer intentionally fails. Do not import/deploy until image and host are approved.",
+  "meta": {
+    "version": "PTDL_v2",
+    "update_url": null
+  },
+  "exported_at": "2026-10-08T00:00:00+00:00",
+  "name": "Enthusia AI - Single Server STAGING UNDEPLOYABLE",
+  "author": "enthusia-ai-w21",
+  "description": "PREPARE ONLY: one supervised process tree: pinned llama.cpp inference -> public README indexer -> Agent -> Gateway; Discord OFF. Image is unbuilt; install fails on purpose. Live SMP/SFTP/ticket tools not allowed.",
+  "features": [],
+  "docker_images": {
+    "UNBUILT - DO NOT SELECT": "ghcr.io/enthusia/ai-single-server:UNPUBLISHED-DO-NOT-DEPLOY"
+  },
+  "file_denylist": [
+    ".env",
+    ".env.production",
+    "secrets",
+    "models/private"
+  ],
+  "startup": "node deploy/bloom/single-server-staging.mjs --managed-inference --managed-indexer --without-discord",
+  "config": {
+    "files": "{}",
+    "startup": "{\"done\":[\"[bloom-staging] Agent and Gateway ready\"]}",
+    "logs": "{}",
+    "stop": "^C"
+  },
+  "scripts": {
+    "installation": {
+      "script": "#!/bin/bash\n# Deliberately refuse installation until an independently reviewed image, model, and owner-approved staging plan exist.\necho '[enthusia-ai] HOLD: image/model/Bloom host not verified; no installation performed.'\nexit 1\n",
+      "container": "debian:bookworm-slim",
+      "entrypoint": "bash"
+    }
+  },
+  "variables": [
+    {
+      "name": "Model absolute path",
+      "description": "Mounted approved model file; no downloading through the egg.",
+      "env_variable": "ENTHUSIA_MODEL_PATH",
+      "default_value": "/home/container/models/qwen3.gguf",
+      "user_editable": false,
+      "user_viewable": true,
+      "rules": "required|string|max:260"
+    },
+    {
+      "name": "Model SHA256",
+      "description": "SHA-256 of the mounted model weights; operator-supplied digest required.",
+      "env_variable": "ENTHUSIA_MODEL_SHA256",
+      "default_value": "",
+      "user_editable": false,
+      "user_viewable": true,
+      "rules": "required|string|size:64"
+    },
+    {
+      "name": "llama-server binary SHA256",
+      "description": "SHA-256 of audited binary inside the reviewed image.",
+      "env_variable": "ENTHUSIA_LLAMA_SERVER_SHA256",
+      "default_value": "",
+      "user_editable": false,
+      "user_viewable": true,
+      "rules": "required|string|size:64"
+    },
+    {
+      "name": "Local model alias",
+      "description": "Alias returned by local llama.cpp /v1/models.",
+      "env_variable": "ENTHUSIA_INFERENCE_MODEL",
+      "default_value": "enthusia-qwen3",
+      "user_editable": false,
+      "user_viewable": true,
+      "rules": "required|string|max:64"
+    },
+    {
+      "name": "Inference base URL",
+      "description": "Internal loopback model HTTP URL only.",
+      "env_variable": "ENTHUSIA_INFERENCE_BASE_URL",
+      "default_value": "http://127.0.0.1:11434",
+      "user_editable": false,
+      "user_viewable": true,
+      "rules": "required|url|max:100"
+    },
+    {
+      "name": "Inference CPU threads",
+      "description": "Staging cap. Panel CPU and memory allocation remains the authoritative hard limit.",
+      "env_variable": "ENTHUSIA_INFERENCE_THREADS",
+      "default_value": "2",
+      "user_editable": true,
+      "user_viewable": true,
+      "rules": "required|integer|min:1|max:8"
+    },
+    {
+      "name": "Inference context size",
+      "description": "Staging cap to reduce shared SMP host load.",
+      "env_variable": "ENTHUSIA_INFERENCE_CONTEXT",
+      "default_value": "4096",
+      "user_editable": true,
+      "user_viewable": true,
+      "rules": "required|integer|min:1024|max:8192"
+    },
+    {
+      "name": "Approved repositories",
+      "description": "Fixed public README allowlist; no private/staff repositories.",
+      "env_variable": "ENTHUSIA_INDEXER_APPROVED_REPOS",
+      "default_value": "wsg138/MaceGuard,wsg138/PieCloak",
+      "user_editable": false,
+      "user_viewable": true,
+      "rules": "required|string|in:wsg138/MaceGuard,wsg138/PieCloak"
+    },
+    {
+      "name": "Knowledge storage",
+      "description": "Absolute persistent data directory within this server's volume.",
+      "env_variable": "ENTHUSIA_INDEXER_DATA_DIR",
+      "default_value": "/home/container/data/knowledge",
+      "user_editable": false,
+      "user_viewable": true,
+      "rules": "required|string|max:260"
+    },
+    {
+      "name": "Knowledge sidecar port",
+      "description": "Loopback-only authenticated knowledge service.",
+      "env_variable": "ENTHUSIA_INDEXER_PORT",
+      "default_value": "4300",
+      "user_editable": false,
+      "user_viewable": true,
+      "rules": "required|integer|min:1024|max:65535"
+    },
+    {
+      "name": "Source read token",
+      "description": "Private approved source credential. Never paste into chat or image build arguments.",
+      "env_variable": "ENTHUSIA_INDEXER_GITHUB_TOKEN",
+      "default_value": "",
+      "user_editable": false,
+      "user_viewable": false,
+      "rules": "required|string|min:8"
+    }
+  ]
+}
