@@ -5,14 +5,15 @@
  * Bloom Pterodactyl Node.js 24 service (TARGET: 118 GB cgroup, 32 CPU quota, 50 GB disk).
  *
  * Requirements in /home/container:
- *   bloom-1b.js (ONLY root *.js startup entrypoint)
+ *   bloom-30b.js (ONLY root *.js startup entrypoint)
  *   llama-server and llama-server.sha256 (already proven on Bloom)
  *
  * No Discord, Minecraft, SFTP, MySQL, background services or extra commands.
  * Downloads ONLY the pinned Hugging Face GGUF; checks its real SHA-256.
- * Runs CPU-only llama-server on a RANDOM localhost port, one short request,
+ * Runs CPU-only llama-server on a RANDOM localhost port, 15 fixed questions,
  * monitors cgroup RAM, shuts down, and prints/saves a sanitized JSON report.
  * Does not assume the host's physical RAM equals the server allocation.
+ * Requires a manual marker AFTER the owner confirms the old Minecraft server has been wiped.
  */
 const { createHash, timingSafeEqual } = require('node:crypto');
 const { createReadStream, createWriteStream, readFileSync, existsSync, lstatSync, statSync, mkdirSync, writeFileSync, renameSync, rmSync, chmodSync } = require('node:fs');
@@ -23,6 +24,21 @@ const { createServer } = require('node:net');
 const { join, resolve } = require('node:path');
 
 const ROOT = process.cwd();
+const WIPE_MARKER = join(ROOT, 'enthusia-30b-staging-ok.txt');
+const WIPE_MARKER_VALUE = 'CC19EA3C WIPED FOR ENTHUSIA AI';
+const LEGACY_MINECRAFT_PATHS = ['server.jar', 'world', 'plugins', 'breeze_island2', 'versions', 'libraries'];
+function requireApprovedWipedServer() {
+  for (const name of LEGACY_MINECRAFT_PATHS) {
+    if (existsSync(join(ROOT, name))) throw new Error('refusing-to-run-on-uncleared-minecraft-server');
+  }
+  if (!existsSync(WIPE_MARKER) || !safeRegularFile(WIPE_MARKER, 100)) {
+    throw new Error('owner-wipe-confirmation-marker-missing');
+  }
+  if (readFileSync(WIPE_MARKER, 'utf8').trim() !== WIPE_MARKER_VALUE) {
+    throw new Error('wrong-bloom-server-wipe-confirmation');
+  }
+}
+
 const MODEL_NAME = 'Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf';
 const MODEL_URL = 'https://huggingface.co/second-state/Qwen3-30B-A3B-Instruct-2507-GGUF/resolve/main/Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf?download=true';
 const MODEL_SHA256 = '0155f4523b0c2e3cb541abdc4b5b1845e7b74af9ae8ae8dde9f4d09783371c86';
@@ -304,6 +320,8 @@ async function main() {
     if (!memoryLimit || memoryLimit < 80_000_000_000 || memoryLimit > 140_000_000_000) {
       throw new Error('unexpected-or-unavailable-container-memory-limit');
     }
+    report.stage = 'wiped-server-approval';
+    requireApprovedWipedServer();
     report.stage = 'binary-verification';
     await checkExecutable();
     report.stage = 'model-download-verification';
@@ -330,4 +348,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { readNumber, safeRegularFile, hashFile, MODEL_SHA256, MODEL_URL, MODEL_NAME, QUALITY_CASES };
+module.exports = { readNumber, safeRegularFile, hashFile, requireApprovedWipedServer, MODEL_SHA256, MODEL_URL, MODEL_NAME, QUALITY_CASES };
