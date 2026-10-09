@@ -32,6 +32,15 @@ describe('30B-A3B sustained CPU workload for SMP spark comparison', () => {
     expect(source).not.toContain('huggingface.co');
     expect(source).not.toMatch(/fetch\(MODEL_URL|model-download-http-failed|Downloading approved/);
   });
+  it('does not trigger Pterodactyl automatic repeat after completed benchmark', () => {
+    // The owner observed the panel restarting the benchmark on clean exit 0.
+    // After llama-server is shut down, Node should remain idle until panel STOP.
+    expect(source).toContain("main().then(() => {");
+    expect(source).toContain("inference stopped. Idling until you manually STOP");
+    expect(source).toContain("const hold = setInterval(() => {}, 60_000);");
+    expect(source).toContain("process.once('SIGTERM', stop);");
+    expect(source).toContain("process.once('SIGINT', stop);");
+  });
   it('limits inference to four threads, 150 seconds, localhost and 80 percent memory cap', () => {
     expect(source).toContain('Date.now() - workloadStart < 150_000');
     expect(source).toContain('results.length < 120');
