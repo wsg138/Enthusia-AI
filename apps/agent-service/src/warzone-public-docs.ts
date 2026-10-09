@@ -16,7 +16,8 @@ function recordOf(v: unknown): Record<string, unknown> | null {
 
 export function isWarzoneRotationQuestion(message: string): boolean {
   return /\b(?:warzones?|warzone[\s-]*rotator|warzonerotator)\b/i.test(message) &&
-    /\b(?:rotat(?:or|ion|es?|ing)|combat|kit|modifier|schedule|works?|explain|rules?|how)\b/i.test(message);
+    (/\b(?:rotat(?:or|ion|es?|ing)|kits?|modifiers?|schedule)\b/i.test(message) ||
+      /\b(?:how|explain|what)\b.*\b(?:works?|system|rules?)\b/i.test(message));
 }
 
 /** Fail closed when approved documentation changes its relevant sections. */
