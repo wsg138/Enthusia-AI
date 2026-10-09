@@ -25,9 +25,9 @@ function client() {
   return {
     getRepoMeta: (owner: string, name: string) => repo(name).getRepoMeta(owner, name),
     getBranchHeadSha: (_owner: string, name: string, _branch: string) =>
-      repo(name).getBranchHeadSha(),
+      (void _branch, repo(name).getBranchHeadSha()),
     getRecursiveTree: (_owner: string, name: string, _sha: string) =>
-      repo(name).getRecursiveTree(),
+      (void _sha, repo(name).getRecursiveTree()),
     getBlob: (owner: string, name: string, sha: string) =>
       repo(name).getBlob(owner, name, sha),
     listIssues: (_owner: string, name: string) => repo(name).listIssues(),
@@ -133,7 +133,7 @@ describe('durable W08/W04/W07 Bloom sidecar (synthetic GitHub, real SQLite)', ()
     expect(await service.refresh()).toBe(true);
     expect(service.registry.getCurrent('github:wsg138/PieCloak:README.md')?.version).toBe('2'.repeat(40));
     const hits = await service.search('PieCloak replacement document hides clues');
-    expect(hits?.some(h => h.artifactId === prior?.version)).toBe(false);
+    expect(hits?.some(h => h.version === prior?.version)).toBe(false);
     expect(hits?.every(h => h.status === 'CURRENT')).toBe(true);
   });
 
