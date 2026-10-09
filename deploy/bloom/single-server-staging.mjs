@@ -129,13 +129,13 @@ export function makeStagingEnvironments(plan, env = process.env) {
     ENTHUSIA_INFERENCE_MAX_OUTPUT_TOKENS: '1400',
     ENTHUSIA_INFERENCE_CONCURRENCY: '1',
     ENTHUSIA_MAX_TOOL_CALLS_PER_TURN: '2',
-    ...(inferenceKey ? { ENTHUSIA_INFERENCE_API_KEY: inferenceKey } : {}),
   };
   const agent = {
     ...common,
     ENTHUSIA_SERVICE_NAME: 'enthusia-bloom-staging-agent',
     ENTHUSIA_AGENT_PORT: String(plan.agentPort),
     ENTHUSIA_AGENT_API_KEYS: agentKey,
+    ...(inferenceKey ? { ENTHUSIA_INFERENCE_API_KEY: inferenceKey } : {}),
     ENTHUSIA_TEST_PIECLOAK_PUBLIC_DOCS: '1',
   };
   const gateway = {
