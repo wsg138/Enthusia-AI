@@ -19,7 +19,7 @@ import { prepareManagedInference } from './managed-inference.mjs';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const wait = (ms) => new Promise((done) => setTimeout(done, ms));
 const EXPECTED_NODE_MAJOR = 24;
-const allowedOptions = new Set(['--dry-run', '--smoke', '--with-discord', '--without-discord', '--managed-inference']);
+const allowedOptions = new Set(['--dry-run', '--smoke', '--with-discord', '--without-discord', '--managed-inference', '--managed-indexer']);
 const DEFAULT_AGENT_PORT = 4200;
 const DEFAULT_GATEWAY_PORT = 4100;
 const STOP_GRACE_MS = 6000;
@@ -51,6 +51,18 @@ export function planSingleServer(args = process.argv.slice(2), env = process.env
 
   const withDiscord = args.includes('--with-discord');
   const managedInference = args.includes('--managed-inference');
+  const managedIndexer = args.includes('--managed-indexer');
+  if (managedIndexer && args.includes('--smoke')) {
+    throw new Error('Knowledge indexing cannot contact GitHub during an isolated smoke test');
+  }
+  if (managedIndexer && (
+    env.ENTHUSIA_INDEXER_APPROVED_REPOS !== 'wsg138/MaceGuard,wsg138/PieCloak' ||
+    !env.ENTHUSIA_INDEXER_GITHUB_TOKEN ||
+    !env.ENTHUSIA_INDEXER_DATA_DIR ||
+    !env.ENTHUSIA_INDEXER_DATA_DIR.includes(':') && !env.ENTHUSIA_INDEXER_DATA_DIR.startsWith('/')
+  )) {
+    throw new Error('Managed indexer needs exact public repo allowlist, private token and absolute data directory');
+  }
   if (managedInference && [
     'ENTHUSIA_MODEL_PATH', 'ENTHUSIA_MODEL_SHA256',
     'ENTHUSIA_LLAMA_SERVER_PATH', 'ENTHUSIA_LLAMA_SERVER_SHA256',
@@ -80,9 +92,11 @@ export function planSingleServer(args = process.argv.slice(2), env = process.env
   const agentPort = parsePort(env.ENTHUSIA_AGENT_PORT, DEFAULT_AGENT_PORT);
   const gatewayPort = parsePort(env.ENTHUSIA_AI_GATEWAY_PORT, DEFAULT_GATEWAY_PORT);
   const inferencePort = Number(new URL(inferenceUrl).port);
+  const indexerPort = parsePort(env.ENTHUSIA_INDEXER_PORT, 4300);
   if (!Number.isInteger(inferencePort) || inferencePort < 1024 || inferencePort > 65535 ||
       agentPort === gatewayPort || inferencePort === agentPort ||
-      inferencePort === gatewayPort) {
+      inferencePort === gatewayPort ||
+      (managedIndexer && [agentPort, gatewayPort, inferencePort].includes(indexerPort))) {
     throw new Error('Agent, Gateway and inference ports must be distinct');
   }
   const resolver = resolve(root, 'deploy/local/workspace-source-resolver.mjs');
@@ -90,6 +104,7 @@ export function planSingleServer(args = process.argv.slice(2), env = process.env
     ['agent', resolve(root, 'apps/agent-service/dist/main.js'), agentPort],
     ['gateway', resolve(root, 'apps/ai-gateway/dist/main.js'), gatewayPort],
     ...(withDiscord ? [['discord', resolve(root, 'apps/discord-bot/dist/main.js'), null]] : []),
+    ...(managedIndexer ? [['indexer', resolve(root, 'deploy/bloom/knowledge-staging.mjs'), indexerPort]] : []),
   ];
   if (!args.includes('--dry-run')) {
     for (const [, entry] of paths) {
@@ -99,7 +114,8 @@ export function planSingleServer(args = process.argv.slice(2), env = process.env
   }
   return {
     root, resolver, paths, agentPort, gatewayPort, inferenceUrl,
-    withDiscord, managedInference, inferencePort, dryRun: args.includes('--dry-run'), smoke: args.includes('--smoke'),
+    withDiscord, managedInference, inferencePort, managedIndexer, indexerPort,
+    dryRun: args.includes('--dry-run'), smoke: args.includes('--smoke'),
   };
 }
 
@@ -117,6 +133,7 @@ export function makeStagingEnvironments(plan, env = process.env) {
   const agentKey = randomBytes(32).toString('hex');
   const gatewayKey = randomBytes(32).toString('hex');
   const inferenceKey = plan.managedInference ? randomBytes(32).toString('hex') : undefined;
+  const indexerKey = plan.managedIndexer ? randomBytes(32).toString('hex') : undefined;
   const common = {
     ...safeInheritedEnv(env),
     NODE_ENV: 'development',
@@ -172,7 +189,17 @@ export function makeStagingEnvironments(plan, env = process.env) {
     ...safeInheritedEnv(env),
     ...(inferenceKey ? { LLAMA_API_KEY: inferenceKey } : {}),
   };
-  return { agent, gateway, discord, inference };
+  const knowledge = {
+    ...safeInheritedEnv(env),
+    NODE_ENV: 'development',
+    ENTHUSIA_BLOOM_STAGING: '1',
+    ENTHUSIA_INDEXER_GITHUB_TOKEN: env.ENTHUSIA_INDEXER_GITHUB_TOKEN,
+    ENTHUSIA_INDEXER_APPROVED_REPOS: env.ENTHUSIA_INDEXER_APPROVED_REPOS,
+    ENTHUSIA_INDEXER_DATA_DIR: env.ENTHUSIA_INDEXER_DATA_DIR,
+    ENTHUSIA_INDEXER_PORT: String(plan.indexerPort),
+    ENTHUSIA_INDEXER_API_KEY: indexerKey,
+  };
+  return { agent, gateway, discord, inference, knowledge };
 }
 
 function portOccupied(port) {
@@ -237,6 +264,27 @@ export async function untilInferenceReady(port, modelName, apiKey, child, timeou
   throw new Error('Local model did not become ready before timeout');
 }
 
+export async function untilKnowledgeReady(port, key, child, timeoutMs = 90000) {
+  const end = Date.now() + timeoutMs;
+  while (Date.now() < end) {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      throw new Error('Knowledge indexer exited before readiness');
+    }
+    try {
+      const response = await fetch('http://127.0.0.1:' + port + '/health/ready', {
+        headers: { authorization: 'Bearer ' + key },
+        signal: AbortSignal.timeout(1000),
+      });
+      if (response.ok) {
+        const status = await response.json();
+        if (status.status === 'ok') return;
+      }
+    } catch { /* No content logged; waiting for indexed public docs. */ }
+    await wait(800);
+  }
+  throw new Error('Knowledge indexer did not verify approved sources before timeout');
+}
+
 async function stopAll(children) {
   for (const entry of [...children].reverse()) {
     if (entry.child.exitCode === null && entry.child.signalCode === null) {
@@ -256,7 +304,8 @@ async function stopAll(children) {
 export async function runSingleServer(plan, env = process.env) {
   // Never attach to or kill an already-running Windows or Bloom service.
   if (await portOccupied(plan.agentPort) || await portOccupied(plan.gatewayPort) ||
-      (plan.managedInference && await portOccupied(plan.inferencePort))) {
+      (plan.managedInference && await portOccupied(plan.inferencePort)) ||
+      (plan.managedIndexer && await portOccupied(plan.indexerPort))) {
     throw new Error('One or more requested local service ports are already occupied');
   }
   // Hash checking must succeed BEFORE starting any child service.
@@ -316,12 +365,22 @@ export async function runSingleServer(plan, env = process.env) {
       ]);
       console.log('[bloom-staging] Pinned local inference runtime is ready.');
     }
+    if (plan.managedIndexer) {
+      const indexerEntry = plan.paths.find(([name]) => name === 'indexer');
+      const indexer = launch('indexer', indexerEntry[1], envs.knowledge);
+      await Promise.race([
+        untilKnowledgeReady(plan.indexerPort, envs.knowledge.ENTHUSIA_INDEXER_API_KEY, indexer),
+        exited.then(() => { throw new Error(stopReason); }),
+      ]);
+      console.log('[bloom-staging] Approved read-only knowledge indexer ready.');
+    }
     const agent = launch('agent', plan.paths[0][1], envs.agent);
     await Promise.race([untilReady('agent', plan.agentPort, agent), exited.then(() => { throw new Error(stopReason); })]);
     const gateway = launch('gateway', plan.paths[1][1], envs.gateway);
     await Promise.race([untilReady('gateway', plan.gatewayPort, gateway), exited.then(() => { throw new Error(stopReason); })]);
     if (plan.withDiscord) launch('discord', plan.paths[2][1], envs.discord);
     console.log('[bloom-staging] Agent and Gateway ready; Discord=' + (plan.withDiscord ? 'enabled' : 'disabled'));
+    console.log('[bloom-staging] Knowledge=' + (plan.managedIndexer ? 'supervised public read-only sidecar' : 'disabled') + '.');
     console.log('[bloom-staging] Inference=' + (model ? 'supervised, pinned local' : 'existing local loopback') +
       '; SFTP and private integrations are OFF.');
     if (plan.smoke) {
@@ -344,7 +403,8 @@ if (invokedAsMain) {
     const plan = planSingleServer();
     if (plan.dryRun) {
       console.log('[bloom-staging] Dry run validated. Services: ' +
-        (plan.managedInference ? 'pinned inference, ' : '') + 'agent, gateway' +
+        (plan.managedInference ? 'pinned inference, ' : '') +
+        (plan.managedIndexer ? 'public knowledge indexer, ' : '') + 'agent, gateway' +
         (plan.withDiscord ? ', Discord' : '') + '.');
       console.log('[bloom-staging] No processes started, no credentials read aloud, no SFTP or SMP changes.');
     } else {
