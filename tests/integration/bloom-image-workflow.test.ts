@@ -44,6 +44,7 @@ describe('Bloom Linux image CI review policy', () => {
   it('retains only a SHA-256-protected diagnostic binary artifact, never a publishable image', () => {
     expect(workflow).toContain('docker cp "$cid":/usr/local/bin/llama-server');
     expect(workflow).toContain('sha256sum llama-server > llama-server.sha256');
+    expect(workflow).toContain('cp deploy/bloom/check-bin.js bloom-native-check/check-bin.js');
     expect(workflow).toContain('actions/upload-artifact@v4');
     expect(workflow).toContain('retention-days: 5');
     expect(workflow).not.toContain('docker login');
