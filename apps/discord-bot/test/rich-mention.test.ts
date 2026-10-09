@@ -158,6 +158,8 @@ describe('mention lifecycle in isolated test channel', () => {
     const { message } = botFor(port);
     const result = await bot.handleMessage(message);
     expect(result.outcome).toBe('agent-error');
+    expect(port.richMessages[0]?.message.embed.title).toContain('Request failed');
+    expect(port.richMessages[0]?.message.embed.color).toBe(0xe05252);
     expect(port.reactions.at(-1)).toBe('+❌');
     expect(port.richMessages).toHaveLength(1);
   });
