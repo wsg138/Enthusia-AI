@@ -22,7 +22,7 @@ describe('single-container Bloom staging image policy (static only)', () => {
     expect(dockerfile).toContain('FROM node:24-bookworm-slim AS staging-runtime');
     expect(dockerfile).toContain('COPY --from=inference-build');
     expect(dockerfile).toContain('llama-server /usr/local/bin/llama-server');
-    expect(dockerfile).toContain('LLAMA_BUILD_WEBUI=OFF');
+    expect(dockerfile).toContain('LLAMA_BUILD_UI=OFF');
     expect(dockerfile).toContain('--managed-inference');
     expect(dockerfile).toContain('--without-discord');
     expect(dockerfile).not.toContain('DISCORD_BOT_TOKEN=');
