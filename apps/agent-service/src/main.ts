@@ -13,6 +13,7 @@ import { PieCloakPublicDocsPilot } from './public-docs.js';
 import { WarzonePublicDocsPilot } from './warzone-public-docs.js';
 import { KnowledgeSearchTool } from './knowledge-search.js';
 import { IndexedPublicDocsResolver } from './indexed-public-docs.js';
+import { createStagingPublicWebTool } from './public-web-search.js';
 import { loadConfiguredFamiliarityRuntime } from './familiarity.js';
 import {
   createAgentRuntime,
@@ -68,6 +69,10 @@ async function main(): Promise<void> {
     logger,
   });
   const reasoner = new InferenceReasoner(inference);
+  // No third-party public search is available unless the owner explicitly
+  // enables this DEVELOPMENT-ONLY flag and supplies a separate API key.
+  // Search snippets are unverified discovery hints, not claim evidence.
+  const publicWebSearch = createStagingPublicWebTool(process.env, config.nodeEnv);
   const staleTicketDecision = new StaleTicketDecisionService(inference);
   const familiarity = loadConfiguredFamiliarityRuntime(config.memoryPath);
   const sftp = await loadConfiguredSftpRuntime(config.sftpConfigPath);
@@ -133,6 +138,7 @@ async function main(): Promise<void> {
       ...ticketTools,
       ...moderationHistoryTools,
       ...familiarity.tools,
+      ...(publicWebSearch ? [publicWebSearch] : []),
     ],
     {
       ...(publicDocs !== undefined && warzoneDocs !== undefined ? {
