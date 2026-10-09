@@ -11,6 +11,8 @@ export interface SingleServerPlan {
   inferencePort: number;
   withDiscord: boolean;
   managedInference: boolean;
+  managedIndexer: boolean;
+  indexerPort: number;
   dryRun: boolean;
   smoke: boolean;
 }
@@ -27,7 +29,14 @@ export function makeStagingEnvironments(
   gateway: StagingEnvironment;
   discord: StagingEnvironment;
   inference: StagingEnvironment;
+  knowledge: StagingEnvironment;
 };
+export function untilKnowledgeReady(
+  port: number,
+  apiKey: string,
+  child: { exitCode: number | null; signalCode: string | null },
+  timeoutMs?: number,
+): Promise<void>;
 export function runSingleServer(
   plan: SingleServerPlan,
   env?: StagingEnvironment,
