@@ -13,10 +13,11 @@
  * Output is one JSON report with ONLY allowlisted non-secret fields.
  */
 import { spawnSync } from 'node:child_process';
-import { copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile, chmod } from 'node:fs/promises';
+import { copyFile, mkdtemp, readFile, rm, stat, writeFile, chmod } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { platform, arch, totalmem } from 'node:os';
 import { resolve, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const ONE_GIB = 1024 ** 3;
 
@@ -81,7 +82,7 @@ export async function runProbe() {
     platform: platform(),
     architecture: arch(),
     nodeMajor: Number(process.versions.node.split('.')[0]),
-    node24Compatible: Number(process.versions.node.split('.')[0]) >= 24,
+    node24Compatible: Number(process.versions.node.split('.')[0]) === 24,
     nodeChildProcessesWork: safeSpawn(process.execPath, ['--version']),
     // os.totalmem() is HOST physical memory, not the Pterodactyl allocation.
     hostMemoryGiB: Math.round(totalmem() / ONE_GIB * 10) / 10,
@@ -121,7 +122,7 @@ export async function runProbe() {
   return report;
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname)) {
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   runProbe().then((report) => {
     process.stdout.write(JSON.stringify(report, null, 2) + '\n');
   }).catch(() => {
