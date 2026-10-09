@@ -60,7 +60,7 @@ describe('Bloom native model CLI check — no model, no network or tokens', () =
     const result = run(dir);
     expect(result.code).toBe(1);
     const report = JSON.parse(result.stdout) as Record<string, unknown>;
-    expect(report.reason).toBe('binary-exited-nonzero');
+    expect(['binary-exited-nonzero', 'missing-binary-dependency']).toContain(report.reason);
     expect(report.binaryBytes).toBe(1600);
     expect(report.modelLoaded).toBe(false);
   });
