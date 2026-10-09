@@ -119,6 +119,19 @@ describe('HttpAiGatewayClient', () => {
     expect(response.text).toContain('play.enthusia.example');
   });
 
+  it('preserves explicit Agent outcomes across the real HTTP boundary', async () => {
+    for (const status of ['answered', 'unverified', 'error'] as const) {
+      const baseUrl = await startServer((_req, respond) => {
+        const payload = JSON.parse(agentResponseBody('123e4567-e89b-42d3-a456-426614174000')) as Record<string, unknown>;
+        payload['outcome'] = status;
+        respond(200, JSON.stringify(payload));
+      });
+      const client = new HttpAiGatewayClient(baseUrl, 5000, nullLogger());
+      const response = await client.sendChat(chatRequest());
+      expect(response.outcome).toBe(status);
+    }
+  });
+
   it('maps gateway 500s to ExternalServiceError', async () => {
     const baseUrl = await startServer((_req, respond) => {
       respond(500, JSON.stringify({ error: 'boom' }));
