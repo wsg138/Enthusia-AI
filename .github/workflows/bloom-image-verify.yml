@@ -89,6 +89,7 @@ jobs:
           cid=$(docker create --entrypoint /bin/true enthusia-ai-bloom-staging:ci)
           trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
           docker cp "$cid":/usr/local/bin/llama-server bloom-native-check/llama-server
+          cp deploy/bloom/check-bin.js bloom-native-check/check-bin.js
           (cd bloom-native-check && sha256sum llama-server > llama-server.sha256)
           docker run --rm --network none --read-only --cap-drop ALL \
             --security-opt no-new-privileges \
