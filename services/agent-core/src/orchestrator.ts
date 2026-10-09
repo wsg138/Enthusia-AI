@@ -175,6 +175,7 @@ export class AgentOrchestrator {
       }
       return {
         text: 'I could not finish that request. Please try again in a moment.',
+        outcome: 'error',
         actions: [],
         sources: [],
         memoryUpdates: [],
@@ -346,7 +347,14 @@ export class AgentOrchestrator {
       }
     }
 
-    return response;
+    // No claim has supporting evidence: this is a safe limitation, not a
+    // completed factual answer. Surface adapters show an unverified state.
+    if (visibleAssessments.length > 0 &&
+        visibleAssessments.every((assessment) => assessment.verdict === 'unsupported') &&
+        response.sources.length === 0) {
+      return { ...response, outcome: 'unverified' };
+    }
+    return { ...response, outcome: 'answered' };
   }
 
   private collectMemoryProposals(
