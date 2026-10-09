@@ -37,6 +37,9 @@ RUN cmake -S /src/llama.cpp -B /src/llama.cpp/build -G Ninja \
     -DLLAMA_CURL=OFF \
     -DLLAMA_BUILD_TESTS=OFF \
     -DLLAMA_BUILD_EXAMPLES=OFF \
+    -DLLAMA_BUILD_SERVER=ON \
+    -DLLAMA_BUILD_WEBUI=OFF \
+    -DLLAMA_USE_PREBUILT_WEBUI=OFF \
  && cmake --build /src/llama.cpp/build --target llama-server --parallel 2
 
 FROM node:24-bookworm-slim AS staging-runtime
