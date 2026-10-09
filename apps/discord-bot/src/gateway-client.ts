@@ -37,6 +37,7 @@ function toAgentResponse(data: {
     context?: Record<string, unknown> | undefined;
   } | null;
   traceId: string;
+  outcome?: 'answered' | 'unverified' | 'error';
 }): AgentResponse {
   return {
     text: data.text,
@@ -59,6 +60,7 @@ function toAgentResponse(data: {
             ...(data.escalation.context === undefined ? {} : { context: data.escalation.context }),
           },
     traceId: data.traceId,
+    ...(data.outcome !== undefined ? { outcome: data.outcome } : {}),
   };
 }
 
