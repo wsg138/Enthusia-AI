@@ -69,8 +69,10 @@ export function planSingleServer(args = process.argv.slice(2), env = process.env
   }
   const agentPort = parsePort(env.ENTHUSIA_AGENT_PORT, DEFAULT_AGENT_PORT);
   const gatewayPort = parsePort(env.ENTHUSIA_AI_GATEWAY_PORT, DEFAULT_GATEWAY_PORT);
-  if (agentPort === gatewayPort || inferenceUrl === 'http://127.0.0.1:' + agentPort ||
-      inferenceUrl === 'http://127.0.0.1:' + gatewayPort) {
+  const inferencePort = Number(new URL(inferenceUrl).port);
+  if (!Number.isInteger(inferencePort) || inferencePort < 1024 || inferencePort > 65535 ||
+      agentPort === gatewayPort || inferencePort === agentPort ||
+      inferencePort === gatewayPort) {
     throw new Error('Agent, Gateway and inference ports must be distinct');
   }
   const resolver = resolve(root, 'deploy/local/workspace-source-resolver.mjs');
