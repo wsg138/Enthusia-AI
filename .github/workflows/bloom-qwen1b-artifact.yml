@@ -1,0 +1,40 @@
+name: Package isolated Bloom Qwen3 1.7B test script
+
+on:
+  push:
+    branches:
+      - fix/discord-command-safe-upsert-20261008
+    paths:
+      - .github/workflows/bloom-qwen1b-artifact.yml
+      - deploy/bloom/bloom-1b.js
+      - deploy/bloom/package.json
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    if: github.ref == 'refs/heads/fix/discord-command-safe-upsert-20261008'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify standalone script syntax, offline
+        run: |
+          node --version
+          node --check deploy/bloom/bloom-1b.js
+          test -s deploy/bloom/bloom-1b.js
+      - name: Package only the exact test script and its checksum
+        run: |
+          mkdir -p bundle
+          cp deploy/bloom/bloom-1b.js bundle/bloom-1b.js
+          (cd bundle && sha256sum bloom-1b.js > bloom-1b.js.sha256)
+      - name: Upload short-lived owner-only diagnostic artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bloom-qwen3-1b-script
+          path: bundle/
+          retention-days: 7
+          if-no-files-found: error
