@@ -10,6 +10,7 @@ import {
 } from './config.js';
 import { InferenceReasoner } from './reasoner.js';
 import { PieCloakPublicDocsPilot } from './public-docs.js';
+import { WarzonePublicDocsPilot } from './warzone-public-docs.js';
 import { loadConfiguredFamiliarityRuntime } from './familiarity.js';
 import {
   createAgentRuntime,
@@ -29,6 +30,7 @@ async function main(): Promise<void> {
     throw new Error('Public documentation pilot is restricted to development test runtimes.');
   }
   const publicDocs = publicDocsOptIn ? new PieCloakPublicDocsPilot() : undefined;
+  const warzoneDocs = publicDocsOptIn ? new WarzonePublicDocsPilot() : undefined;
   const logger = createLogger({
     name: config.serviceName,
     level: config.logLevel,
@@ -113,7 +115,10 @@ async function main(): Promise<void> {
       ...familiarity.tools,
     ],
     {
-      ...(publicDocs !== undefined ? { publicSourceResolver: (request: import('@enthusia/agent-core').ResolvedChatRequest) => publicDocs.resolve(request) } : {}),
+      ...(publicDocs !== undefined && warzoneDocs !== undefined ? {
+        publicSourceResolver: async (request: import('@enthusia/agent-core').ResolvedChatRequest) =>
+          (await publicDocs.resolve(request)) ?? (await warzoneDocs.resolve(request)),
+      } : {}),
       ...(familiarity.onVerifiedTopicHelp !== undefined
         ? { onVerifiedTopicHelp: familiarity.onVerifiedTopicHelp }
         : {}),
