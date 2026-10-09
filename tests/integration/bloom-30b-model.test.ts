@@ -37,10 +37,10 @@ describe('30B-A3B wiped spare Bloom staging gate', () => {
     expect(benchmark.QUALITY_CASES.map(q => q.question)).toEqual(baseline.QUALITY_CASES.map(q => q.question));
     expect(benchmark.QUALITY_CASES).toHaveLength(15);
     expect(source).toContain("'--host', '127.0.0.1'");
-    expect(source).toContain("'--threads', '8'");
+    expect(source).toContain("'--threads', '4'");
     expect(source).toContain("'--parallel', '1'");
-    expect(source).toContain("stopAtFraction = 0.85");
-    expect(source).toContain('memoryLimit < 80_000_000_000 || memoryLimit > 140_000_000_000');
+    expect(source).toContain("stopAtFraction = 0.80");
+    expect(source).toContain('memoryLimit < 36_000_000_000 || memoryLimit > 65_000_000_000');
     expect(source).toContain('bloom-30b-report.json');
     expect(source).toContain("discord: false, minecraft: false, sftp: false, mysql: false");
     expect(source).not.toContain("'--host', '0.0.0.0'");
