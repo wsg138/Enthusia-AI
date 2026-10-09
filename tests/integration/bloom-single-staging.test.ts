@@ -101,6 +101,42 @@ describe('single Bloom staging launcher safety gates (dry-run, no network or tok
     },
   );
 
+  it('keeps the knowledge indexer disabled unless explicitly approved', () => {
+    const result = run({}, ['--dry-run', '--managed-indexer']);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Managed indexer needs exact public repo allowlist');
+  });
+
+  it('refuses managed indexing during the no-network smoke', () => {
+    const result = run({}, ['--dry-run', '--smoke', '--managed-indexer']);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('cannot contact GitHub during an isolated smoke');
+  });
+
+  it('allows a restricted, credential-private indexer dry run without contacting GitHub', () => {
+    const result = run({
+      ENTHUSIA_INDEXER_APPROVED_REPOS: 'wsg138/MaceGuard,wsg138/PieCloak',
+      ENTHUSIA_INDEXER_GITHUB_TOKEN: 'synthetic-token-must-not-be-logged',
+      ENTHUSIA_INDEXER_DATA_DIR: process.cwd(),
+    }, ['--dry-run', '--managed-indexer']);
+    if (Number(process.versions.node.split('.')[0]) === 24) {
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain('public knowledge indexer');
+      expect(result.stdout).not.toContain('synthetic-token-must-not-be-logged');
+    }
+  });
+
+  it('rejects a knowledge port collision with the Agent or local model', () => {
+    const r = run({
+      ENTHUSIA_INDEXER_APPROVED_REPOS: 'wsg138/MaceGuard,wsg138/PieCloak',
+      ENTHUSIA_INDEXER_GITHUB_TOKEN: 'synthetic',
+      ENTHUSIA_INDEXER_DATA_DIR: process.cwd(),
+      ENTHUSIA_INDEXER_PORT: '4200',
+    }, ['--dry-run', '--managed-indexer']);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('must be distinct');
+  });
+
   it('refuses to bring Discord online in the credential-free smoke', () => {
     const result = run({
       DISCORD_BOT_TOKEN: 'fake-secret',
