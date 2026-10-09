@@ -103,7 +103,7 @@
       "default_value": "wsg138/MaceGuard,wsg138/PieCloak",
       "user_editable": false,
       "user_viewable": true,
-      "rules": "required|string|in:wsg138/MaceGuard,wsg138/PieCloak"
+      "rules": "required|string|max:120"
     },
     {
       "name": "Knowledge storage",
