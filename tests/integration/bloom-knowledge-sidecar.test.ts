@@ -86,6 +86,8 @@ describe('durable W08/W04/W07 Bloom sidecar (synthetic GitHub, real SQLite)', ()
     expect(await service.refresh()).toBe(true);
     expect(service.fresh()).toBe(true);
     expect(service.retrieval.indexedCount()).toBeGreaterThan(0);
+    expect(service.registry.getCurrent('github:wsg138/PieCloak:src/StaffInternal.java')).toBeUndefined();
+    expect(service.registry.getCurrent('github:wsg138/PieCloak:.env')).toBeUndefined();
     const result = await request(port, 'Warzones combat kits schedule');
     expect(result.status).toBe(200);
     expect(result.body.sourceMode).toBe('github-documentation-only');
