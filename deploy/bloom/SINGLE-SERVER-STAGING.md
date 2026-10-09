@@ -160,3 +160,20 @@ The connected GitHub read API returned **no pull-request workflow run for the ne
 Latest Windows checkout: **1,210 automated tests passed; one pre-existing integration smoke skipped; root TypeScript, targeted ESLint and credential-free Agent/Gateway supervisor smoke passed.** The working branch remains isolated; no production changes.
 
 **Release gate stays CLOSED:** a successful Linux build is only the first proof. A real verified GGUF, supervised model startup, model memory/CPU benchmarking under an SMP-safe quota, persistent index permissions, Bloom Pterodactyl runtime compatibility, source credentials and a rollback test are all still required before any panel import or live SFTP.
+
+## Verified GitHub Linux image build — 2026-10-08
+
+Owner confirmed GitHub Actions is working by screenshot; Actions itself is enabled. The first newly added `pull_request`-only workflow did not surface a run for draft PR #118, so the isolated staging workflow acquired an exact branch-only `push` trigger as well. This is not a general production workflow; it has `contents: read`, never uses secrets, and never publishes an image.
+
+**A genuine GitHub-hosted Ubuntu Linux job PASSED:** [Bloom single-server Linux image build check run #37879161473](https://github.com/wsg138/Enthusia-AI/actions/runs/37879161473), head SHA `519eb13e7c38fb644ffdf6df9a53d25cd7aa109c` (push event). The job runner confirmed success on all stages:
+
+- Complete CPU-only Linux image construction from the selected pinned upstream llama.cpp commit; the image was used only within the CI runner and **not pushed**.
+- Executed the packaged Node 24 interpreter and `llama-server --help`.
+- Verified compiled Agent, Gateway and Discord entrypoints exist in the image.
+- Ran a credential-free launcher dry run inside a no-network, read-only, capability-dropped, no-new-privileges Linux container.
+
+**This is a real completed image build, but NOT a loaded Qwen3 inference test.** The job deliberately did not download/open a GGUF, index GitHub, connect SFTP, log into Discord or deploy to Bloom.
+
+An expanded workflow revision (head `61497527e43caab06afecb39c6373dd4dccd1b16`) adds **actual Agent + Gateway process startup/ready/shutdown inside the same offline Linux image**, under `--memory 768m --cpus 2 --pids-limit 128` and still without a model. The second run is [#37879685988](https://github.com/wsg138/Enthusia-AI/actions/runs/37879685988), initially in progress; **do not mark this additional lifecycle check passed until the job completes**.
+
+Remaining deployment gates are unchanged: approved GGUF and model SHA-256, realistic CPU/RAM benchmarks and SMP isolation, image digest scanning/review, persistent volumes, Pterodactyl import under owner-approved staging, then separately approved read-only live SMP SFTP and typed metrics. PR #118 is still a HOLD draft.
