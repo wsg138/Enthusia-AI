@@ -145,3 +145,18 @@ factual accuracy evaluation across many approved public docs; real Docker/Linux
 image build and resource benchmark; actual Pterodactyl egg import in an
 approved **staging** environment; only then a separately approved read-only SMP
 SFTP identity, current deployment inspection and typed live metrics.
+
+## Linux build-readiness pass — 2026-10-08 late evening
+
+**Found and fixed two real Dockerfile blockers before a Linux build:**
+
+- The `node:24-bookworm-slim` base image already provides a non-root `node` user (UID 1000). The earlier runtime Dockerfile attempted to create a different user with the same UID, which would fail at image build. The candidate now uses the existing `node` account and assigns the persistent working directory to it.
+- The earlier `llama.cpp` build declared obsolete/unrecognized CMake UI options. Compared against upstream `ggml-org/llama.cpp` commit `3d65c90d04d337e88f2b1f7f0061f40a5324e662`, the correct current flag is `LLAMA_BUILD_UI=OFF`. The selected upstream server documentation also recognizes `--reasoning off`, `--no-webui`, `--no-slots` and `LLAMA_API_KEY`. These findings support the candidate but do **not** prove a compiled model server can start on Bloom.
+
+**New Linux test job:** `.github/workflows/bloom-image-verify.yml` is a pull-request-only, read-only-permission build and *offline* smoke intended to build the entire image with the pinned upstream source commit. If run, it checks the Linux `node` executable, `llama-server --help`, the compiled Agent/Gateway/Discord entrypoints and a credential-free staging launcher dry run. Every runtime check uses `--network none`, `--read-only`, dropped capabilities and no new privileges. The image is **never pushed or published**; no secret, Discord token, model weights, SFTP login, Bloom API or SMP connection is made.
+
+The connected GitHub read API returned **no pull-request workflow run for the new commit** at the time of this check. **Do not mark the Linux build PASS** until an actual workflow run and its logs are available. Local static policies assert the workflow's scope; they cannot substitute for an image build or explain why a run has not appeared. A future operator may need to confirm GitHub Actions is enabled and runner access is available.
+
+Latest Windows checkout: **1,210 automated tests passed; one pre-existing integration smoke skipped; root TypeScript, targeted ESLint and credential-free Agent/Gateway supervisor smoke passed.** The working branch remains isolated; no production changes.
+
+**Release gate stays CLOSED:** a successful Linux build is only the first proof. A real verified GGUF, supervised model startup, model memory/CPU benchmarking under an SMP-safe quota, persistent index permissions, Bloom Pterodactyl runtime compatibility, source credentials and a rollback test are all still required before any panel import or live SFTP.
