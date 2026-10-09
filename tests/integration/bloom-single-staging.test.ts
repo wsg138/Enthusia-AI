@@ -114,9 +114,14 @@ describe('single Bloom staging launcher safety gates (dry-run, no network or tok
     const children = makeStagingEnvironments(plan, env);
     expect(children.knowledge.ENTHUSIA_INDEXER_GITHUB_TOKEN).toBe(sourceToken);
     expect(children.knowledge.ENTHUSIA_INDEXER_API_KEY).toMatch(/^[0-9a-f]{64}$/);
+    expect(children.agent.ENTHUSIA_INDEXER_API_KEY).toBe(children.knowledge.ENTHUSIA_INDEXER_API_KEY);
+    expect(children.agent.ENTHUSIA_TEST_KNOWLEDGE_BRIDGE).toBe('1');
+    expect(children.agent.ENTHUSIA_INDEXER_BASE_URL).toBe('http://127.0.0.1:4300');
     for (const child of [children.agent, children.gateway, children.discord, children.inference]) {
       expect(child.ENTHUSIA_INDEXER_GITHUB_TOKEN).toBeUndefined();
-      expect(child.ENTHUSIA_INDEXER_API_KEY).toBeUndefined();
+      if (child !== children.agent) {
+        expect(child.ENTHUSIA_INDEXER_API_KEY).toBeUndefined();
+      }
     }
   });
 
