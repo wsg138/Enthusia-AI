@@ -146,6 +146,56 @@ describe('mention lifecycle in isolated test channel', () => {
     expect(port.sentMessages[0]?.message.content).not.toContain('synthetic gateway outage');
   });
 
+  it('reacts ❌ to a structured Agent error despite HTTP 200 and a valid embed', async () => {
+    const port = new RichTestPort();
+    const response = sourceAnswer();
+    response.outcome = 'error';
+    response.text = 'I could not finish that request. Please try again in a moment.';
+    const bot = new EnthusiaAiDiscordBot(port,
+      { sendChat: async () => response },
+      testOptions({ mentionOnly: true, allowedGuildIds: ['test-guild'], allowedChannelIds: ['ai-testing'] }),
+      nullLogger());
+    const { message } = botFor(port);
+    const result = await bot.handleMessage(message);
+    expect(result.outcome).toBe('agent-error');
+    expect(port.reactions.at(-1)).toBe('+❌');
+    expect(port.richMessages).toHaveLength(1);
+  });
+
+  it('reacts ⚠️ for source-limited answers rather than claiming full success', async () => {
+    const port = new RichTestPort();
+    const response = sourceAnswer();
+    response.outcome = 'unverified';
+    response.sources = [];
+    response.text = 'I could not verify the rules from current sources.';
+    const bot = new EnthusiaAiDiscordBot(port,
+      { sendChat: async () => response },
+      testOptions({ mentionOnly: true, allowedGuildIds: ['test-guild'], allowedChannelIds: ['ai-testing'] }),
+      nullLogger());
+    const { message } = botFor(port);
+    const result = await bot.handleMessage(message);
+    expect(result.outcome).toBe('unverified');
+    expect(port.reactions.at(-1)).toBe('+⚠️');
+    expect(port.richMessages).toHaveLength(1);
+  });
+
+  it('renders an exact-commit Warzones technical source with no raw URL preview', () => {
+    const response = sourceAnswer();
+    response.sources = [{
+      artifactId: 'github:wsg138/MaceGuard@' + SHA + ':README.md',
+      description: 'Public Warzones documentation',
+      visibility: Visibility.PUBLIC,
+    }];
+    response.text = '**Warzones** rotate kits and modifiers.\nSource: ' +
+      'https://github.com/wsg138/MaceGuard/blob/' + SHA + '/README.md' +
+      '\nDocumentation revision: aaaaaaaaaaaa.';
+    const card = formatRichAgentResponse(response);
+    expect(card?.embed.title).toContain('Warzones');
+    expect(card?.embed.description).not.toContain('https://');
+    expect(card?.embed.fields?.[0]?.value).toContain(
+      '[Technical source](https://github.com/wsg138/MaceGuard/blob/' + SHA + '/README.md)');
+  });
+
   it('falls back to plain text if Discord refuses the embed permission', async () => {
     const port = new RichTestPort();
     port.sendRichMessage = async () => { throw new Error('Missing Embed Links permission'); };
