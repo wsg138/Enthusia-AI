@@ -1,0 +1,75 @@
+# STAGING-ONLY proof: build the Linux container on GitHub-hosted runners.
+# No model weights, secrets, server connections, Docker publication or Bloom changes.
+name: Bloom single-server Linux image build check
+
+on:
+  pull_request:
+    paths:
+      - 'deploy/bloom/Dockerfile.single-staging'
+      - 'deploy/bloom/Dockerfile.single-staging.dockerignore'
+      - 'deploy/bloom/single-server-staging.mjs'
+      - 'deploy/bloom/managed-inference.mjs'
+      - 'deploy/bloom/knowledge-staging.mjs'
+      - '.github/workflows/bloom-image-verify.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'apps/**'
+      - 'packages/**'
+      - 'services/**'
+      - 'integrations/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bloom-image-verify-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-staging-image:
+    name: Build image and inspect runtime only
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact PR commit
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Build CPU-only staging image (never publish)
+        run: |
+          docker build \
+            --pull \
+            --progress=plain \
+            --file deploy/bloom/Dockerfile.single-staging \
+            --build-arg LLAMA_CPP_COMMIT=3d65c90d04d337e88f2b1f7f0061f40a5324e662 \
+            --tag enthusia-ai-bloom-staging:ci \
+            .
+
+      - name: Confirm installed runtime and app artifacts
+        run: |
+          docker run --rm --network none --read-only --cap-drop ALL \
+            --security-opt no-new-privileges \
+            --entrypoint node enthusia-ai-bloom-staging:ci --version
+          docker run --rm --network none --read-only --cap-drop ALL \
+            --security-opt no-new-privileges \
+            --entrypoint /usr/local/bin/llama-server \
+            enthusia-ai-bloom-staging:ci --help >/dev/null
+          docker run --rm --network none --read-only --cap-drop ALL \
+            --security-opt no-new-privileges \
+            --entrypoint /bin/sh enthusia-ai-bloom-staging:ci \
+            -c 'test -s apps/agent-service/dist/main.js && test -s apps/ai-gateway/dist/main.js && test -s apps/discord-bot/dist/main.js'
+
+      - name: Verify launcher dry-run with no credentials
+        run: |
+          docker run --rm --network none --read-only --cap-drop ALL \
+            --security-opt no-new-privileges \
+            --entrypoint node enthusia-ai-bloom-staging:ci \
+            deploy/bloom/single-server-staging.mjs --dry-run --without-discord
+
+      - name: Declare safety scope
+        run: |
+          echo 'Linux image build and no-network runtime checks complete.'
+          echo 'No model weights, Discord login, GitHub indexing, SFTP, Bloom API, or SMP touched.'
+          echo 'This does not verify inference performance, model memory, or panel compatibility.'
