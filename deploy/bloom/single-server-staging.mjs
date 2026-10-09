@@ -202,7 +202,7 @@ async function untilReady(name, port, child, timeoutMs = 30000) {
   throw new Error(name + ' did not become ready before timeout');
 }
 
-async function untilInferenceReady(port, modelName, apiKey, child, timeoutMs = 120000) {
+export async function untilInferenceReady(port, modelName, apiKey, child, timeoutMs = 120000) {
   const until = Date.now() + timeoutMs;
   while (Date.now() < until) {
     if (child.exitCode !== null || child.signalCode !== null) {
