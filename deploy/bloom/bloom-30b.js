@@ -2,7 +2,7 @@
 
 /**
  * Enthusia AI — one-shot Qwen3 30B-A3B CPU staging test for the OWNER-APPROVED spare
- * Bloom Pterodactyl Node.js 24 service (TARGET: 48 GB cgroup, 400% CPU quota, 50 GB disk).
+ * Bloom Pterodactyl generic Node.js 24/25 service (TARGET: 48 GB cgroup, 400% CPU quota, 50 GB disk).
  *
  * Requirements in /home/container:
  *   bloom-30b.js (ONLY root *.js startup entrypoint)
@@ -313,8 +313,8 @@ async function main() {
     discord: false, minecraft: false, sftp: false, mysql: false,
   };
   try {
-    if (process.platform !== 'linux' || process.arch !== 'x64' || Number(process.versions.node.split('.')[0]) !== 24) {
-      throw new Error('requires-linux-x64-node24');
+    if (process.platform !== 'linux' || process.arch !== 'x64' || ![24, 25].includes(Number(process.versions.node.split('.')[0]))) {
+      throw new Error('requires-linux-x64-node24-or-node25');
     }
     const memoryLimit = readNumber(LIMIT_PATHS);
     if (!memoryLimit || memoryLimit < 36_000_000_000 || memoryLimit > 65_000_000_000) {
