@@ -44,7 +44,7 @@ A separate **cached-only** one-shot staging file `deploy/bloom/bloom-30b-loadtes
 - Up to **150 seconds** of serial inference, or **120 requests**, whichever occurs first; same 15 fixed question types repeated. This is an artificial CPU/shared-host interference benchmark, **not** additional statistically independent accuracy evaluation.
 - 4 CPU threads, one parallel slot, 2048 context, max 96 generated tokens per request, localhost-only API and no new credentials.
 - Samples memory and stops if it exceeds 80% of the real 48GB container limit.
-- Saves the report `bloom-30b-loadtest-report.json` with reply timing and memory. It exits cleanly; Pterodactyl may call a one-shot exit-0 process "crashed" merely because it's not a permanent app.
+- Saves the report `bloom-30b-loadtest-report.json` with reply timing and memory. **The actual Bloom runtime automatically restarted the one-shot workload after clean exit 0.** Manually STOP the AI split immediately after a completed run and verify it stays stopped. Future stress scripts must prevent automatic replay; the "crashed" label did not indicate an application OOM.
 
 When the live SMP is stable and the owner chooses a suitable window:
 
@@ -53,7 +53,7 @@ When the live SMP is stable and the owner chooses a suitable window:
 
    https://raw.githubusercontent.com/wsg138/Enthusia-AI/fix/discord-command-safe-upsert-20261008/deploy/bloom/bloom-30b-loadtest.js
 
-3. Set Startup MAIN FILE to `bloom-30b-loadtest.js`, leaving the actual AI server stopped until the simultaneous SMP profile begins.
+3. **IMPORTANT: Bloom limits MAIN FILE to 16 characters.** Save or rename the downloaded load-test script to `bloom-30b.js` (12 characters) in the Bloom root and set Startup MAIN FILE to `bloom-30b.js`. (The longer GitHub source basename is not valid in the panel field.) Leave AI stopped until the synchronized profile begins.
 4. On the **live SMP** run `/spark profiler start --timeout 180 --thread * --interval 10`; then immediately start `CC19EA3C`. Hash checking ~18.6 GB and model loading will precede the 150s model workload; note the approximate overlap; collect start time and report.
 5. Share SMP spark report URL plus `bloom-30b-loadtest-report.json` and whether players were online. This lets us compare the baseline and concurrent CPU activity. Performance during cold download needs separate testing; this script should never trigger a download.
 
