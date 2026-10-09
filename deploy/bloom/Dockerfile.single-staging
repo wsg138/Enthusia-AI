@@ -38,8 +38,7 @@ RUN cmake -S /src/llama.cpp -B /src/llama.cpp/build -G Ninja \
     -DLLAMA_BUILD_TESTS=OFF \
     -DLLAMA_BUILD_EXAMPLES=OFF \
     -DLLAMA_BUILD_SERVER=ON \
-    -DLLAMA_BUILD_WEBUI=OFF \
-    -DLLAMA_USE_PREBUILT_WEBUI=OFF \
+    -DLLAMA_BUILD_UI=OFF \
  && cmake --build /src/llama.cpp/build --target llama-server --parallel 2
 
 FROM node:24-bookworm-slim AS staging-runtime
@@ -49,11 +48,11 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
 WORKDIR /home/container
 COPY --from=app-build /src/enthusia-ai /home/container
 COPY --from=inference-build /src/llama.cpp/build/bin/llama-server /usr/local/bin/llama-server
-RUN groupadd --gid 1000 enthusia \
- && useradd --uid 1000 --gid 1000 --create-home enthusia \
- && mkdir -p /home/container/models /home/container/data \
- && chown -R enthusia:enthusia /home/container
-USER enthusia:enthusia
+RUN mkdir -p /home/container/models /home/container/data \
+ && chown -R node:node /home/container
+# Official Node images already include the non-root 'node' user (UID 1000).
+# Creating a second user with that UID fails in the existing base image.
+USER node
 
 # The model, its hash, and the compiled executable hash are supplied
 # through an operator-approved manifest/Pterodactyl environment. NEVER
