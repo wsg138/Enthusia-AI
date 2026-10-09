@@ -169,3 +169,32 @@ export class PublicWebSearchTool implements Tool<{ question: string }> {
     }
   }
 }
+
+
+/**
+ * ONLY in isolated development. A search provider key without explicit opt-in
+ * is rejected so a later production environment cannot accidentally enable
+ * outbound public searches or send user text to a third party.
+ */
+export function createStagingPublicWebTool(
+  env: NodeJS.ProcessEnv,
+  nodeEnv: string,
+  fetchImpl?: typeof fetch,
+): PublicWebSearchTool | undefined {
+  const enabled = env['ENTHUSIA_TEST_PUBLIC_WEB_SEARCH'] === '1';
+  const secret = env['ENTHUSIA_BRAVE_API_KEY'];
+  if (!enabled && secret !== undefined) {
+    throw new Error('Public web search key supplied while the staging feature is disabled');
+  }
+  if (!enabled) return undefined;
+  if (nodeEnv !== 'development') {
+    throw new Error('Public web search is restricted to isolated development staging');
+  }
+  if (!secret) {
+    throw new Error('Enabled public web search requires a separate private Brave key');
+  }
+  return new PublicWebSearchTool({
+    apiKey: secret,
+    ...(fetchImpl === undefined ? {} : { fetchImpl }),
+  });
+}
