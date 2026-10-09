@@ -12,7 +12,7 @@ import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import net from 'node:net';
-import { dirname, resolve } from 'node:path';
+import { dirname, resolve, isAbsolute } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { prepareManagedInference } from './managed-inference.mjs';
 
@@ -59,7 +59,7 @@ export function planSingleServer(args = process.argv.slice(2), env = process.env
     env.ENTHUSIA_INDEXER_APPROVED_REPOS !== 'wsg138/MaceGuard,wsg138/PieCloak' ||
     !env.ENTHUSIA_INDEXER_GITHUB_TOKEN ||
     !env.ENTHUSIA_INDEXER_DATA_DIR ||
-    !env.ENTHUSIA_INDEXER_DATA_DIR.includes(':') && !env.ENTHUSIA_INDEXER_DATA_DIR.startsWith('/')
+    !isAbsolute(env.ENTHUSIA_INDEXER_DATA_DIR)
   )) {
     throw new Error('Managed indexer needs exact public repo allowlist, private token and absolute data directory');
   }
