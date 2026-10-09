@@ -1,0 +1,59 @@
+name: Bundle isolated Bloom 30B Node25 trial
+
+on:
+  push:
+    branches:
+      - fix/discord-command-safe-upsert-20261008
+    paths:
+      - .github/workflows/bloom-30b-node25-bundle.yml
+      - deploy/bloom/bloom-30b.js
+      - tests/integration/bloom-30b-model.test.ts
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout isolated development branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify script syntax on actual Node 25 major version
+        uses: actions/setup-node@v4
+        with:
+          node-version: '25'
+      - run: |
+          node --version
+          node --check deploy/bloom/bloom-30b.js
+          grep -F "requires-linux-x64-node24-or-node25" deploy/bloom/bloom-30b.js
+          grep -F "CC19EA3C WIPED FOR ENTHUSIA AI" deploy/bloom/bloom-30b.js
+      - name: Retrieve previously Bloom-tested native runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: enthusia-linux-llama-bloom-diagnostic
+          run-id: 37885046923
+          github-token: ${{ github.token }}
+          path: native
+      - name: Verify prior runtime SHA and produce only the necessary files
+        run: |
+          set -euo pipefail
+          test -s native/llama-server
+          test -s native/llama-server.sha256
+          (cd native && sha256sum -c llama-server.sha256)
+          mkdir bundle
+          cp native/llama-server native/llama-server.sha256 bundle/
+          cp deploy/bloom/bloom-30b.js bundle/
+          chmod 755 bundle/llama-server
+          (cd bundle && sha256sum llama-server bloom-30b.js > bundle-checksums.sha256)
+          test "$(find bundle -maxdepth 1 -type f | wc -l)" -eq 4
+      - name: Package restricted staging-only artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: enthusia-bloom-30b-node25-staging
+          path: bundle/
+          retention-days: 7
+          if-no-files-found: error
