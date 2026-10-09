@@ -35,6 +35,8 @@ describe('Bloom Linux image CI review policy', () => {
     expect(workflow).toContain('no-new-privileges');
     expect(workflow).toContain('--entrypoint /usr/local/bin/llama-server');
     expect(workflow).toContain('deploy/bloom/single-server-staging.mjs --dry-run --without-discord');
+    expect(workflow).toContain('deploy/bloom/single-server-staging.mjs --smoke --without-discord');
+    expect(workflow).toContain('--memory 768m --cpus 2 --pids-limit 128');
     expect(workflow).not.toContain('--with-discord');
     expect(workflow).not.toContain('docker run --privileged');
     expect(workflow).not.toMatch(/ENTHUSIA_AGENT_SFTP_CONFIG_PATH|DISCORD_BOT_TOKEN|SFTP_PASSWORD/);
