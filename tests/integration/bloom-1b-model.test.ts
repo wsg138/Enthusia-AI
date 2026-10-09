@@ -47,9 +47,17 @@ describe('Bloom 1.7B GGUF performance gate', () => {
       createHash('sha256').update('test-data').digest('hex'),
     );
     const linked = join(dir, 'linked.gguf');
-    await symlink(realFile, linked, 'file');
-    expect(bench.safeRegularFile(linked, 100)).toBe(false);
-    await expect(bench.hashFile(linked, 100)).rejects.toThrow();
+    try {
+      await symlink(realFile, linked, 'file');
+      expect(bench.safeRegularFile(linked, 100)).toBe(false);
+      await expect(bench.hashFile(linked, 100)).rejects.toThrow();
+    } catch (error) {
+      // The authorized Windows checkout may lack the OS privilege to
+      // create symlinks; Linux CI still exercises the symlink rejection.
+      if (!(process.platform === 'win32' && (error as NodeJS.ErrnoException).code === 'EPERM')) {
+        throw error;
+      }
+    }
   });
 
   it('reads only bounded cgroup numeric values (not host memory)', async () => {
