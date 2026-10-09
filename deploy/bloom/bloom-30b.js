@@ -2,7 +2,7 @@
 
 /**
  * Enthusia AI — one-shot Qwen3 30B-A3B CPU staging test for the OWNER-APPROVED spare
- * Bloom Pterodactyl Node.js 24 service (TARGET: 118 GB cgroup, 32 CPU quota, 50 GB disk).
+ * Bloom Pterodactyl Node.js 24 service (TARGET: 48 GB cgroup, 400% CPU quota, 50 GB disk).
  *
  * Requirements in /home/container:
  *   bloom-30b.js (ONLY root *.js startup entrypoint)
@@ -51,7 +51,7 @@ const MODEL = join(MODEL_DIR, MODEL_NAME);
 const REPORT = join(ROOT, 'bloom-30b-report.json');
 const MEMORY_PATHS = ['/sys/fs/cgroup/memory.current', '/sys/fs/cgroup/memory/memory.usage_in_bytes'];
 const LIMIT_PATHS = ['/sys/fs/cgroup/memory.max', '/sys/fs/cgroup/memory/memory.limit_in_bytes'];
-const stopAtFraction = 0.85;
+const stopAtFraction = 0.80;
 // These are independent questions. No server data or credentials are supplied.
 const QUALITY_CASES = Object.freeze([
   { id: 'Q01', kind: 'fact', question: 'In vanilla Minecraft, do ordinary creeper explosions normally create fire? Answer in one sentence.' },
@@ -184,7 +184,7 @@ async function benchmark(modelBytes, memoryLimit) {
   const args = [
     '--model', MODEL, '--alias', 'enthusia-qwen3-30b-a3b-cpu',
     '--host', '127.0.0.1', '--port', String(port),
-    '--threads', '8', '--threads-batch', '8',
+    '--threads', '4', '--threads-batch', '4',
     '--ctx-size', '2048', '--batch-size', '128', '--ubatch-size', '128',
     '--parallel', '1', '--n-gpu-layers', '0',
     '--reasoning', 'off', '--no-webui', '--no-slots',
@@ -279,7 +279,7 @@ async function benchmark(modelBytes, memoryLimit) {
       responseSecondsMax: Math.max(...results.map(item => item.seconds)),
       peakMemoryMiB: Math.round(peak / 1048576),
       memoryLimitMiB: Math.round(memoryLimit / 1048576),
-      cpuThreads: 8, contextTokens: 2048,
+      cpuThreads: 4, contextTokens: 2048,
       answersRequireHumanReview: true,
       results,
     };
@@ -317,7 +317,7 @@ async function main() {
       throw new Error('requires-linux-x64-node24');
     }
     const memoryLimit = readNumber(LIMIT_PATHS);
-    if (!memoryLimit || memoryLimit < 80_000_000_000 || memoryLimit > 140_000_000_000) {
+    if (!memoryLimit || memoryLimit < 36_000_000_000 || memoryLimit > 65_000_000_000) {
       throw new Error('unexpected-or-unavailable-container-memory-limit');
     }
     report.stage = 'wiped-server-approval';
