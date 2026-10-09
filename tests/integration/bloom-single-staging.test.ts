@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { planSingleServer, makeStagingEnvironments } from '../../deploy/bloom/single-server-staging.mjs';
 
 const launcher = resolve('deploy/bloom/single-server-staging.mjs');
 const fakeEnv = {
@@ -100,6 +101,24 @@ describe('single Bloom staging launcher safety gates (dry-run, no network or tok
       expect(result.stdout).not.toContain('fake-secret');
     },
   );
+
+  it('isolates GitHub credentials to the knowledge child only', () => {
+    const sourceToken = 'synthetic-source-token-not-real';
+    const env = {
+      ...fakeEnv,
+      ENTHUSIA_INDEXER_GITHUB_TOKEN: sourceToken,
+      ENTHUSIA_INDEXER_APPROVED_REPOS: 'wsg138/MaceGuard,wsg138/PieCloak',
+      ENTHUSIA_INDEXER_DATA_DIR: process.cwd(),
+    };
+    const plan = planSingleServer(['--managed-indexer', '--dry-run'], env);
+    const children = makeStagingEnvironments(plan, env);
+    expect(children.knowledge.ENTHUSIA_INDEXER_GITHUB_TOKEN).toBe(sourceToken);
+    expect(children.knowledge.ENTHUSIA_INDEXER_API_KEY).toMatch(/^[0-9a-f]{64}$/);
+    for (const child of [children.agent, children.gateway, children.discord, children.inference]) {
+      expect(child.ENTHUSIA_INDEXER_GITHUB_TOKEN).toBeUndefined();
+      expect(child.ENTHUSIA_INDEXER_API_KEY).toBeUndefined();
+    }
+  });
 
   it('keeps the knowledge indexer disabled unless explicitly approved', () => {
     const result = run({}, ['--dry-run', '--managed-indexer']);
