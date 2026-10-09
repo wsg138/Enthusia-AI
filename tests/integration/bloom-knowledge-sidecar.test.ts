@@ -24,14 +24,14 @@ function client() {
   };
   return {
     getRepoMeta: (owner: string, name: string) => repo(name).getRepoMeta(owner, name),
-    getBranchHeadSha: (owner: string, name: string, branch: string) =>
-      repo(name).getBranchHeadSha(owner, name, branch),
-    getRecursiveTree: (owner: string, name: string, sha: string) =>
-      repo(name).getRecursiveTree(owner, name, sha),
+    getBranchHeadSha: (_owner: string, name: string, _branch: string) =>
+      repo(name).getBranchHeadSha(),
+    getRecursiveTree: (_owner: string, name: string, _sha: string) =>
+      repo(name).getRecursiveTree(),
     getBlob: (owner: string, name: string, sha: string) =>
       repo(name).getBlob(owner, name, sha),
-    listIssues: (owner: string, name: string) => repo(name).listIssues(owner, name),
-    listPullRequests: (owner: string, name: string) => repo(name).listPullRequests(owner, name),
+    listIssues: (_owner: string, name: string) => repo(name).listIssues(),
+    listPullRequests: (_owner: string, name: string) => repo(name).listPullRequests(),
   };
 }
 const folders: string[] = [];
