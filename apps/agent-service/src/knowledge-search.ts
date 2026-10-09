@@ -143,14 +143,14 @@ export function validatePublicKnowledge(data: unknown): KnowledgeSearchResult | 
     if (!isRecord(hit) || hit.status !== SourceStatus.CURRENT ||
         hit.deploymentVerified !== false || typeof hit.text !== 'string' ||
         hit.text.length < 1 || hit.text.length > 1100 ||
-        typeof hit.sourceLocator !== 'string' ||
-        !APPROVED.some((prefix) => (sourceLocator as string).startsWith(prefix)) ||
+        typeof sourceLocator !== 'string' ||
+        !APPROVED.some((prefix) => sourceLocator.startsWith(prefix)) ||
         typeof hit.version !== 'string' || !SHA.test(hit.version) ||
         typeof hit.artifactId !== 'string' || hit.artifactId.length > 160 ||
         typeof hit.score !== 'number' || hit.score < 0 || hit.score > 1) return null;
     excerpts.push({
       text: hit.text,
-      sourceLocator: sourceLocator as string,
+      sourceLocator,
       artifactId: hit.artifactId,
       version: hit.version,
       score: hit.score,
