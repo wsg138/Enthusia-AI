@@ -99,7 +99,11 @@ export async function createKnowledgeStaging(options) {
     // The underlying W08 engine supports many types of files, but the pilot
     // must never persist incidental STAFF source code into its public volume.
     const publicOnlyClient = {
-      getRepoMeta: (...args) => options.client.getRepoMeta(...args),
+      getRepoMeta: async (...args) => {
+        const meta = await options.client.getRepoMeta(...args);
+        if (!meta.isPublic) throw new Error('Approved documentation repository is not public');
+        return meta;
+      },
       getBranchHeadSha: (...args) => options.client.getBranchHeadSha(...args),
       getRecursiveTree: async (...args) => (await options.client.getRecursiveTree(...args))
         .filter((entry) => entry.type === 'blob' && entry.path === 'README.md'),
