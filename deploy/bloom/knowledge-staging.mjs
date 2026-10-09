@@ -88,6 +88,7 @@ export async function createKnowledgeStaging(options) {
   });
   const registry = new SourceRegistry(registryStore);
   let lastVerifiedAt = 0;
+  let verifiedCommits = new Map();
   let refreshing = false;
   let closed = false;
   let timer;
@@ -115,9 +116,13 @@ export async function createKnowledgeStaging(options) {
       refreshing = true;
       // Source truth must be confirmed in THIS process, after EACH refresh.
       lastVerifiedAt = 0;
+      verifiedCommits = new Map();
       try {
         const reports = await indexer.indexAll();
-        if (reports.length !== 2 || reports.some((r) => r.errors.length > 0)) return false;
+        if (reports.length !== 2 || reports.some((r) => r.errors.length > 0 ||
+          !/^[a-f0-9]{40}$/i.test(r.commitSha) ||
+          !APPROVED_REPOS.includes(r.owner + '/' + r.repo))) return false;
+        verifiedCommits = new Map(reports.map((r) => [r.owner + '/' + r.repo, r.commitSha]));
         lastVerifiedAt = Date.now();
         return true;
       } catch {
@@ -139,12 +144,13 @@ export async function createKnowledgeStaging(options) {
         limit: 5,
       });
       return results.results.filter((h) => h.chunk.visibility === Visibility.PUBLIC &&
-          APPROVED_REPOS.some((repo) => h.chunk.sourceLocator.startsWith('github:' + repo + ':')) &&
+          APPROVED_REPOS.some((repo) => h.chunk.sourceLocator === 'github:' + repo + ':README.md') &&
           h.provenance.status === 'CURRENT')
         .map((h) => ({
           text: h.chunk.text.slice(0, 1100),
           sourceLocator: h.provenance.sourceLocator,
           version: h.provenance.version,
+          commitSha: verifiedCommits.get(h.chunk.sourceLocator.split(':')[1]) ?? '',
           artifactId: h.provenance.artifactId,
           status: h.provenance.status,
           score: h.score,
