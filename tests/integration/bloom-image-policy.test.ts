@@ -39,10 +39,20 @@ describe('single-container Bloom staging image policy (static only)', () => {
     expect(dockerfile).not.toContain('ARG DISCORD_BOT_TOKEN');
   });
 
-  it('runs as a non-root staging user and leaves Bloom resource caps to panel', () => {
-    expect(dockerfile).toContain('USER enthusia:enthusia');
+  it('reuses the Node image non-root account without conflicting UID 1000', () => {
+    expect(dockerfile).toContain('USER node');
+    expect(dockerfile).toContain('chown -R node:node /home/container');
+    expect(dockerfile).not.toContain('groupadd --gid 1000');
+    expect(dockerfile).not.toContain('useradd --uid 1000');
     expect(dockerfile).toContain('ENV NODE_ENV=development');
     expect(dockerfile).toContain('ENTHUSIA_BLOOM_STAGING=1');
     expect(dockerfile).toContain('CPU and memory limits MUST be enforced');
+  });
+
+  it('uses the upstream llama.cpp UI build flag rather than ignored CMake options', () => {
+    expect(dockerfile).toContain('LLAMA_BUILD_SERVER=ON');
+    expect(dockerfile).toContain('LLAMA_BUILD_UI=OFF');
+    expect(dockerfile).not.toContain('LLAMA_BUILD_WEBUI=');
+    expect(dockerfile).not.toContain('LLAMA_USE_PREBUILT_WEBUI=');
   });
 });
