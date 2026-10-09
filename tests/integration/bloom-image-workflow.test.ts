@@ -35,10 +35,19 @@ describe('Bloom Linux image CI review policy', () => {
     expect(workflow).toContain('no-new-privileges');
     expect(workflow).toContain('--entrypoint /usr/local/bin/llama-server');
     expect(workflow).toContain('deploy/bloom/single-server-staging.mjs --dry-run --without-discord');
-    expect(workflow).toContain('deploy/bloom/single-server-staging.mjs --smoke --without-discord');
+    expect(workflow).toContain('deploy/bloom/check-offline-supervisor.mjs');
     expect(workflow).toContain('--memory 768m --cpus 2 --pids-limit 128');
     expect(workflow).not.toContain('--with-discord');
     expect(workflow).not.toContain('docker run --privileged');
     expect(workflow).not.toMatch(/ENTHUSIA_AGENT_SFTP_CONFIG_PATH|DISCORD_BOT_TOKEN|SFTP_PASSWORD/);
   });
+  it('retains only a SHA-256-protected diagnostic binary artifact, never a publishable image', () => {
+    expect(workflow).toContain('docker cp "$cid":/usr/local/bin/llama-server');
+    expect(workflow).toContain('sha256sum llama-server > llama-server.sha256');
+    expect(workflow).toContain('actions/upload-artifact@v4');
+    expect(workflow).toContain('retention-days: 5');
+    expect(workflow).not.toContain('docker login');
+    expect(workflow).not.toContain('gh release');
+  });
+
 });
