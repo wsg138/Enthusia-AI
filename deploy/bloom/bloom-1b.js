@@ -74,6 +74,11 @@ async function checkExecutable() {
 }
 
 async function downloadModel() {
+  // Reject symlink directories even if a valid-looking model is already inside.
+  if (existsSync(MODEL_DIR) &&
+      (!lstatSync(MODEL_DIR).isDirectory() || lstatSync(MODEL_DIR).isSymbolicLink())) {
+    throw new Error('unsafe-model-directory');
+  }
   if (safeRegularFile(MODEL, MAX_MODEL_BYTES)) {
     console.log('[qwen-test] Verifying existing model file...');
     if ((await hashFile(MODEL, MAX_MODEL_BYTES)) !== MODEL_SHA256) {
@@ -82,14 +87,14 @@ async function downloadModel() {
     return statSync(MODEL).size;
   }
   if (existsSync(MODEL)) throw new Error('unexpected-existing-model-path');
-  if (existsSync(MODEL_DIR) && (!lstatSync(MODEL_DIR).isDirectory() || lstatSync(MODEL_DIR).isSymbolicLink())) {
-    throw new Error('unsafe-model-directory');
-  }
   mkdirSync(MODEL_DIR, { recursive: true });
   const part = join(MODEL_DIR, '.enthusia-1.7b-download.part');
   // This script alone owns this named partial. An interrupted download restarts.
   if (existsSync(part)) {
-    if (!safeRegularFile(part, MAX_MODEL_BYTES)) throw new Error('unsafe-existing-partial');
+    const st = lstatSync(part);
+    if (!st.isFile() || st.isSymbolicLink() || st.size > MAX_MODEL_BYTES) {
+      throw new Error('unsafe-existing-partial');
+    }
     rmSync(part);
   }
   console.log('[qwen-test] Downloading approved 1.28 GB model (one time only)...');
