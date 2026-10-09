@@ -8,7 +8,9 @@
 import { createServer } from 'node:http';
 import { mkdir } from 'node:fs/promises';
 import { isAbsolute, join, resolve } from 'node:path';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { timingSafeEqual } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
+import { resolve as absolute } from 'node:path';
 import { Visibility } from '@enthusia/contracts';
 import { SourceProvenanceStore, SourceRegistry } from '@enthusia/source-provenance';
 import {
@@ -238,7 +240,7 @@ async function main() {
     throw new Error('Knowledge sidecar could not start');
   }
 }
-if (process.argv[1] && import.meta.url === new URL('file://' + process.argv[1].replace(/\\/g, '/')).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(absolute(process.argv[1])).href) {
   main().catch(() => {
     console.error('[knowledge-staging] Start failed (no credentials or source text logged).');
     process.exitCode = 1;
