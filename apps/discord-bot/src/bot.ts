@@ -45,7 +45,9 @@ export type HandleOutcome =
   | 'ignored'
   | 'rate-limited'
   | 'greeted'
-  | 'gateway-error';
+  | 'gateway-error'
+  | 'agent-error'
+  | 'unverified';
 
 export interface HandleResult {
   outcome: HandleOutcome;
@@ -163,7 +165,8 @@ export class EnthusiaAiDiscordBot {
       await this.tryReaction(message, '👀', false);
       await this.tryReaction(message, '🤔', false);
       await this.tryReaction(message,
-        result?.outcome === 'responded' || result?.outcome === 'greeted' ? '✅' : '❌', true);
+        result?.outcome === 'responded' || result?.outcome === 'greeted' ? '✅'
+          : result?.outcome === 'unverified' ? '⚠️' : '❌', true);
     }
   }
 
@@ -290,7 +293,8 @@ export class EnthusiaAiDiscordBot {
     } else {
       await sendChunks(chunks);
     }
-    return { outcome: 'responded', traceId };
+    return { outcome: response.outcome === 'error' ? 'agent-error'
+      : response.outcome === 'unverified' ? 'unverified' : 'responded', traceId };
   }
 
   private async tryReaction(message: DiscordMessageRef, emoji: string, add: boolean): Promise<void> {
