@@ -124,7 +124,9 @@ export function makeStagingEnvironments(plan, env = process.env) {
     ENTHUSIA_LOCAL_BIND_HOST: '127.0.0.1',
     ENTHUSIA_INFERENCE_BASE_URL: plan.inferenceUrl,
     ENTHUSIA_INFERENCE_MODEL: env.ENTHUSIA_INFERENCE_MODEL || 'qwen3:8b',
-    ENTHUSIA_INFERENCE_THINKING_MODE: 'disabled',
+    // Ollama accepts the non-standard think:false property; llama.cpp does
+    // not need it because its supervised child uses --reasoning off.
+    ENTHUSIA_INFERENCE_THINKING_MODE: plan.managedInference ? 'default' : 'disabled',
     ENTHUSIA_INFERENCE_MAX_CONTEXT_TOKENS: '8192',
     ENTHUSIA_INFERENCE_MAX_OUTPUT_TOKENS: '1400',
     ENTHUSIA_INFERENCE_CONCURRENCY: '1',
