@@ -10,9 +10,11 @@ const sourceCommit = '3d65c90d04d337e88f2b1f7f0061f40a5324e662';
 
 /** Static-only guardrail; a workflow file existing is not a completed CI run. */
 describe('Bloom Linux image CI review policy', () => {
-  it('is restricted to pull requests with read-only GitHub permissions', () => {
-    expect(workflow).toMatch(/on:\s*\n\s+pull_request:/);
-    expect(workflow).not.toMatch(/\bpush:\s*\n/);
+  it('is restricted to pull requests or an exact isolated branch push', () => {
+    expect(workflow).toMatch(/on:\s*\n\s+push:/);
+    expect(workflow).toContain("branches:\n      - 'fix/discord-command-safe-upsert-20261008'");
+    expect(workflow).toMatch(/\bpull_request:\s*\n\s+paths:/);
+    expect(workflow).toContain("github.ref == 'refs/heads/fix/discord-command-safe-upsert-20261008'");
     expect(workflow).not.toContain('workflow_dispatch');
     expect(workflow).toMatch(/permissions:\s*\n\s+contents: read/);
     expect(workflow).toContain('timeout-minutes: 35');
