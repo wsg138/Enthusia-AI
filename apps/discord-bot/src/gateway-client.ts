@@ -37,7 +37,7 @@ function toAgentResponse(data: {
     context?: Record<string, unknown> | undefined;
   } | null;
   traceId: string;
-  outcome?: 'answered' | 'unverified' | 'error';
+  outcome?: 'answered' | 'unverified' | 'error' | undefined;
 }): AgentResponse {
   return {
     text: data.text,
