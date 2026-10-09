@@ -182,7 +182,8 @@ export async function createKnowledgeStaging(options) {
         }
         const hits = await search(parsed.question);
         if (!hits) { reply(400, { error: 'invalid_question' }); return; }
-        reply(200, { hits, sourceMode: 'github-documentation-only', deploymentVerified: false });
+        reply(200, { hits, sourceMode: 'github-documentation-only',
+          verifiedAt: new Date(lastVerifiedAt).toISOString(), deploymentVerified: false });
       } catch {
         reply(400, { error: 'invalid_request' });
       }
