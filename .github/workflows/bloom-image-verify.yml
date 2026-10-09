@@ -75,6 +75,14 @@ jobs:
             --entrypoint node enthusia-ai-bloom-staging:ci \
             deploy/bloom/single-server-staging.mjs --dry-run --without-discord
 
+      - name: Start and stop real Agent and Gateway inside offline Linux container
+        run: |
+          docker run --rm --network none --read-only --cap-drop ALL \
+            --security-opt no-new-privileges \
+            --memory 768m --cpus 2 --pids-limit 128 \
+            --entrypoint node enthusia-ai-bloom-staging:ci \
+            deploy/bloom/single-server-staging.mjs --smoke --without-discord
+
       - name: Declare safety scope
         run: |
           echo 'Linux image build and no-network runtime checks complete.'
