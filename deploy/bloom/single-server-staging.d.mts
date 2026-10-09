@@ -32,3 +32,11 @@ export function runSingleServer(
   plan: SingleServerPlan,
   env?: StagingEnvironment,
 ): Promise<void>;
+
+export function untilInferenceReady(
+  port: number,
+  modelName: string,
+  apiKey: string,
+  child: { exitCode: number | null; signalCode: string | null },
+  timeoutMs?: number,
+): Promise<void>;
