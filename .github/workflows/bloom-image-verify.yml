@@ -3,6 +3,13 @@
 name: Bloom single-server Linux image build check
 
 on:
+  push:
+    branches:
+      - 'fix/discord-command-safe-upsert-20261008'
+    paths:
+      - '.github/workflows/bloom-image-verify.yml'
+      - 'deploy/bloom/Dockerfile.single-staging'
+      - 'deploy/bloom/Dockerfile.single-staging.dockerignore'
   pull_request:
     paths:
       - 'deploy/bloom/Dockerfile.single-staging'
@@ -28,7 +35,7 @@ concurrency:
 jobs:
   linux-staging-image:
     name: Build image and inspect runtime only
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/fix/discord-command-safe-upsert-20261008')
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
