@@ -16,9 +16,7 @@
  * Requires a manual marker AFTER the owner confirms the old Minecraft server has been wiped.
  */
 const { createHash, timingSafeEqual } = require('node:crypto');
-const { createReadStream, createWriteStream, readFileSync, existsSync, lstatSync, statSync, mkdirSync, writeFileSync, renameSync, rmSync, chmodSync } = require('node:fs');
-const { pipeline } = require('node:stream/promises');
-const { Readable, Transform } = require('node:stream');
+const { createReadStream, readFileSync, existsSync, lstatSync, statSync, writeFileSync, chmodSync } = require('node:fs');
 const { spawn } = require('node:child_process');
 const { createServer } = require('node:net');
 const { join, resolve } = require('node:path');
@@ -40,7 +38,6 @@ function requireApprovedWipedServer() {
 }
 
 const MODEL_NAME = 'Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf';
-const MODEL_URL = 'https://huggingface.co/second-state/Qwen3-30B-A3B-Instruct-2507-GGUF/resolve/main/Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf?download=true';
 const MODEL_SHA256 = '0155f4523b0c2e3cb541abdc4b5b1845e7b74af9ae8ae8dde9f4d09783371c86';
 const MAX_MODEL_BYTES = 19_500_000_000;
 const MIN_MODEL_BYTES = 18_000_000_000;
@@ -107,60 +104,23 @@ async function checkExecutable() {
   chmodSync(BINARY, 0o700);
 }
 
-async function downloadModel() {
-  // Reject symlink directories even if a valid-looking model is already inside.
-  if (existsSync(MODEL_DIR) &&
-      (!lstatSync(MODEL_DIR).isDirectory() || lstatSync(MODEL_DIR).isSymbolicLink())) {
-    throw new Error('unsafe-model-directory');
+async function verifyExistingModel() {
+  // This profiling test must never download model weights: network and disk
+  // preparation are separate workloads from steady-state CPU inference.
+  if (!existsSync(MODEL_DIR) || !lstatSync(MODEL_DIR).isDirectory() ||
+      lstatSync(MODEL_DIR).isSymbolicLink()) {
+    throw new Error('missing-or-unsafe-existing-model-directory');
   }
-  if (safeRegularFile(MODEL, MAX_MODEL_BYTES)) {
-    console.log('[qwen-loadtest] Verifying existing model file...');
-    if ((await hashFile(MODEL, MAX_MODEL_BYTES)) !== MODEL_SHA256) {
-      throw new Error('existing-model-checksum-mismatch-do-not-overwrite');
-    }
-    return statSync(MODEL).size;
+  if (!safeRegularFile(MODEL, MAX_MODEL_BYTES)) {
+    throw new Error('existing-model-required-no-download');
   }
-  if (existsSync(MODEL)) throw new Error('unexpected-existing-model-path');
-  mkdirSync(MODEL_DIR, { recursive: true });
-  const part = join(MODEL_DIR, '.enthusia-30b-download.part');
-  // This script alone owns this named partial. An interrupted download restarts.
-  if (existsSync(part)) {
-    const st = lstatSync(part);
-    if (!st.isFile() || st.isSymbolicLink() || st.size > MAX_MODEL_BYTES) {
-      throw new Error('unsafe-existing-partial');
-    }
-    rmSync(part);
+  const bytes = statSync(MODEL).size;
+  if (bytes < MIN_MODEL_BYTES) throw new Error('existing-model-too-small');
+  console.log('[qwen-loadtest] Verifying cached approved model (no download)...');
+  if ((await hashFile(MODEL, MAX_MODEL_BYTES)) !== MODEL_SHA256) {
+    throw new Error('existing-model-checksum-mismatch');
   }
-  console.log('[qwen-loadtest] Downloading approved 18.6 GB model (once, only on spare after wipe)...');
-  let downloaded = 0;
-  const digest = createHash('sha256');
-  let nextProgress = 1_000_000_000;
-  try {
-    const response = await fetch(MODEL_URL, { redirect: 'follow', signal: AbortSignal.timeout(90 * 60_000) });
-    if (!response.ok || !response.body) throw new Error('model-download-http-failed');
-    const length = Number(response.headers.get('content-length'));
-    if (Number.isFinite(length) && length > MAX_MODEL_BYTES) throw new Error('model-download-too-large');
-    const guard = new Transform({
-      transform(chunk, _enc, cb) {
-        downloaded += chunk.length;
-        if (downloaded > MAX_MODEL_BYTES) return cb(new Error('model-download-size-limit'));
-        digest.update(chunk);
-        if (downloaded >= nextProgress) {
-          console.log('[qwen-loadtest] Downloaded ' + Math.floor(downloaded / 1e6) + ' MB...');
-          nextProgress += 1_000_000_000;
-        }
-        cb(null, chunk);
-      }
-    });
-    await pipeline(Readable.fromWeb(response.body), guard, createWriteStream(part, { flags: 'wx', mode: 0o600 }));
-    if (downloaded < MIN_MODEL_BYTES || digest.digest('hex') !== MODEL_SHA256) {
-      throw new Error('downloaded-model-checksum-or-size-mismatch');
-    }
-    renameSync(part, MODEL);
-    return downloaded;
-  } finally {
-    if (existsSync(part)) rmSync(part, { force: true });
-  }
+  return bytes;
 }
 
 async function unusedPort() {
@@ -312,7 +272,7 @@ async function main() {
     test: 'enthusia-qwen3-30b-a3b-sustained-smp-profiling',
     status: 'FAIL',
     stage: 'preflight',
-    network: 'pinned Hugging Face model download only, and localhost inference',
+    network: 'localhost inference only; existing model required; no external download',
     discord: false, minecraft: false, sftp: false, mysql: false,
   };
   try {
@@ -328,8 +288,7 @@ async function main() {
     report.stage = 'binary-verification';
     await checkExecutable();
     report.stage = 'existing-model-verification';
-    if (!safeRegularFile(MODEL, MAX_MODEL_BYTES)) throw new Error('existing-model-required-no-download');
-    const bytes = await downloadModel();
+    const bytes = await verifyExistingModel();
     report.stage = 'model-inference';
     const result = await benchmark(bytes, memoryLimit);
     Object.assign(report, result);
@@ -352,4 +311,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { readNumber, safeRegularFile, hashFile, requireApprovedWipedServer, MODEL_SHA256, MODEL_URL, MODEL_NAME, QUALITY_CASES };
+module.exports = { readNumber, safeRegularFile, hashFile, requireApprovedWipedServer, MODEL_SHA256, MODEL_NAME, QUALITY_CASES };
