@@ -139,17 +139,18 @@ export function validatePublicKnowledge(data: unknown): KnowledgeSearchResult | 
       !Array.isArray(data.hits) || data.hits.length > 5) return null;
   const excerpts: KnowledgeExcerpt[] = [];
   for (const hit of data.hits) {
+    const sourceLocator: unknown = isRecord(hit) ? hit.sourceLocator : undefined;
     if (!isRecord(hit) || hit.status !== SourceStatus.CURRENT ||
         hit.deploymentVerified !== false || typeof hit.text !== 'string' ||
         hit.text.length < 1 || hit.text.length > 1100 ||
         typeof hit.sourceLocator !== 'string' ||
-        !APPROVED.some((prefix) => hit.sourceLocator.startsWith(prefix)) ||
+        !APPROVED.some((prefix) => (sourceLocator as string).startsWith(prefix)) ||
         typeof hit.version !== 'string' || !SHA.test(hit.version) ||
         typeof hit.artifactId !== 'string' || hit.artifactId.length > 160 ||
         typeof hit.score !== 'number' || hit.score < 0 || hit.score > 1) return null;
     excerpts.push({
       text: hit.text,
-      sourceLocator: hit.sourceLocator,
+      sourceLocator: sourceLocator as string,
       artifactId: hit.artifactId,
       version: hit.version,
       score: hit.score,
