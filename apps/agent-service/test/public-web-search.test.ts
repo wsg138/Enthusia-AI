@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Visibility } from '@enthusia/contracts';
 import type { ToolCallContext } from '@enthusia/agent-core';
-import { PublicWebSearchTool, parsePublicWebHits, safePublicUrl } from '../src/public-web-search.js';
+import { PublicWebSearchTool, createStagingPublicWebTool, parsePublicWebHits, safePublicUrl } from '../src/public-web-search.js';
 
 const key = 'synthetic-test-brave-key-never-real';
 const ctx: ToolCallContext = {
@@ -93,5 +93,20 @@ describe('staging-only public web search — no secrets, SSRF, or unsourced asse
     const last = await tool.execute({ question: 'Minecraft redstone comparator' }, ctx);
     expect(last.error?.code).toBe('WEB_SEARCH_BUDGET');
     expect(calls).toBe(30);
+  });
+
+  it('stays off by default; refuses production and refuses a key without opt-in', () => {
+    expect(createStagingPublicWebTool({}, 'development')).toBeUndefined();
+    expect(() => createStagingPublicWebTool({ ENTHUSIA_BRAVE_API_KEY: key }, 'development')).toThrow();
+    expect(() => createStagingPublicWebTool({
+      ENTHUSIA_TEST_PUBLIC_WEB_SEARCH: '1', ENTHUSIA_BRAVE_API_KEY: key,
+    }, 'production')).toThrow();
+    expect(() => createStagingPublicWebTool({
+      ENTHUSIA_TEST_PUBLIC_WEB_SEARCH: '1',
+    }, 'development')).toThrow();
+    const enabled = createStagingPublicWebTool({
+      ENTHUSIA_TEST_PUBLIC_WEB_SEARCH: '1', ENTHUSIA_BRAVE_API_KEY: key,
+    }, 'development', async () => doc());
+    expect(enabled?.meta.name).toBe('web.search_public');
   });
 });
