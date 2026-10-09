@@ -156,6 +156,11 @@ export function makeStagingEnvironments(plan, env = process.env) {
     ENTHUSIA_AGENT_API_KEYS: agentKey,
     ...(inferenceKey ? { ENTHUSIA_INFERENCE_API_KEY: inferenceKey } : {}),
     ENTHUSIA_TEST_PIECLOAK_PUBLIC_DOCS: '1',
+    ...(plan.managedIndexer ? {
+      ENTHUSIA_TEST_KNOWLEDGE_BRIDGE: '1',
+      ENTHUSIA_INDEXER_BASE_URL: 'http://127.0.0.1:' + plan.indexerPort,
+      ENTHUSIA_INDEXER_API_KEY: indexerKey,
+    } : {}),
   };
   const gateway = {
     ...common,
