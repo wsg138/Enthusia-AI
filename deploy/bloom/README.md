@@ -4,6 +4,17 @@
 templates and documentation. Applying them to the panel is a manual,
 user-approved step owned by a future deployment run.
 
+> **2026-10-08 staging update:** The owner's target is **one** Bloom Pterodactyl
+> server for the complete Enthusia AI stack, not one Pterodactyl server per
+> service role. The files below are the earlier multi-server W21 template and
+> must **not** be imported as the final configuration. New
+> [single-server staging guide](SINGLE-SERVER-STAGING.md) and
+> `single-server-staging.mjs` have been added and tested with Agent + Gateway.
+> A managed inference process, persistent indexer, container image, egg and
+> owner-approved live SFTP are not yet completed or deployed.
+>
+> See [issue #119](https://github.com/wsg138/Enthusia-AI/issues/119).
+
 ## Files
 
 | File | Purpose |
