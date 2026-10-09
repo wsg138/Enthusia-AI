@@ -77,3 +77,26 @@ Expected result is a **short orange Warzones embed**, bullets for rotation/comba
 For follow-up validation of error honesty, use the bot's existing source-limited capabilities on an unrelated server-specific question; if source proof is missing, it should show a safe unverified message and ⚠️, not ✅. Do not intentionally break production services or share credentials to exercise errors.
 
 Draft PR #118 remains HOLD pending owner-confirmed Discord result and independent reviews. No production services/configs, ticket tools, staff permissions or saved tokens changed.
+
+
+## 2026-10-08 20:58 EDT: OWNER-CONFIRMED LIVE Discord UX PASS
+
+Owner-supplied screenshot of the **existing isolated #ai-testing** channel, after restarting the launcher with the test-only branch, confirms:
+
+- **Grounded positive case, 20:55:** an actual bot mention \`@Enthusia AI Can you explain how the Warzones combat rotator system works?\` received a threaded/replied **orange embed** titled \`⚔️ Warzones • Combat rotation\`, clear explanation of kit/modifier cycles, separate player-use commands, and clean named **Enthusia Wiki / Technical source** links. The original message shows **✅**, meaning the explicit \`answered\` status now survives the Discord integration.
+- **Source-limited negative case, 20:57–20:58:** an actual bot mention \`@Enthusia AI why is the server lagging\` received a **yellow embed** \`⚠️ Source not verified\` reading \`I could not verify the server is experiencing lag from current sources.\` The original message shows **⚠️**, not a false ✅. There is **no live TPS/MSPT, network, runtime or deployment-health tool in this test bot**, so this refusal is safer than inventing a cause.
+- The screenshot confirms the final reaction for each request. **It does not establish timing of the transient 👀 and 🤔 states.**
+- No user evidence of a failed Agent response in this latest screenshot. The earlier source-less internal failure and HTTP-200→✅ misclassification are resolved for these two live test cases; generalized reliability still needs sustained testing.
+
+### Acceptance change
+
+Mark **mention routing + embed display + grounded answer + source-hidden long URL + correct positive/unverified final reaction** as **PASS** for the isolated testing guild. The verified public docs pilot covers PieCloak and Warzones; this milestone is **not** blanket production readiness.
+
+Remaining work, separate from this passed UI milestone:
+
+1. **Reusable source retrieval:** replace the fixed two-repo documentation pilots with the existing approved-repository W08 GitHub indexer + W04 provenance + W07 CURRENT-only/visibility-filtered retrieval, then expose narrow public read-only queries through W12 with answer citations. Validate stale/invalid/conflicted source rejection and deployed-SHA differences.
+2. **Live server diagnostics:** issue #41 already proposes typed \`server.runtime_health(server,plugin_id?,since?)\` and source/deployment tools. Add current read-only aggregate TPS/MSPT, network and plugin health only after trusted source/provenance, freshness, privacy, and authorized endpoint are agreed. No generic arbitrary SFTP/file/command or write operations. A question like "why is the server lagging" must not claim a current problem or a cause until current metrics are actually observed.
+3. **Response UX:** unexplained current-state questions should ideally say **"I can't check live server performance yet"**, not imply that the server has/doesn't have lag. Any general troubleshooting guidance must be distinguished from verified server-specific causes.
+4. **Release gates:** PR #118 stays DRAFT/HOLD pending independent code/security review, exact-head CI checks and dev dependency advisory triage. Do not merge into main, enable broader Discord traffic, or deploy production based solely on the owner screenshot.
+
+**No owner action required** to record this acceptance. Keep the existing test stack isolated to its allowlisted guild and channel.
