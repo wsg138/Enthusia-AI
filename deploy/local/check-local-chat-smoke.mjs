@@ -107,7 +107,7 @@ try {
   const gatewayKey = randomBytes(32).toString('hex');
   const agent = start('agent', 'apps/agent-service/dist/main.js', {
     ...shared, ENTHUSIA_AGENT_PORT: String(agentPort), ENTHUSIA_AGENT_API_KEYS: agentKey,
-    ENTHUSIA_TEST_PIECLOAK_PUBLIC_DOCS: publicDocs ? '1' : '0',
+    ENTHUSIA_TEST_PIECLOAK_PUBLIC_DOCS: (publicDocs || warzone) ? '1' : '0',
   });
   await waitLive(agent, agentPort);
   await checkReady('agent', agentPort);
@@ -160,12 +160,18 @@ try {
   if (String(payload.text ?? '').includes('Something went wrong while handling your request')) {
     throw new Error('Orchestrator returned its built-in failure fallback');
   }
+  if (warzone && (!String(payload.text ?? '').includes('github.com/wsg138/MaceGuard/blob/') ||
+      !String(payload.text ?? '').includes('documented features') ||
+      !Array.isArray(payload.sources) || payload.sources.length !== 1 ||
+      payload.outcome !== 'answered')) {
+    throw new Error('Warzone public-source answer is not grounded and complete.');
+  }
   if (publicDocs && (!String(payload.text ?? '').includes('github.com/wsg138/PieCloak/blob/') ||
       !String(payload.text ?? '').includes('documented settings') ||
       !Array.isArray(payload.sources) || payload.sources.length !== 1)) {
     throw new Error('The public-source answer lacks a verified GitHub commit/source.');
   }
-  console.log(publicDocs
+  console.log(publicDocs || warzone
     ? '[smoke] Verified public README reached the local Agent and Gateway without Discord.'
     : '[smoke] One synthetic end-to-end model request completed without Discord.');
 } finally {
