@@ -2,7 +2,7 @@
 
 **Status (2026-10-09): PREPARED, NOT DEPLOYED.**
 
-The owner is retiring/wiping the *currently running* `SMP Temp` Minecraft server ID `CC19EA3C`. As last reported, Bloom shows 118 GB RAM, 3200% CPU allocation, and 50 GB disk allocation, with 36.51 GB RAM and 12.24 GB disk **still in use**. Those current values do NOT authorize a wipe or stopping it. **Do not change this server until the owner explicitly confirms that backups/migration are complete, the old SMP Temp is shut down and wiped, and it is now available for Enthusia AI staging.**
+The owner is retiring/wiping the *currently running* `SMP Temp` Minecraft server ID `CC19EA3C`. The owner's earlier screenshot showed 118 GB RAM and 3200% CPU while Minecraft was STILL RUNNING. The shared host's safe AI target is now **48 GB RAM and 400% CPU**; retain **50 GB disk**. Actual live SMP memory/TPS/MSPT should be checked before any increase. Those current values do NOT authorize a wipe or stopping it. **Do not change this server until the owner explicitly confirms that backups/migration are complete, the old SMP Temp is shut down and wiped, and it is now available for Enthusia AI staging.**
 
 ## Prepared offline
 
@@ -13,13 +13,13 @@ The owner is retiring/wiping the *currently running* `SMP Temp` Minecraft server
 - Starts native pinned `llama-server` ONLY after verifying an already vetted `llama-server.sha256`. The old separate spare Bloom `2E4CEE8C` has a passing native runtime diagnostic; transferring its two tested binary files to the new **wiped** spare is acceptable if the owner approves, but this project does not access that server or secrets.
 - Node 24 generic egg and root `MAIN FILE = bloom-30b.js`; only a single root `.js` file (important known Pterodactyl template expansion bug).
 - Compares 15 precisely identical prompts with the earlier 1.7B baseline (that model failed seven of nine basic vanilla Minecraft facts).
-- CPU-only: eight threads, 2048 context, one parallel slot, localhost-bound random port, no Discord/SFTP/Minecraft/MySQL/production secrets. Samples actual Pterodactyl **cgroup memory**, 85% cap, 10-minute model-readiness timeout and 120-second timeout for each of 15 questions. One-shot exit code 0 is *success* even if panel labels the stopped test offline/crashed.
-- Download is streamed to `models/`, hard size bound **18.0–19.5 GB**, hashed and validated before launching. An interrupted download removes the partial file. Allow for free space before starting — at least **25 GB actually free on Bloom disk** (30 GB preferable). **Never run on an un-wiped server.**
+- CPU-only: four threads, 2048 context, one parallel slot, localhost-bound random port, no Discord/SFTP/Minecraft/MySQL/production secrets. Samples actual Pterodactyl **cgroup memory**, 80% cap, 10-minute model-readiness timeout and 120-second timeout for each of 15 questions. One-shot exit code 0 is *success* even if panel labels the stopped test offline/crashed.
+- Download is streamed to `models/`, hard size bound **18.0–19.5 GB**, hashed and validated before launching. An interrupted download removes the partial file. Allow for free space before starting — at least **25 GB actually free on Bloom disk** (30 GB preferable). **Never run on an un-wiped server.** Do not run the benchmark while the owner is still migrating the temporary SMP or while players remain connected. The 48 GB limit is an upper bound, not reserved RAM; host-level monitoring is still needed.
 - Saves `bloom-30b-report.json` in the root with each answer, latency, tokens, observed memory, and status. Test PASS means technical execution; **human scoring of factual correctness is still mandatory**.
 
 ## AFTER the owner confirms wipe complete
 
-1. Verify the correct panel server: **`CC19EA3C`**. Check RAM allocation and at least **25 GB free disk**. If Minecraft artifacts like `server.jar`, `world/`, `plugins/`, `versions/`, or `libraries/` remain, **STOP** — the old server may not be cleared.
+1. Verify the correct panel server: **`CC19EA3C`**. Check RAM allocation is **48 GB** (script accepts a cautious range of 36–65 billion cgroup bytes) and at least **25 GB free disk**. If Minecraft artifacts like `server.jar`, `world/`, `plugins/`, `versions/`, or `libraries/` remain, **STOP** — the old server may not be cleared.
 2. Upload only the previously checksum-verified `llama-server` and its corresponding `llama-server.sha256` to the wiped server root. No live SMP tokens, database files, or other world data.
 3. Create a root text file named exactly **`enthusia-30b-staging-ok.txt`** with contents **`CC19EA3C WIPED FOR ENTHUSIA AI`**. This is the explicit owner confirmation and test-server identity gate; the script refuses to download anything if missing or wrong.
 4. In Bloom Files → **Download from URL**, paste `https://raw.githubusercontent.com/wsg138/Enthusia-AI/fix/discord-command-safe-upsert-20261008/deploy/bloom/bloom-30b.js`. Ensure saved filename exactly `bloom-30b.js`, and **no other root `.js` files**. Do not upload the repository's `deploy/bloom/package.json` to the container root.
