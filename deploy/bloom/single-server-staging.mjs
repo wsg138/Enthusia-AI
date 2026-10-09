@@ -11,13 +11,14 @@
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
+import net from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const wait = (ms) => new Promise((done) => setTimeout(done, ms));
 const EXPECTED_NODE_MAJOR = 24;
-const allowedOptions = new Set(['--dry-run', '--with-discord', '--without-discord']);
+const allowedOptions = new Set(['--dry-run', '--smoke', '--with-discord', '--without-discord']);
 const DEFAULT_AGENT_PORT = 4200;
 const DEFAULT_GATEWAY_PORT = 4100;
 const STOP_GRACE_MS = 6000;
@@ -48,13 +49,16 @@ export function planSingleServer(args = process.argv.slice(2), env = process.env
   }
 
   const withDiscord = args.includes('--with-discord');
+  if (args.includes('--smoke') && withDiscord) throw new Error('Smoke mode must never connect to Discord');
   if (withDiscord) {
-    if (!env.DISCORD_BOT_TOKEN || !env.ENTHUSIA_DISCORD_TEST_GUILDS ||
-        !env.ENTHUSIA_DISCORD_TEST_CHANNELS || !env.ENTHUSIA_DISCORD_SLASH_GUILD_ID) {
+    if (!env.DISCORD_BOT_TOKEN || !env.ENTHUSIA_DISCORD_ALLOWED_GUILD_IDS ||
+        !env.ENTHUSIA_DISCORD_ALLOWED_CHANNEL_IDS || !env.ENTHUSIA_DISCORD_SLASH_GUILD_ID) {
       throw new Error('Discord staging requires privately injected test bot token and exact test guild/channel restrictions');
     }
-    if (env.ENTHUSIA_DISCORD_TEST_GUILDS.includes(',') ||
-        env.ENTHUSIA_DISCORD_TEST_CHANNELS.includes(',')) {
+    if (env.ENTHUSIA_DISCORD_ALLOWED_GUILD_IDS !== '1552729865306767471' ||
+        env.ENTHUSIA_DISCORD_SLASH_GUILD_ID !== '1552729865306767471' ||
+        !/^\d{17,21}$/.test(env.ENTHUSIA_DISCORD_ALLOWED_CHANNEL_IDS) ||
+        env.ENTHUSIA_DISCORD_ALLOWED_CHANNEL_IDS === '1552873662745546822') {
       throw new Error('Discord staging must use exactly one test guild and one test channel');
     }
   }
@@ -73,7 +77,7 @@ export function planSingleServer(args = process.argv.slice(2), env = process.env
   const paths = [
     ['agent', resolve(root, 'apps/agent-service/dist/main.js'), agentPort],
     ['gateway', resolve(root, 'apps/ai-gateway/dist/main.js'), gatewayPort],
-    ...(withDiscord ? [['discord', resolve(root, 'apps/discord-bot/src/main.ts'), null]] : []),
+    ...(withDiscord ? [['discord', resolve(root, 'apps/discord-bot/dist/main.js'), null]] : []),
   ];
   for (const [, path] of paths) {
     if (!existsSync(path)) throw new Error('Missing compiled service. Run npm build before staging.');
@@ -81,7 +85,7 @@ export function planSingleServer(args = process.argv.slice(2), env = process.env
   if (!existsSync(resolver)) throw new Error('Missing staged workspace resolver');
   return {
     root, resolver, paths, agentPort, gatewayPort, inferenceUrl,
-    withDiscord, dryRun: args.includes('--dry-run'),
+    withDiscord, dryRun: args.includes('--dry-run'), smoke: args.includes('--smoke'),
   };
 }
 
@@ -102,12 +106,14 @@ export function makeStagingEnvironments(plan, env = process.env) {
     ...safeInheritedEnv(env),
     NODE_ENV: 'development',
     ENTHUSIA_LOG_LEVEL: 'warn',
+    ENTHUSIA_LOCAL_BIND_HOST: '127.0.0.1',
     ENTHUSIA_INFERENCE_BASE_URL: plan.inferenceUrl,
     ENTHUSIA_INFERENCE_MODEL: env.ENTHUSIA_INFERENCE_MODEL || 'qwen3:8b',
     ENTHUSIA_INFERENCE_THINKING_MODE: 'disabled',
     ENTHUSIA_INFERENCE_MAX_CONTEXT_TOKENS: '8192',
     ENTHUSIA_INFERENCE_MAX_OUTPUT_TOKENS: '1400',
     ENTHUSIA_INFERENCE_CONCURRENCY: '1',
+    ENTHUSIA_MAX_TOOL_CALLS_PER_TURN: '2',
   };
   const agent = {
     ...common,
@@ -130,19 +136,33 @@ export function makeStagingEnvironments(plan, env = process.env) {
     ...common,
     ENTHUSIA_SERVICE_NAME: 'enthusia-bloom-staging-discord',
     DISCORD_BOT_TOKEN: env.DISCORD_BOT_TOKEN,
-    ENTHUSIA_DISCORD_ALLOWED_GUILDS: env.ENTHUSIA_DISCORD_TEST_GUILDS,
-    ENTHUSIA_DISCORD_ALLOWED_CHANNELS: env.ENTHUSIA_DISCORD_TEST_CHANNELS,
+    ENTHUSIA_DISCORD_ALLOWED_GUILD_IDS: env.ENTHUSIA_DISCORD_ALLOWED_GUILD_IDS,
+    ENTHUSIA_DISCORD_ALLOWED_CHANNEL_IDS: env.ENTHUSIA_DISCORD_ALLOWED_CHANNEL_IDS,
+    ENTHUSIA_DISCORD_TEST_CHANNELS: '',
+    ENTHUSIA_DISCORD_AI_CHANNELS: '',
+    ENTHUSIA_DISCORD_STAFF_CHANNELS: '',
+    ENTHUSIA_DISCORD_STAFF_ROLES: '',
+    ENTHUSIA_DISCORD_USE_MOCK_GATEWAY: 'false',
     ENTHUSIA_DISCORD_SLASH_GUILD_ID: env.ENTHUSIA_DISCORD_SLASH_GUILD_ID,
     ENTHUSIA_DISCORD_SLASH_ONLY: 'false',
     ENTHUSIA_DISCORD_MENTION_ONLY: 'true',
     ENTHUSIA_DISCORD_GATEWAY_TIMEOUT_MS: '130000',
-    ENTHUSIA_AI_GATEWAY_BASE_URL: 'http://127.0.0.1:' + plan.gatewayPort,
+    ENTHUSIA_AI_GATEWAY_URL: 'http://127.0.0.1:' + plan.gatewayPort,
     ENTHUSIA_AI_GATEWAY_API_KEY: gatewayKey,
   };
   return { agent, gateway, discord };
 }
 
-async function untilReady(name, port, child, timeoutMs = 20000) {
+function portOccupied(port) {
+  return new Promise((done) => {
+    const socket = net.connect({ host: '127.0.0.1', port });
+    socket.once('connect', () => { socket.destroy(); done(true); });
+    socket.once('error', () => { socket.destroy(); done(false); });
+    socket.setTimeout(1000, () => { socket.destroy(); done(true); });
+  });
+}
+
+async function untilReady(name, port, child, timeoutMs = 30000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (child.exitCode !== null || child.signalCode !== null) {
@@ -179,6 +199,10 @@ async function stopAll(children) {
 }
 
 export async function runSingleServer(plan, env = process.env) {
+  // Never attach to or kill an already-running Windows or Bloom service.
+  if (await portOccupied(plan.agentPort) || await portOccupied(plan.gatewayPort)) {
+    throw new Error('One or more requested local service ports are already occupied');
+  }
   const envs = makeStagingEnvironments(plan, env);
   const children = [];
   let stopping = false;
@@ -219,6 +243,10 @@ export async function runSingleServer(plan, env = process.env) {
     if (plan.withDiscord) launch('discord', plan.paths[2][1], envs.discord);
     console.log('[bloom-staging] Agent and Gateway ready; Discord=' + (plan.withDiscord ? 'enabled' : 'disabled'));
     console.log('[bloom-staging] External inference stays on local loopback; SFTP and private integrations are OFF.');
+    if (plan.smoke) {
+      stopReason = 'smoke complete';
+      return;
+    }
     await exited;
     if (stopReason.includes('unexpected') || stopReason.includes('failed')) throw new Error(stopReason);
   } finally {
