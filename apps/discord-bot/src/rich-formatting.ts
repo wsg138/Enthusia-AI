@@ -7,6 +7,8 @@ const OFFICIAL_WIKI = 'https://enthusia.miraheze.org/wiki/Main_Page';
 const MAX_DESCRIPTION = 3300;
 const HEX_ORANGE = 0xf47c24;
 const HEX_BLUE = 0x3989c9;
+const HEX_RED = 0xe05252;
+const HEX_YELLOW = 0xe5a936;
 const PIECLOAK_SOURCE = /^github:wsg138\/PieCloak@([a-f0-9]{40}):README\.md$/;
 const WARZONE_SOURCE = /^github:wsg138\/MaceGuard@([a-f0-9]{40}):README\.md$/;
 
@@ -47,14 +49,22 @@ export function formatRichAgentResponse(response: AgentResponse): DiscordRichRes
   if (description.length > MAX_DESCRIPTION) return null;
   return {
     embed: {
-      title: isPieCloak ? '🛡️ PieCloak • Base protection' :
-        isWarzone ? '⚔️ Warzones • Combat rotation' : 'Enthusia AI',
+      title: response.outcome === 'error' ? '❌ Request failed' :
+        response.outcome === 'unverified' ? '⚠️ Source not verified' :
+          isPieCloak ? '🛡️ PieCloak • Base protection' :
+            isWarzone ? '⚔️ Warzones • Combat rotation' : 'Enthusia AI',
       description: neutralizeMassMentions(description),
-      color: isPieCloak || isWarzone ? HEX_ORANGE : HEX_BLUE,
+      color: response.outcome === 'error' ? HEX_RED :
+        response.outcome === 'unverified' ? HEX_YELLOW :
+          isPieCloak || isWarzone ? HEX_ORANGE : HEX_BLUE,
       ...(fields.length ? { fields } : {}),
       footer: {
-        text: isPieCloak || isWarzone
-          ? 'Based on public documentation • Live server version not verified'
+        text: response.outcome === 'error'
+          ? 'No staff alert was sent • You can retry'
+          : response.outcome === 'unverified'
+            ? 'No current source verified • No server details were guessed'
+            : isPieCloak || isWarzone
+              ? 'Based on public documentation • Live server version not verified'
           : 'Enthusia AI • Answers may be limited by available sources',
       },
     },
