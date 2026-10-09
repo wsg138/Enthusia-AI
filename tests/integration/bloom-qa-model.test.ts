@@ -35,7 +35,7 @@ describe('Bloom model sustained answer-quality pilot', () => {
     expect(source).toContain("max_tokens: 96, temperature: 0, stream: false");
     expect(source).toContain("child.kill('SIGTERM')");
     expect(source).toContain('bloom-qa-report.json');
-    expect(source).toContain('QA');
+    expect(source).toContain('[qwen-qa] RESULT');
     expect(source).not.toContain("'--host', '0.0.0.0'");
     expect(source).not.toMatch(/DISCORD_BOT_TOKEN|SFTP_PASSWORD|MYSQL_PASSWORD/);
   });
