@@ -81,7 +81,30 @@ jobs:
             --security-opt no-new-privileges \
             --memory 768m --cpus 2 --pids-limit 128 \
             --entrypoint node enthusia-ai-bloom-staging:ci \
-            deploy/bloom/single-server-staging.mjs --smoke --without-discord
+            deploy/bloom/check-offline-supervisor.mjs
+
+      - name: Package source-pinned Linux llama-server diagnostic binary
+        run: |
+          mkdir -p bloom-native-check
+          cid=$(docker create --entrypoint /bin/true enthusia-ai-bloom-staging:ci)
+          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+          docker cp "$cid":/usr/local/bin/llama-server bloom-native-check/llama-server
+          (cd bloom-native-check && sha256sum llama-server > llama-server.sha256)
+          docker run --rm --network none --read-only --cap-drop ALL \
+            --security-opt no-new-privileges \
+            --entrypoint /usr/bin/ldd enthusia-ai-bloom-staging:ci \
+            /usr/local/bin/llama-server > bloom-native-check/dependencies.txt
+          test -s bloom-native-check/llama-server
+          test -s bloom-native-check/llama-server.sha256
+
+      - name: Retain diagnostic binary for approved test server only
+        uses: actions/upload-artifact@v4
+        with:
+          name: enthusia-linux-llama-bloom-diagnostic
+          path: bloom-native-check/
+          retention-days: 5
+          if-no-files-found: error
+          compression-level: 6
 
       - name: Declare safety scope
         run: |
