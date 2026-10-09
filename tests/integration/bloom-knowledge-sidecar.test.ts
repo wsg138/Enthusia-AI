@@ -3,6 +3,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { MockGitHubApi } from '../../integrations/github/test/fakes.js';
+import { KnowledgeSearchTool } from '../../apps/agent-service/src/knowledge-search.js';
+import { IndexedPublicDocsResolver } from '../../apps/agent-service/src/indexed-public-docs.js';
+import { createAgentRuntime } from '../../apps/agent-service/src/runtime.js';
+import { Visibility } from '@enthusia/contracts';
+import type { Reasoner } from '@enthusia/agent-core';
 import {
   APPROVED_REPOS, createKnowledgeStaging, knowledgeConfig,
 } from '../../deploy/bloom/knowledge-staging.mjs';
@@ -139,6 +144,69 @@ describe('durable W08/W04/W07 Bloom sidecar (synthetic GitHub, real SQLite)', ()
     const hits = await service.search('PieCloak replacement document hides clues');
     expect(hits?.some(h => h.version === prior?.version)).toBe(false);
     expect(hits?.every(h => h.status === 'CURRENT')).toBe(true);
+  });
+
+
+  it('routes a real localhost W08/W04/W07 result through the Agent without asking the model', async () => {
+    const { service } = await opened();
+    const port = await service.listen(0);
+    expect(await service.refresh()).toBe(true);
+    const resolver = new IndexedPublicDocsResolver(new KnowledgeSearchTool({
+      baseUrl: 'http://127.0.0.1:' + port, apiKey: KEY,
+    }));
+    let reasonerInvoked = false;
+    const fakeReasoner = {
+      async classifyIntent() { reasonerInvoked = true; throw new Error('model should not be called'); },
+    } as unknown as Reasoner;
+    const runtime = createAgentRuntime(fakeReasoner, [], {
+      publicSourceResolver: (request) => resolver.resolve(request),
+    });
+    const request = {
+      surface: 'discord' as const,
+      actor: { id: 'test-player', type: 'player' as const },
+      conversationId: 'guild:test-public',
+      message: 'How do Warzones combat kits work?',
+      visibilityCeiling: Visibility.PUBLIC,
+      traceId: '123e4567-e89b-42d3-a456-426614174000',
+    };
+    const answer = await runtime.orchestrator.handleChat(request);
+    expect(answer.outcome).toBe('answered');
+    expect(answer.text).toContain('Warzones rotate PvP combat kits');
+    expect(answer.sources[0]?.artifactId).toBe(
+      'github:wsg138/MaceGuard@' + 'e'.repeat(40) + ':README.md');
+    expect(answer.sources[0]?.description).toContain('/blob/' + 'e'.repeat(40) + '/README.md');
+    expect(reasonerInvoked).toBe(false);
+
+    // Previously indexed chunks remain on disk but must become unusable
+    // immediately after an incomplete source refresh.
+    pie.failBlobShas.add('3'.repeat(40));
+    pie.editFile('4'.repeat(40), 'README.md',
+      '# PieCloak\nNew source that cannot be checked.', '3'.repeat(40));
+    expect(await service.refresh()).toBe(false);
+    const unavailable = await runtime.orchestrator.handleChat(request);
+    expect(unavailable.outcome).toBe('unverified');
+    expect(unavailable.sources).toEqual([]);
+    expect(reasonerInvoked).toBe(false);
+    pie.failBlobShas.clear();
+  });
+
+  it('refuses to index an approved repo that has become private', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'enthusia-private-knowledge-test-'));
+    folders.push(dir);
+    const c = client();
+    const privateClient = {
+      ...c,
+      getRepoMeta: async (owner: string, name: string) => ({
+        ...await c.getRepoMeta(owner, name),
+        isPublic: name !== 'PieCloak',
+      }),
+    };
+    const service = await createKnowledgeStaging({ dir, apiKey: KEY, client: privateClient });
+    services.push(service);
+    const port = await service.listen(0);
+    expect(await service.refresh()).toBe(false);
+    expect(service.fresh()).toBe(false);
+    expect((await request(port, 'Warzones rotations')).status).toBe(503);
   });
 
   it('fails closed after a refresh error rather than trusting last persisted data', async () => {
