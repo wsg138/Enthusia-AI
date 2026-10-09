@@ -19,6 +19,8 @@ export interface KnowledgeExcerpt {
   artifactId: string;
   sourceLocator: string;
   version: string;
+  /** Verified repository HEAD where this README blob was indexed. */
+  commitSha: string;
   score: number;
   deploymentVerified: false;
 }
@@ -146,6 +148,7 @@ export function validatePublicKnowledge(data: unknown): KnowledgeSearchResult | 
         typeof sourceLocator !== 'string' ||
         !APPROVED.some((prefix) => sourceLocator.startsWith(prefix)) ||
         typeof hit.version !== 'string' || !SHA.test(hit.version) ||
+        typeof hit.commitSha !== 'string' || !SHA.test(hit.commitSha) ||
         typeof hit.artifactId !== 'string' || hit.artifactId.length > 160 ||
         typeof hit.score !== 'number' || hit.score < 0 || hit.score > 1) return null;
     excerpts.push({
@@ -153,6 +156,7 @@ export function validatePublicKnowledge(data: unknown): KnowledgeSearchResult | 
       sourceLocator,
       artifactId: hit.artifactId,
       version: hit.version,
+      commitSha: hit.commitSha,
       score: hit.score,
       deploymentVerified: false,
     });
