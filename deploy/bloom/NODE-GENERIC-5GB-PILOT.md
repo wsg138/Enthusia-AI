@@ -35,3 +35,34 @@ The test does NOT prove data survives a restart, prove an uploaded llama-server 
 Red/Red-DiscordBot, Botify and Python generic do not replace the custom existing Node system.
 
 **No changes are authorized for live SMP, production Discord, SFTP or ticket integrations.** All development remains on isolated draft PR #118; track in issue #119.
+
+## Owner-confirmed spare Bloom Node egg — 2026-10-09 00:23 EDT
+
+Owner ran the `probe.js` wrapper with `probe-node-generic.mjs` on the spare Bloom service. **This phase PASSED.** The supplied real console reported:
+
+- Node `v24.17.0`, Linux x64, Node child processes permitted.
+- Memory cgroup `4,999,999,488 bytes`, i.e., a hard cap just under **5.0 GB decimal** (approximately **4.66 GiB**). The `123.4 GiB` shown by `os.totalmem()` was the host and is NOT this container's allocation.
+- CPU cgroup quota equivalent to **8 CPU cores**; this does not promise eight isolated physical cores.
+- Workspace writable; a copied **harmless** native Linux executable can run.
+- Docker image import rights, restart persistence, a real llama-server executable and model loading **remain untested**.
+- The probe exits **code 0** by design. Pterodactyl reporting offline/"crashed" after it ends is expected, not evidence of OOM.
+
+**Conclusion:** no full VPS or custom egg is needed to attempt the next native executable compatibility check. The normal `node.js generic` egg is viable for Node components and appears capable of executing a verified native binary. It has NOT yet demonstrated a running local AI model.
+
+## Phase 2 — actual llama-server CLI, still no model or credentials
+
+We now prepare a trusted *diagnostic* portable `llama-server` from the pinned upstream source commit `3d65c90d04d337e88f2b1f7f0061f40a5324e662` using the isolated GitHub Actions Linux image build. The workflow also uses an offline local **synthetic /v1/models** endpoint for Agent/Gateway startup (the earlier CI lifecycle run failed only because no inference endpoint was present in an offline container).
+
+**Wait for the GitHub build to complete SUCCESSFULLY before the following owner steps.** In the [Bloom Linux image build Actions workflow](https://github.com/wsg138/Enthusia-AI/actions/workflows/bloom-image-verify.yml), open the latest successful run and download the artifact named `enthusia-linux-llama-bloom-diagnostic`. Extract its ZIP on the owner's computer. Its contents are a SHA-pinned `llama-server` executable, `llama-server.sha256`, `dependencies.txt` for audit and `check-bin.js`.
+
+Upload ONLY these 3 files to the **root** of the same unused 5 GB Bloom test service:
+
+- `check-bin.js` — safe short main file for the Node generic egg.
+- `llama-server` — compiled native executable, no weights.
+- `llama-server.sha256` — companion checksum from the same CI job.
+
+Set **MAIN FILE** to `check-bin.js` (not `node check-bin.js`; the egg adds `node` itself). Start once and send its console report. The script checks file size and exact SHA-256, applies an executable flag, runs **only `llama-server --help` for up to 5 seconds** without network or any model file, and prints `PASS` or a bounded failure category. Exit code 0 after a PASS causes Pterodactyl to show offline; this is expected.
+
+`dependencies.txt` lists system libraries used by the binary and may be useful to determine why a binary fails on Bloom. Do **not** upload it unless troubleshooting calls for it. Do not use SFTP to the live SMP or any existing bot's files.
+
+Only after Phase 2 PASS can we consider model weights. Start with Qwen3 1.7B at conservative **1–2 CPU threads and 2048-token context**, instrument actual cgroup memory and wall-clock response time, and stop if the container nears its 5 GB memory limit. Never attempt Qwen3 8B there.
