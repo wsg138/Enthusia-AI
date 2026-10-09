@@ -94,3 +94,18 @@ New staging-only components:
 Further synthetic validation: `apps/agent-service/test/knowledge-search.test.ts` and `tests/integration/bloom-knowledge-readiness.test.ts`. The supervisor waits for authenticated, fresh source indexing before marking the knowledge child ready and launching Agent. No GitHub token is passed to Agent/Gateway/Discord/inference.
 
 **Release blocker:** A real Linux/Bloom image build and model/runtime benchmark remain unavailable from the Windows test environment; neither a live GitHub index nor a SFTP session was created. Hashing embeddings used for test-sidecar retrieval are not suitable as final production semantic embeddings.
+
+## Agent knowledge connection — 2026-10-08 (synthetic end-to-end PASSED)
+
+The staging Agent now has an **explicitly gated, public-only source resolver** driven by the new persistent sidecar:
+
+- With `--managed-indexer`, the staging supervisor supplies `ENTHUSIA_TEST_KNOWLEDGE_BRIDGE=1`, the internal indexer endpoint and a random service API key **only to Agent**. The GitHub credential remains **only in the knowledge-indexer process**. None of these integration variables are passed to Discord, Gateway or inference.
+- `apps/agent-service/src/main.ts` enables the bridge only for `NODE_ENV=development` together with the existing isolated `ENTHUSIA_TEST_PIECLOAK_PUBLIC_DOCS=1`. An unexpected indexer endpoint or key without opt-in is a startup error. Ordinary Windows Discord testing and production defaults remain unchanged.
+- `apps/agent-service/src/indexed-public-docs.ts` invokes the already validated `KnowledgeSearchTool` directly for **public explanatory PieCloak/Warzones questions**. It never gives retrieved document text to Qwen3 as instructions and does not expose the general `knowledge.search` tool to LLM planning. Only bounded safe excerpts are **visibly quoted as documentation**, not asserted to be deployed server behavior. Dynamic current-state questions are never answered by this route.
+- Citation links use the **verified Git commit SHA returned by W08**, not the README blob SHA (which is a different Git object). The Discord embed displays a concise technical link with its prior wiki landing-page link. Ambiguous revisions, missing citations, malicious prompt-injection lines, stale results, private repos and wrong source paths cause explicit `unverified` results with no fake citations.
+- The sidecar itself checks GitHub repository visibility on every refresh; a previously public repository becoming private makes the source unavailable, even if a SQLite copy remains.
+- The bridge remains restricted to exactly the two approved **public README** documents and uses test-only hashing embeddings. It is **not a general full-server semantic knowledge system or proof of current deployed plugin versions**.
+
+**New tests:** `apps/agent-service/test/indexed-public-docs.test.ts` proves safe excerpts and tests malicious instructions/lack of live-state evidence; `tests/integration/bloom-knowledge-sidecar.test.ts` now sends a real loopback request through actual W08/W04/W07 storage into a real Agent orchestrator using a synthetic GitHub client. It verifies that the local model is never invoked for source excerpts, citations are pinned to the indexed Git commit, revocation disables answers immediately, and a public-to-private repository transition fails closed.
+
+**Still pending:** real approved GitHub token and running indexer, operational embedding model, full-language answer synthesis with deterministic claims, Docker/Linux container build, Bloom egg and resource benchmark, owner-approved read-only live SFTP and metric tools. This remains staging-only on draft PR #118, not merged or deployed.
