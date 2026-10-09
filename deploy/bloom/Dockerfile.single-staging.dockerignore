@@ -6,7 +6,10 @@
 **/.git/**
 **/.env
 **/.env.*
-**/*secret*
+**/.secrets/**
+**/*credentials.json
+**/*secrets.json
+**/*token.json
 **/*.pem
 **/*.key
 **/*.p12
@@ -23,10 +26,10 @@ node_modules/**
 **/coverage/**
 **/.venv/**
 **/__pycache__/**
-**/models/**
+models/**
 **/*.gguf
 **/*.safetensors
 **/training/data/private/**
 **/captures/**
-**/runtime/**
+runtime/**
 **/.runtime/**
