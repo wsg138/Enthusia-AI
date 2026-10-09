@@ -11,6 +11,8 @@ import {
 import { InferenceReasoner } from './reasoner.js';
 import { PieCloakPublicDocsPilot } from './public-docs.js';
 import { WarzonePublicDocsPilot } from './warzone-public-docs.js';
+import { KnowledgeSearchTool } from './knowledge-search.js';
+import { IndexedPublicDocsResolver } from './indexed-public-docs.js';
 import { loadConfiguredFamiliarityRuntime } from './familiarity.js';
 import {
   createAgentRuntime,
@@ -26,11 +28,29 @@ async function main(): Promise<void> {
   const config = loadAgentServiceConfig();
   const inferenceConfig = loadInferenceConfig();
   const publicDocsOptIn = process.env['ENTHUSIA_TEST_PIECLOAK_PUBLIC_DOCS'] === '1';
+  const indexedOptIn = process.env['ENTHUSIA_TEST_KNOWLEDGE_BRIDGE'] === '1';
+  if (indexedOptIn && (config.nodeEnv !== 'development' || !publicDocsOptIn)) {
+    throw new Error('Indexed public docs require the isolated development public-docs pilot');
+  }
+  const indexerEndpoint = process.env['ENTHUSIA_INDEXER_BASE_URL'];
+  const indexerKey = process.env['ENTHUSIA_INDEXER_API_KEY'];
+  if (indexedOptIn && (!indexerEndpoint || !indexerKey)) {
+    throw new Error('Indexed public docs require a configured internal knowledge service');
+  }
+  if (!indexedOptIn && (indexerEndpoint || indexerKey)) {
+    throw new Error('Unexpected knowledge-service credentials without staging opt-in');
+  }
   if (publicDocsOptIn && config.nodeEnv !== 'development') {
     throw new Error('Public documentation pilot is restricted to development test runtimes.');
   }
   const publicDocs = publicDocsOptIn ? new PieCloakPublicDocsPilot() : undefined;
   const warzoneDocs = publicDocsOptIn ? new WarzonePublicDocsPilot() : undefined;
+  // This bridge invokes the typed W12-compatible read tool directly. It is
+  // not model-plannable until excerpt-level claim verification is reviewed.
+  const indexedDocs = indexedOptIn && indexerEndpoint && indexerKey
+    ? new IndexedPublicDocsResolver(new KnowledgeSearchTool({
+      baseUrl: indexerEndpoint, apiKey: indexerKey,
+    })) : undefined;
   const logger = createLogger({
     name: config.serviceName,
     level: config.logLevel,
@@ -117,6 +137,7 @@ async function main(): Promise<void> {
     {
       ...(publicDocs !== undefined && warzoneDocs !== undefined ? {
         publicSourceResolver: async (request: import('@enthusia/agent-core').ResolvedChatRequest) =>
+          (await indexedDocs?.resolve(request)) ??
           (await publicDocs.resolve(request)) ?? (await warzoneDocs.resolve(request)),
       } : {}),
       ...(familiarity.onVerifiedTopicHelp !== undefined
