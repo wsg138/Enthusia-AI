@@ -177,6 +177,8 @@ describe('mention lifecycle in isolated test channel', () => {
     const { message } = botFor(port);
     const result = await bot.handleMessage(message);
     expect(result.outcome).toBe('unverified');
+    expect(port.richMessages[0]?.message.embed.title).toContain('Source not verified');
+    expect(port.richMessages[0]?.message.embed.color).toBe(0xe5a936);
     expect(port.reactions.at(-1)).toBe('+⚠️');
     expect(port.richMessages).toHaveLength(1);
   });
