@@ -16,6 +16,7 @@ function body(overrides: Record<string, unknown> = {}) {
       sourceLocator: 'github:wsg138/MaceGuard:README.md',
       artifactId: 'synthetic-artifact',
       version: HASH,
+      commitSha: 'b'.repeat(40),
       status: SourceStatus.CURRENT,
       score: 0.85,
       deploymentVerified: false,
