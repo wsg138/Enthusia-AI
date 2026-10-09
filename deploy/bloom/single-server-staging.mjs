@@ -202,19 +202,32 @@ async function untilReady(name, port, child, timeoutMs = 30000) {
   throw new Error(name + ' did not become ready before timeout');
 }
 
-async function untilInferenceReady(port, child, timeoutMs = 120000) {
+async function untilInferenceReady(port, modelName, apiKey, child, timeoutMs = 120000) {
   const until = Date.now() + timeoutMs;
   while (Date.now() < until) {
     if (child.exitCode !== null || child.signalCode !== null) {
       throw new Error('Local model exited before readiness');
     }
     try {
-      const res = await fetch('http://127.0.0.1:' + port + '/health', {
-        signal: AbortSignal.timeout(900),
+      const baseUrl = 'http://127.0.0.1:' + port;
+      const headers = { authorization: 'Bearer ' + apiKey };
+      const res = await fetch(baseUrl + '/health', {
+        headers, signal: AbortSignal.timeout(900),
       });
       if (res.ok) {
         const value = await res.json();
-        if (value.status === 'ok') return;
+        if (value.status === 'ok') {
+          // Readiness is tied to the verified, explicitly aliased local model,
+          // not merely an arbitrary HTTP server responding on the port.
+          const list = await fetch(baseUrl + '/v1/models', {
+            headers, signal: AbortSignal.timeout(1200),
+          });
+          if (list.ok) {
+            const catalog = await list.json();
+            if (Array.isArray(catalog.data) &&
+                catalog.data.some((item) => item.id === modelName)) return;
+          }
+        }
       }
     } catch { /* Model still loading; never log remote response bodies. */ }
     await wait(750);
@@ -296,7 +309,7 @@ export async function runSingleServer(plan, env = process.env) {
         if (!stopping) { stopReason = 'inference exited unexpectedly'; notifyExit(); }
       });
       await Promise.race([
-        untilInferenceReady(model.port, child),
+        untilInferenceReady(model.port, model.modelName, envs.inference.LLAMA_API_KEY, child),
         exited.then(() => { throw new Error(stopReason); }),
       ]);
       console.log('[bloom-staging] Pinned local inference runtime is ready.');
