@@ -66,6 +66,7 @@ describe('Warzone public docs: exact source, zero secrets', () => {
     expect(isWarzoneRotationQuestion(request().message)).toBe(true);
     expect(isWarzoneRotationQuestion('What is your IP?')).toBe(false);
     expect(isWarzoneRotationQuestion('Warzones ticket history for player X')).toBe(false);
+    expect(isWarzoneRotationQuestion('Warzone combat logs for player X')).toBe(false);
   });
 
   it('requires all expected README gameplay sections', () => {
