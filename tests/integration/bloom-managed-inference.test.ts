@@ -102,7 +102,8 @@ describe('managed llama.cpp single Bloom model preflight (synthetic, never launc
     });
     expect(envs.inference.LLAMA_API_KEY).toMatch(/^[a-f0-9]{64}$/);
     expect(envs.agent.ENTHUSIA_INFERENCE_API_KEY).toBe(envs.inference.LLAMA_API_KEY);
-    expect(envs.gateway.ENTHUSIA_INFERENCE_API_KEY).toBe(envs.inference.LLAMA_API_KEY);
+    expect(envs.gateway.ENTHUSIA_INFERENCE_API_KEY).toBeUndefined();
+    expect(envs.discord.ENTHUSIA_INFERENCE_API_KEY).toBeUndefined();
     expect(JSON.stringify(envs)).not.toContain('synthetic-secret-should-never-appear');
     expect(envs.discord.DISCORD_BOT_TOKEN).toBeUndefined();
   });
