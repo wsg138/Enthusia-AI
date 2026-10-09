@@ -95,6 +95,8 @@ describe('durable W08/W04/W07 Bloom sidecar (synthetic GitHub, real SQLite)', ()
     const hits = result.body.hits as Array<{ text: string; status: string; sourceLocator: string; deploymentVerified: boolean }>;
     expect(hits.some(h => h.sourceLocator === 'github:wsg138/MaceGuard:README.md')).toBe(true);
     expect(hits.every(h => h.status === 'CURRENT' && h.deploymentVerified === false)).toBe(true);
+    expect(hits.some(h => h.sourceLocator === 'github:wsg138/MaceGuard:README.md' &&
+      (h as typeof h & { commitSha: string }).commitSha === 'e'.repeat(40))).toBe(true);
     expect(JSON.stringify(result.body)).not.toContain('private-staff-internal-algorithm');
     expect(JSON.stringify(result.body)).not.toContain('not-a-real-secret');
   });
