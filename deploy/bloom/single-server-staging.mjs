@@ -79,10 +79,12 @@ export function planSingleServer(args = process.argv.slice(2), env = process.env
     ['gateway', resolve(root, 'apps/ai-gateway/dist/main.js'), gatewayPort],
     ...(withDiscord ? [['discord', resolve(root, 'apps/discord-bot/dist/main.js'), null]] : []),
   ];
-  for (const [, path] of paths) {
-    if (!existsSync(path)) throw new Error('Missing compiled service. Run npm build before staging.');
+  if (!args.includes('--dry-run')) {
+    for (const [, entry] of paths) {
+      if (!existsSync(entry)) throw new Error('Missing compiled service. Run npm build before staging.');
+    }
+    if (!existsSync(resolver)) throw new Error('Missing staged workspace resolver');
   }
-  if (!existsSync(resolver)) throw new Error('Missing staged workspace resolver');
   return {
     root, resolver, paths, agentPort, gatewayPort, inferenceUrl,
     withDiscord, dryRun: args.includes('--dry-run'), smoke: args.includes('--smoke'),
