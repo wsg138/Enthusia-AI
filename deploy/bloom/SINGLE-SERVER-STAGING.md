@@ -109,3 +109,39 @@ The staging Agent now has an **explicitly gated, public-only source resolver** d
 **New tests:** `apps/agent-service/test/indexed-public-docs.test.ts` proves safe excerpts and tests malicious instructions/lack of live-state evidence; `tests/integration/bloom-knowledge-sidecar.test.ts` now sends a real loopback request through actual W08/W04/W07 storage into a real Agent orchestrator using a synthetic GitHub client. It verifies that the local model is never invoked for source excerpts, citations are pinned to the indexed Git commit, revocation disables answers immediately, and a public-to-private repository transition fails closed.
 
 **Still pending:** real approved GitHub token and running indexer, operational embedding model, full-language answer synthesis with deterministic claims, Docker/Linux container build, Bloom egg and resource benchmark, owner-approved read-only live SFTP and metric tools. This remains staging-only on draft PR #118, not merged or deployed.
+
+## Source-answer quality and Pterodactyl candidate — 2026-10-08
+
+The staging-only, opt-in `IndexedPublicDocsResolver` now favors short
+source-stated paragraphs and Markdown bullet points, ranked against the player's
+actual question and approved topic vocabulary. It skips Markdown links/images,
+configuration fragments, obvious prompt instructions, and overly long sentences,
+rather than chopping a technical paragraph into an unsupported statement. The
+answer still quotes the document and indicates **not verified against live SMP**.
+Realistic PieCloak and MaceGuard README excerpt regression tests were added to
+`apps/agent-service/test/indexed-public-docs.test.ts`. This is a limited
+extractive method, not a general semantic QA engine and not a substitute for
+production source review.
+
+A new
+[`egg-single-server-STAGING-CANDIDATE.json`](egg-single-server-STAGING-CANDIDATE.json)
+proposes **one** Pterodactyl PTDL_v2 server whose fixed startup uses
+`single-server-staging.mjs --managed-inference --managed-indexer --without-discord`.
+It requires a model and binary SHA-256, conservative CPU threads/context limits,
+one persistent index directory and a concealed GitHub-only read token. It does not
+contain Discord or live SMP/SFTP credentials.
+
+**Deliberate hard stop:** the image string is an **unpublished placeholder**
+and the egg's installer exits nonzero. This file is not deployable and has never
+been imported into Bloom. The JSON structure was derived from the public
+Pterodactyl generic egg reference and statically tested, but neither actual
+Bloom panel compatibility nor image runtime resource limits can be proven here.
+A later independent review must replace those safeguards only after a pinned,
+built and scanned image, real loaded GGUF tests, volume permissions/rollback
+tests and explicit owner approval.
+
+Remaining hard gates: production-grade embeddings; source citation and
+factual accuracy evaluation across many approved public docs; real Docker/Linux
+image build and resource benchmark; actual Pterodactyl egg import in an
+approved **staging** environment; only then a separately approved read-only SMP
+SFTP identity, current deployment inspection and typed live metrics.
