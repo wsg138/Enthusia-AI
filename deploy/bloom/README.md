@@ -10,8 +10,10 @@ user-approved step owned by a future deployment run.
 > must **not** be imported as the final configuration. New
 > [single-server staging guide](SINGLE-SERVER-STAGING.md) and
 > `single-server-staging.mjs` have been added and tested with Agent + Gateway.
-> A managed inference process, persistent indexer, container image, egg and
-> owner-approved live SFTP are not yet completed or deployed.
+> A SHA-256-validated managed inference launch path and an **unbuilt** Node 24 +
+> llama.cpp staging Dockerfile now exist. Actual model/host validation, the
+> persistent indexer, importable single-server egg and owner-approved live
+> SFTP are not yet completed or deployed.
 >
 > See [issue #119](https://github.com/wsg138/Enthusia-AI/issues/119).
 
