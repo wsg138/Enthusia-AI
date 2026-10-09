@@ -79,7 +79,7 @@ async function main() {
     ENTHUSIA_TEST_PIECLOAK_PUBLIC_DOCS: '1',
   });
   await waitReady('http://127.0.0.1:4200/health/ready', launched[0], 30000);
-  console.log('[test] Agent ready. Only the opt-in public PieCloak README pilot is enabled; no private/live server tools.');
+  console.log('[test] Agent ready. Only opt-in public PieCloak and Warzones docs are enabled; no private/live server tools.');
 
   spawnChild('gateway', 'apps/ai-gateway/dist/main.js', {
     ...shared,
