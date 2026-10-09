@@ -305,7 +305,20 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().catch(() => {
+  main().then(() => {
+    // This generic Pterodactyl egg was OBSERVED automatically restarting the
+    // one-shot run after exit 0. Do not silently repeat a CPU-intensive trial
+    // against the host shared with live SMP. benchmark() already shut down
+    // llama-server before main() resolves. Only a lightweight Node timer stays.
+    console.log('[qwen-loadtest] Benchmark finished; inference stopped. Idling until you manually STOP this Bloom server. It will NOT rerun automatically.');
+    const hold = setInterval(() => {}, 60_000);
+    const stop = () => {
+      clearInterval(hold);
+      process.exit(process.exitCode ?? 0);
+    };
+    process.once('SIGTERM', stop);
+    process.once('SIGINT', stop);
+  }).catch(() => {
     console.error('[qwen-loadtest] Unexpected diagnostic error.');
     process.exitCode = 1;
   });
