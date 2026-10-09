@@ -83,6 +83,14 @@ describe('single Bloom staging launcher safety gates (dry-run, no network or tok
     expect(result.stderr).toContain('must be distinct');
   });
 
+  it('rejects inference port collisions with a trailing slash', () => {
+    const result = run({
+      ENTHUSIA_INFERENCE_BASE_URL: 'http://127.0.0.1:4100/',
+    });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('ports must be distinct');
+  });
+
   it.runIf(Number(process.versions.node.split('.')[0]) === 24)(
     'accepts only explicitly staged agent+gateway configuration without starting services', () => {
       const result = run();
