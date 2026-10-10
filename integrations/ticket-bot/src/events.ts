@@ -318,9 +318,10 @@ export class TicketEventRouter {
   }
 }
 
-function defaultHandlerError(err: unknown): void {
-  // Default: surface via console, never swallow silently.
-  console.error('[ticket-bot] event handler failed:', err);
+function defaultHandlerError(): void {
+  // Untrusted subscriber errors can embed ticket contents or credentials.
+  // Keep the default log content-free; callers may inject a safe classified logger.
+  console.error('[ticket-bot] event handler failed; delivery will be retried');
 }
 
 /**
