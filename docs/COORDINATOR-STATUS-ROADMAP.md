@@ -1,6 +1,20 @@
 # Enthusia AI — Coordinator Status and Roadmap
 
-Last updated: 2026-10-06
+Last updated: 2026-10-10 (verified GitHub status; live Bloom/SMP state not re-read)
+
+## Current coordinator checkpoint — October 10, 2026
+
+**This section supersedes older deployment/model assumptions below. GitHub merge status is never proof of a loaded server artifact.**
+
+- **LoreItems prerequisite:** `wsg138/EnthusiaLoreItems` main commit `a8416b573aed5950ea28118a28e478c56cd8e3b3` contains the consolidated PR #59 performance/security changes and docs #43/#58. Official main-branch GitHub Actions CI **38086024352 passed**. Its JAR SHA-256 is `bccbe03f7b8f7f849318429ca34630f98ccad18c2a49ecbed55619d3bf672530`, 13,287,828 bytes. The JAR is **not verified installed on SMP**; historical remotely installed plugin SHA is not current proof. A consistent WAL-aware SQLite + markers backup, one active JAR check, authorized SFTP staging, normal scheduled restart and identity/performance verification are missing.
+- **Bloom inference:** owner-tested one separate Bloom AI split **CC19EA3C** with Qwen3-30B-A3B-Instruct-2507 Q4_K_M GGUF (18,556,686,048 bytes, SHA-256 `0155f4523b0c2e3cb541abdc4b5b1845e7b74af9ae8ae8dde9f4d09783371c86`). CPU-only `llama-server`, four threads, 2048 context; real 15-question run completed, model ready ~8.2 seconds, average response 2.6 seconds, peak sampled ~13.9 GiB. Main vanilla factual answers were only **6/9 correct**. This is **not** an accepted accuracy gate.
+- **Shared-host risk:** matched approximate player counts (13–14) had SMP near 20 TPS with AI off, but ~16.67–16.92 TPS during overlapping four-thread inference. Inclusive Spark stacks also implicated LoreItems inventory/shulker scans, chunk and entity work; causality remains unproven. **No further co-located inference stress test** before the new LoreItems binary is actually loaded and separately benchmarked, host CPU scheduling/physical-core isolation is discussed with Bloom, and the owner agrees to abort criteria. The official comparisons are under `deploy/bloom/SPARK-SMP-STACK-ROOT-CAUSE-REVIEW-20261010.md` on the staging branch.
+- **AI canonical main:** benchmark comparison guardrails PR **#120** merged (`12ea9699`); durable SQLite Ticket Bot event dedup PR **#121** merged (`f3594068`). The latter is **opt-in library code**, not an active production webhook or exactly-once effect guarantee. No production service, Ticket Bot or Discord migration has been claimed.
+- **AI runtime staging:** the large PR **#118** remains **draft/HOLD**; latest reconciled head `085c257a154891254d933daa0d8cec77e955b339` is mergeable and has an additional default-deny shared-host inference startup approval latch. Previous head `ec8c9d2` passed full repository CI and non-publishing Linux image build, but that does **not** clear the latest head, release security triage, or actual Bloom deployment. The draft egg is intentionally noninstallable. Staging Discord is isolated to an allowlisted testing guild/channel; no duplicate login.
+- **Ticket/retrieval/training:** the Ticket Bot remains lifecycle authority (#27/#113). Runtime handshakes, authenticated webhook ingress and downstream idempotency are outstanding. Public/GitHub knowledge retrieval is partially implemented but cannot assert current server facts absent deployed SHA/runtime verification (#39–#41). Synthetic ticket corpora remain HOLD unless independently approved; do not spend beyond the owner's **$25** GPU cap or claim a fine-tuned bot from a two-step smoke.
+- **Blackboard access:** production SFTP writes are not exposed in the connected worker tool surface; Blackboard PR #101 remains blocked by independent worker identity (#103) and elevated broker process identity (#104). Do not bypass these issues, use owner credentials as an alternate write path or modify production without the approved task authorization.
+- **Existing open AI PRs:** #118 staged HOLD, #109 QA HOLD, #25 training bootstrap HOLD. Keep them distinct from merged code; do not batch-merge overlapping stale branches.
+
 
 This document is the coordinator-facing operational status for Enthusia AI. It does not replace the detailed architecture specifications; it connects them to the current implementation, deployment state, open work, and future roadmap.
 
@@ -103,7 +117,7 @@ For moderation, support AI may investigate, summarize, gather evidence, explain,
 
 ## 4. Completed foundation
 
-W01–W22 are considered complete unless a regression is found:
+W01–W22 have a substantial implemented scaffold and many merged contracts, **but source completion does not mean every runtime integration or production acceptance is complete**:
 
 - W01 scaffold/shared contracts;
 - W02 AI Gateway;
@@ -399,23 +413,9 @@ Do not train mutable production facts into model weights as authority.
 
 ## 11. Current local-model direction
 
-Current leading local reasoning model:
+The **actually benchmarked Bloom CPU model** is Qwen3-30B-A3B-Instruct-2507 Q4_K_M (not the older Qwen3.5-35B proposal). It was tested with four inference threads on a physically shared SMP/Bloom host; its 6/9 basic factual-question accuracy and the contemporaneous SMP TPS regression mean it is **neither quality-cleared nor performance-cleared for player-facing production service**.
 
-- Qwen3.5-35B-A3B Q4_K_M;
-- approximately 21 GB;
-- local llama.cpp server;
-- constrained GPU offload due RTX 4060 Ti 8 GB.
-
-General routing direction:
-
-- Tier 0: deterministic logic;
-- Tier 1: smaller/fast model where useful later;
-- Tier 2: main local reasoning model;
-- Tier 3: OpenAI escalation.
-
-Accuracy and evidence-grounding outrank latency.
-
-Moderation-model training is a separate project and must not be conflated with Enthusia-AI.
+Tiered routing remains the goal: deterministic checks first, source-grounded small-model help when suitable, stronger local reasoning only after SMP isolation, and bounded external OpenAI escalation for difficult engineering. Model training improves behavior and tool use, not mutable server facts. AI-Moderation-API remains an independent service.
 
 ## 12. Remaining current issues
 
@@ -506,20 +506,16 @@ Keep these as explicit future directions rather than accidental scope creep:
 
 Any high-impact feature must preserve the same authority model: model reasoning may propose; deterministic policy and the authoritative subsystem decide what may actually happen.
 
-## 15. Coordinator execution order
+## 15. Coordinator execution order — October 10
 
-Unless live evidence changes priority, use this order:
-
-1. finish/merge deployed Ticket Bot capability handshake;
-2. keep issue/roadmap state synchronized with merged source;
-3. finish #33 adaptive familiarity path;
-4. build #30 multimodal evidence in bounded stages, starting with images/provenance before video;
-5. complete #27 deployment/runtime verification when production-write/restart authorization is explicitly available;
-6. restore stale live coverage (#40);
-7. resolve source provenance (#39);
-8. keep #36/#37 as explicit production health/deployment issues;
-9. continue PR #25 only through the owner-review training gate;
-10. expand future typed tools based on real support/staff use cases rather than generic access.
+1. Finish final review, secure upload and **normal-restart** runtime verification of the approved LoreItems main artifact. Back up SQLite consistently and preserve instance identities; do not restart or deploy without an authorized transport.
+2. First establish a new **AI stopped** stable SMP baseline using the optimized plugin, and preserve exact Spark sample timing and plugin SHA. Do not assume the older CPU-heavy AI benchmark proves a single root cause.
+3. Clear PR #118's **exact-head** CI and independent security/code-quality findings, preserve no-live default for Discord/private tools and the new explicit managed-inference run gate. Prepare one Bloom service rather than five separate Pterodactyl servers.
+4. Ask Bloom about **disjoint physical-core sibling allocations/CPU scheduling** and approve a bounded CPU/memory/test window before any 30B model-on comparison. Compare OFF, idle model, bounded inference and OFF/recovery with honest confounders.
+5. Keep building **verified live source retrieval and typed read-only health/config/deployment tools** (#39–#41). Never use public web snippets as current staff or network ground truth.
+6. Complete Ticket Bot authentication/lease persistence/webhook/subscriber idempotency and deploy capability handshake in shadow/read-only stages (#27/#113). Keep lifecycle authority and punishments outside AI.
+7. Advance evaluation and training only with source-provenance, independent human-approved ticket examples, privacy boundaries, explicit cost ledger and the prior $25 cap. Do not use held-out or synthetic HOLD cases as trainable.
+8. Close or re-scope older drafts #109/#25 through their own independent gates; later re-enable Discord/in-game AI only after operational behavior, safety, CPU impact and fallback are demonstrated.
 
 ## 16. Definition of “done”
 
