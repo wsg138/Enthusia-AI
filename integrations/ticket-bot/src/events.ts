@@ -289,10 +289,16 @@ export class TicketEventRouter {
 
   private async claim(event: TicketEvent): Promise<boolean> {
     if (this.deduplicationStore === null) return true;
-    const firstDelivery = await this.deduplicationStore.claim(
-      ticketEventDeduplicationKey(event),
-    );
+    const key = ticketEventDeduplicationKey(event);
+    const firstDelivery = await this.deduplicationStore.claim(key);
     if (firstDelivery) return true;
+    // An in-flight worker has not durably acknowledged this delivery yet.
+    // Returning success here could cause the webhook sender to drop retries.
+    // Older in-memory test stores retain their original duplicate semantics.
+    const state = await this.deduplicationStore.getState?.(key);
+    if (state !== undefined && state !== 'completed') {
+      throw new Error('Ticket event is not yet completed; retry delivery required');
+    }
     this.duplicateCount += 1;
     this.onDuplicate(event);
     return false;
@@ -312,9 +318,10 @@ export class TicketEventRouter {
   }
 }
 
-function defaultHandlerError(err: unknown): void {
-  // Default: surface via console, never swallow silently.
-  console.error('[ticket-bot] event handler failed:', err);
+function defaultHandlerError(): void {
+  // Untrusted subscriber errors can embed ticket contents or credentials.
+  // Keep the default log content-free; callers may inject a safe classified logger.
+  console.error('[ticket-bot] event handler failed; delivery will be retried');
 }
 
 /**

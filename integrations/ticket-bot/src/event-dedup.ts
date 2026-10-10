@@ -1,5 +1,7 @@
 import { ValidationError } from '@enthusia/contracts';
 
+export type TicketEventClaimState = 'missing' | 'inflight' | 'expired' | 'completed';
+
 export interface TicketEventDeduplicationStore {
   /**
    * Atomically claim an event key.
@@ -10,6 +12,8 @@ export interface TicketEventDeduplicationStore {
    * Delivery may happen more than once after crashes: handlers must be idempotent.
    */
   claim(key: string): Promise<boolean>;
+  /** Optional strict duplicate inspection for production durable stores. */
+  getState?(key: string): Promise<TicketEventClaimState>;
   /** Mark the delivery completed only after every subscriber succeeded. */
   complete(key: string): Promise<void>;
   /** Allow a future retry if any subscriber failed. */
