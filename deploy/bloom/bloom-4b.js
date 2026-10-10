@@ -20,7 +20,7 @@ const { pipeline } = require('node:stream/promises');
 const { Readable, Transform } = require('node:stream');
 const { spawn } = require('node:child_process');
 const { createServer } = require('node:net');
-const { join, resolve } = require('node:path');
+const { join } = require('node:path');
 
 const ROOT = process.cwd();
 const MODEL_NAME = 'Qwen3-4B-Q4_K_M.gguf';

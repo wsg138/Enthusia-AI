@@ -19,7 +19,7 @@ const { createHash, timingSafeEqual } = require('node:crypto');
 const { createReadStream, readFileSync, existsSync, lstatSync, statSync, writeFileSync, chmodSync } = require('node:fs');
 const { spawn } = require('node:child_process');
 const { createServer } = require('node:net');
-const { join, resolve } = require('node:path');
+const { join } = require('node:path');
 
 const ROOT = process.cwd();
 const WIPE_MARKER = join(ROOT, 'enthusia-30b-staging-ok.txt');
