@@ -195,6 +195,7 @@ async function benchmark(modelBytes, memoryLimit) {
     console.log('[qwen-loadtest] Model ready in ' + loadSeconds + ' seconds. Starting bounded 150-second workload; collect a live-SMP spark profile NOW if not already running.');
     const results = [];
     const workloadStart = Date.now();
+    console.log('[qwen-loadtest] Inference workload started at ' + new Date(workloadStart).toISOString());
     while (Date.now() - workloadStart < 150_000 && results.length < 120) {
       const item = QUALITY_CASES[results.length % QUALITY_CASES.length];
       if (memoryExceeded) throw new Error('memory-safety-threshold-exceeded');
@@ -233,7 +234,11 @@ async function benchmark(modelBytes, memoryLimit) {
       console.log('[qwen-loadtest] Request ' + results.length + ' / 120 completed in ' + result.seconds + 's');
     }
     if (memoryExceeded) throw new Error('memory-safety-threshold-exceeded');
+    const workloadEnd = Date.now();
+    console.log('[qwen-loadtest] Inference workload ended at ' + new Date(workloadEnd).toISOString());
     return {
+      workloadStartedAtUtc: new Date(workloadStart).toISOString(),
+      workloadFinishedAtUtc: new Date(workloadEnd).toISOString(),
       modelVerified: true, binaryVerified: true, modelBytes,
       loadSeconds,
       questionsCompleted: results.length,
@@ -268,7 +273,9 @@ async function benchmark(modelBytes, memoryLimit) {
 }
 
 async function main() {
+  const scriptStartedAtUtc = new Date().toISOString();
   const report = {
+    scriptStartedAtUtc,
     test: 'enthusia-qwen3-30b-a3b-sustained-smp-profiling',
     status: 'FAIL',
     stage: 'preflight',
@@ -298,6 +305,7 @@ async function main() {
     report.error = e instanceof Error ? String(e.message).slice(0, 120) : 'unclassified-error';
     process.exitCode = 1;
   }
+  report.scriptFinishedAtUtc = new Date().toISOString();
   console.log('[qwen-loadtest] RESULT');
   console.log(JSON.stringify(report, null, 2));
   try { writeFileSync(REPORT, JSON.stringify(report, null, 2) + '\n', { mode: 0o600 }); }
