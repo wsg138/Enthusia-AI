@@ -289,10 +289,16 @@ export class TicketEventRouter {
 
   private async claim(event: TicketEvent): Promise<boolean> {
     if (this.deduplicationStore === null) return true;
-    const firstDelivery = await this.deduplicationStore.claim(
-      ticketEventDeduplicationKey(event),
-    );
+    const key = ticketEventDeduplicationKey(event);
+    const firstDelivery = await this.deduplicationStore.claim(key);
     if (firstDelivery) return true;
+    // An in-flight worker has not durably acknowledged this delivery yet.
+    // Returning success here could cause the webhook sender to drop retries.
+    // Older in-memory test stores retain their original duplicate semantics.
+    const state = await this.deduplicationStore.getState?.(key);
+    if (state !== undefined && state !== 'completed') {
+      throw new Error('Ticket event is not yet completed; retry delivery required');
+    }
     this.duplicateCount += 1;
     this.onDuplicate(event);
     return false;
