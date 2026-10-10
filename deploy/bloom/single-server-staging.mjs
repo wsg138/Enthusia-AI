@@ -307,6 +307,12 @@ async function stopAll(children) {
 }
 
 export async function runSingleServer(plan, env = process.env) {
+  // Model hashes are integrity checks, not approval to load the shared SMP host.
+  // Operator must explicitly enable the risk-reviewed model run; safe dry-run
+  // does not enter this function and remains available without approval.
+  if (plan.managedInference && env.ENTHUSIA_BLOOM_INFERENCE_RUN_APPROVED !== '1') {
+    throw new Error('Managed Bloom inference requires explicit shared-host run approval');
+  }
   // Never attach to or kill an already-running Windows or Bloom service.
   if (await portOccupied(plan.agentPort) || await portOccupied(plan.gatewayPort) ||
       (plan.managedInference && await portOccupied(plan.inferencePort)) ||

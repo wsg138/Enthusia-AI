@@ -45,6 +45,8 @@ node ./node_modules/vitest/vitest.mjs run tests/integration/bloom-single-staging
 
 ## Authorization gates
 
+**New source-level safety latch (October 10):** A real `--managed-inference` startup now fails before accessing model bytes or spawning any process unless the operator explicitly sets `ENTHUSIA_BLOOM_INFERENCE_RUN_APPROVED=1`. The draft Pterodactyl egg has an operator-only, default-off variable for this. Harmless `--dry-run` remains usable without the flag. A string flag does **not** itself grant consent: only set it after a documented owner-approved shared-host benchmark window, CPU isolation review, and abort plan. Existing one-shot `bloom-30b*.js` scripts are separate entrypoints and are **not** protected by this supervisor latch; never start those independently on a shared production host without the same approval.
+
 Do not create a Bloom server, change its egg/image, start inference on the live shared host, grant SFTP or production access, or migrate the bot until the owner separately approves the rollout and available host capacity is verified. No urgency to reset or copy the existing bot token into chat.
 
 

@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { prepareManagedInference } from '../../deploy/bloom/managed-inference.mjs';
-import { makeStagingEnvironments, planSingleServer } from '../../deploy/bloom/single-server-staging.mjs';
+import { makeStagingEnvironments, planSingleServer, runSingleServer } from '../../deploy/bloom/single-server-staging.mjs';
 
 const folders: string[] = [];
 const hashOf = (text: string) => createHash('sha256').update(text).digest('hex');
@@ -133,5 +133,19 @@ describe('managed llama.cpp single Bloom model preflight (synthetic, never launc
       expect(dryRun.status).toBe(0);
       expect(dryRun.stdout).toContain('pinned inference, agent, gateway');
     }
+  });
+
+  it('refuses actual model launch without explicit shared-host run approval', async () => {
+    const f = await fixtures();
+    const env = {
+      ...f,
+      NODE_ENV: 'development',
+      ENTHUSIA_BLOOM_STAGING: '1',
+      ENTHUSIA_INFERENCE_BASE_URL: 'http://127.0.0.1:15123',
+    };
+    const plan = planSingleServer(['--dry-run', '--managed-inference'], env);
+    await expect(runSingleServer(plan, env)).rejects.toThrow(
+      'explicit shared-host run approval',
+    );
   });
 });

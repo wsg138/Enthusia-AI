@@ -62,6 +62,8 @@ describe('Pterodactyl PTDL_v2 single-server review candidate (NOT deployed)', ()
     expect(variables.get('ENTHUSIA_MODEL_SHA256')?.default_value).toBe('');
     expect(variables.get('ENTHUSIA_LLAMA_SERVER_SHA256')?.default_value).toBe('');
     expect(variables.get('ENTHUSIA_MODEL_PATH')?.default_value).toBe('/home/container/models/qwen3.gguf');
+    expect(variables.get('ENTHUSIA_BLOOM_INFERENCE_RUN_APPROVED')?.default_value).toBe('0');
+    expect(variables.get('ENTHUSIA_BLOOM_INFERENCE_RUN_APPROVED')?.user_editable).toBe(false);
     expect(variables.get('ENTHUSIA_INFERENCE_THREADS')?.default_value).toBe('2');
     expect(variables.get('ENTHUSIA_INFERENCE_THREADS')?.rules).toContain('max:8');
     expect(variables.get('ENTHUSIA_INFERENCE_CONTEXT')?.default_value).toBe('4096');

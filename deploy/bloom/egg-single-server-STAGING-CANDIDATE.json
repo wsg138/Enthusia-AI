@@ -79,6 +79,15 @@
       "rules": "required|url|max:100"
     },
     {
+      "name": "Shared host inference run approval",
+      "description": "Operator-only staging gate; remains 0 until a documented SMP host risk review authorizes a specific test.",
+      "env_variable": "ENTHUSIA_BLOOM_INFERENCE_RUN_APPROVED",
+      "default_value": "0",
+      "user_editable": false,
+      "user_viewable": true,
+      "rules": "required|in:0,1"
+    },
+    {
       "name": "Inference CPU threads",
       "description": "Staging cap. Panel CPU and memory allocation remains the authoritative hard limit.",
       "env_variable": "ENTHUSIA_INFERENCE_THREADS",
