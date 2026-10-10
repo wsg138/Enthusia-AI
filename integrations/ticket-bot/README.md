@@ -90,6 +90,61 @@ const tools = createTicketTools(client);
 for (const tool of tools) registry.register(tool);
 ```
 
+## Durable webhook event claims (staging only)
+
+Issue #113 adds `SQLiteTicketEventDeduplicationStore`, backed by an **absolute SQLite
+path on a genuinely persistent volume**. The default router still uses
+`InMemoryTicketEventDeduplicationStore` for development and tests.
+**Nothing enables live Ticket Bot webhook ingress automatically.**
+
+~~~ts
+import {
+  SQLiteTicketEventDeduplicationStore, TicketEventRouter,
+  verifyWebhookSignature,
+} from '@enthusia/integration-ticket-bot';
+
+// Path must be supplied from runtime config for an approved, persistent,
+// access-controlled volume. Do not inject ticket or staff-private message text.
+const store = new SQLiteTicketEventDeduplicationStore({ path: persistentDbPath });
+const router = new TicketEventRouter({ deduplicationStore: store });
+
+// In an independently reviewed webhook ingress, authenticate the exact raw
+// body with a private per-service secret BEFORE parsing or calling ingest.
+if (!verifyWebhookSignature(rawBody, signatureHeader, signingSecret)) {
+  // Reject unauthenticated delivery; do not dispatch.
+} else {
+  // Await this. On an in-flight claim / failed handler / DB outage,
+// ingest rejects and the ingress must return a retryable failure, never 2xx.
+  await router.ingest(JSON.parse(rawBody.toString()));
+}
+
+// On shutdown, drain handlers and close the database before stopping process.
+store.close();
+~~~
+
+- SQLite uses WAL, `synchronous=FULL`, 5-second busy timeout, and
+  `BEGIN IMMEDIATE` for cross-connection atomic ownership. Only SHA-256
+  *hashes of event IDs*, lease tokens, timestamps and completion state are stored.
+- In-flight claims have a default ten-minute lease; the owner token fences
+  acknowledgements/deletes after a crash or another worker reacquires.
+  A second delivery while an earlier worker is running must be retried,
+  **not acknowledged as handled**. Completed records are never evicted
+  automatically; capacity/backup/retention policy needs a separate review.
+- A crash **after a side effect but before completion** can still execute
+  that subscriber twice after the lease expires. Every downstream destination
+  therefore needs its own event-ID idempotency key. This store does not
+  deliver exactly-once side effects.
+- The database and WAL files need filesystem permissions/volume persistence,
+  operational backup, and ownership checks. Do not use the ephemeral
+  Pterodactyl container layer, a shared network filesystem without reliable
+  SQLite locks, or a world-accessible directory.
+- This is a storage and router integration **only**. A production webhook
+  HTTP endpoint with signed-body verification, replay/timestamp limits,
+  genuine Ticket Bot capability checks, deterministic retry HTTP handling,
+  and owner-reviewed downstream idempotent actions remains a separate
+  rollout gate under issues #27 and #113. No live ticket, Discord, moderation,
+  or SMP permissions change.
+
 ## Runtime safety gates
 
 - Ticket action submission still performs the authenticated `/v1/capabilities`
