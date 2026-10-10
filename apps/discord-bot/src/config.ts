@@ -51,6 +51,10 @@ export interface DiscordBotOptions {
   staffChannelIds: string[];
   /** Configured test channel(s): every message here is a trigger. */
   testChannelIds: string[];
+  /** Optional hard allowlist. When configured, rejects all other guilds, including DMs. */
+  allowedGuildIds?: string[];
+  /** Optional hard allowlist for message and slash interaction channels. */
+  allowedChannelIds?: string[];
   /** Discord role IDs that mark an actor as staff (role context mapping). */
   staffRoleIds: string[];
   /** Default visibility ceiling for responses (§17). */
@@ -110,6 +114,8 @@ export function resolveDiscordBotOptions(env: NodeJS.ProcessEnv = process.env): 
     aiChannelIds: commaSeparatedList(env['ENTHUSIA_DISCORD_AI_CHANNELS']),
     staffChannelIds: commaSeparatedList(env['ENTHUSIA_DISCORD_STAFF_CHANNELS']),
     testChannelIds: commaSeparatedList(env['ENTHUSIA_DISCORD_TEST_CHANNELS']),
+    allowedGuildIds: commaSeparatedList(env['ENTHUSIA_DISCORD_ALLOWED_GUILD_IDS']),
+    allowedChannelIds: commaSeparatedList(env['ENTHUSIA_DISCORD_ALLOWED_CHANNEL_IDS']),
     staffRoleIds: commaSeparatedList(env['ENTHUSIA_DISCORD_STAFF_ROLES']),
     defaultVisibilityCeiling: Visibility.PUBLIC,
     perUserRateLimit: {

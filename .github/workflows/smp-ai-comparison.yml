@@ -1,0 +1,23 @@
+name: SMP-AI comparison guardrails
+
+on:
+  pull_request:
+    paths:
+      - "deploy/bloom/smp-colocation-compare.mjs"
+      - "deploy/bloom/smp-colocation-compare.test.mjs"
+      - ".github/workflows/smp-ai-comparison.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-comparison:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify comparison input and confounder handling
+        run: node --test deploy/bloom/smp-colocation-compare.test.mjs

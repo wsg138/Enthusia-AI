@@ -92,7 +92,11 @@ export {
 export type {
   TicketEventDeduplicationStore,
   TicketEventIdentity,
+  TicketEventClaimState,
 } from './event-dedup.js';
+
+export { SQLiteTicketEventDeduplicationStore } from './sqlite-event-dedup.js';
+export type { SQLiteTicketEventDeduplicationOptions } from './sqlite-event-dedup.js';
 
 export { ticketReportTarget } from './report-target.js';
 export type { TicketReportTarget } from './report-target.js';

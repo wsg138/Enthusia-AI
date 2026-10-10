@@ -16,7 +16,21 @@
  * decides. Bots (including itself) are never answered.
  */
 import type { DiscordBotOptions } from './config.js';
-import type { DiscordMessageRef, Snowflake } from './types.js';
+import type { DiscordChannelInfo, DiscordMessageRef, Snowflake } from './types.js';
+
+/** Hard scope applies even to explicit mentions and slash commands.
+ * Empty lists preserve existing default behavior; test deployments set both.
+ */
+export function channelIsAllowed(
+  channel: DiscordChannelInfo,
+  options: DiscordBotOptions,
+): boolean {
+  if (options.allowedGuildIds?.length &&
+      !options.allowedGuildIds.includes(channel.guild?.id ?? '')) return false;
+  if (options.allowedChannelIds?.length &&
+      !options.allowedChannelIds.includes(channel.id)) return false;
+  return true;
+}
 
 /** Why the bot decided to respond (or not). */
 export type TriggerKind = 'mention' | 'slash' | 'ai-channel' | 'test-channel';
@@ -58,6 +72,9 @@ export function decideTrigger(
   botUserId: Snowflake | null,
   options: DiscordBotOptions,
 ): TriggerDecision {
+  if (!channelIsAllowed(message.channel, options)) {
+    return { trigger: null, reason: 'outside configured guild/channel allowlist', prompt: '' };
+  }
   if (message.author.isBot) {
     return { trigger: null, reason: 'author is a bot', prompt: '' };
   }

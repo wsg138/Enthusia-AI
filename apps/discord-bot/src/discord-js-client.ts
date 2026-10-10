@@ -77,9 +77,8 @@ export function buildAiSlashCommand(): { name: string; definition: unknown } {
 }
 
 /**
- * Upsert just the /ai command. A bulk PUT with [definition] would delete
- * unrelated commands registered by another component of the same app.
- * This never removes existing Ticket Bot or other application commands.
+ * Upsert only the /ai command. Avoid a bulk PUT which would delete unrelated
+ * commands registered by another component of the Discord application.
  */
 export async function upsertAiSlashCommand(
   rest: Pick<REST, 'post'>,
@@ -395,6 +394,7 @@ export class DiscordJsClientAdapter implements DiscordClientPort {
     return sent.id;
   }
 
+
   async sendRichMessage(channelId: Snowflake, payload: DiscordRichResponse, replyToMessageId?: Snowflake): Promise<Snowflake> {
     const channel = await this.client.channels.fetch(channelId);
     if (!channel || !channel.isSendable()) throw new Error('target channel is not sendable');
@@ -418,7 +418,6 @@ export class DiscordJsClientAdapter implements DiscordClientPort {
     if (!raw || !this.readyUserId) return;
     await raw.reactions.resolve(emoji)?.users.remove(this.readyUserId);
   }
-
   async deferSlashAsk(interaction: DiscordSlashAskRef): Promise<void> {
     const raw = this.rawInteractions.get(interaction);
     if (!raw) throw new Error('slash interaction is missing its raw Discord interaction');

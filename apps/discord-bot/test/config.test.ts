@@ -16,6 +16,8 @@ describe('resolveDiscordBotOptions', () => {
     expect(options.slashOnly).toBe(false);
     expect(options.aiChannelIds).toEqual([]);
     expect(options.testChannelIds).toEqual([]);
+    expect(options.allowedGuildIds).toEqual([]);
+    expect(options.allowedChannelIds).toEqual([]);
     expect(options.staffChannelIds).toEqual([]);
     expect(options.staffRoleIds).toEqual([]);
     expect(options.defaultVisibilityCeiling).toBe(Visibility.PUBLIC);
@@ -28,11 +30,15 @@ describe('resolveDiscordBotOptions', () => {
       ENTHUSIA_DISCORD_AI_CHANNELS: 'ai-1',
       ENTHUSIA_DISCORD_STAFF_CHANNELS: 'staff-1',
       ENTHUSIA_DISCORD_STAFF_ROLES: 'role-1,role-2',
+      ENTHUSIA_DISCORD_ALLOWED_GUILD_IDS: 'guild-1',
+      ENTHUSIA_DISCORD_ALLOWED_CHANNEL_IDS: 'ai-channel-1, ai-channel-2',
     });
     expect(options.testChannelIds).toEqual(['chan-1', 'chan-2']);
     expect(options.aiChannelIds).toEqual(['ai-1']);
     expect(options.staffChannelIds).toEqual(['staff-1']);
     expect(options.staffRoleIds).toEqual(['role-1', 'role-2']);
+    expect(options.allowedGuildIds).toEqual(['guild-1']);
+    expect(options.allowedChannelIds).toEqual(['ai-channel-1', 'ai-channel-2']);
   });
 
   it('reads gateway and rate-limit overrides', () => {

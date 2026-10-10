@@ -29,7 +29,7 @@ import { extractMessageContext, extractSlashAskContext } from './context.js';
 import { formatAgentResponse } from './formatting.js';
 import { formatRichAgentResponse } from './rich-formatting.js';
 import type { AiGatewayClient } from './gateway-client.js';
-import { decideSlashTrigger, decideTrigger, type TriggerDecision } from './policy.js';
+import { channelIsAllowed, decideSlashTrigger, decideTrigger, type TriggerDecision } from './policy.js';
 import { DiscordRateLimitPolicy } from './rate-limit.js';
 import type {
   DiscordClientPort,
@@ -172,10 +172,12 @@ export class EnthusiaAiDiscordBot {
 
   /** Full pipeline for a `/ai ask` invocation. Exposed for tests. */
   async handleSlashAsk(interaction: DiscordSlashAskRef): Promise<HandleResult> {
-    if (!this.inAllowedScope(interaction.channel.guild?.id, interaction.channel.id)) {
-      return { outcome: 'ignored', reason: 'outside allowed test guild/channel' };
+    if (!channelIsAllowed(interaction.channel, this.options) ||
+        !this.inAllowedScope(interaction.channel.guild?.id, interaction.channel.id)) {
+      // Fail closed without acknowledging out-of-scope slash interactions.
+      return { outcome: 'ignored', reason: 'outside configured guild/channel allowlist' };
     }
-    // Acknowledge only authorized slash interactions before slow inference.
+    // Defer quickly before inference, but never acknowledge unauthorized users.
     await this.port.deferSlashAsk?.(interaction);
     const decision = decideSlashTrigger(interaction.question);
     return this.respondToTrigger(

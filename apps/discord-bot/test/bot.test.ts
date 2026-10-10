@@ -69,6 +69,36 @@ describe('EnthusiaAiDiscordBot message flow', () => {
     expect(port.sentMessages[0]!.message.content).toBe('echo: what is the ip?');
   });
 
+  it('refuses even a direct mention outside the configured test guild or channel', async () => {
+    const gateway = new RecordingGateway();
+    const options = testOptions({
+      allowedGuildIds: ['guild-1'],
+      allowedChannelIds: ['channel-1'],
+    });
+    const { port, bot } = setup(gateway, options);
+    const mention = `<@${BOT_ID}> can you help?`;
+    const wrongGuild = guildMessage({
+      content: mention,
+      mentionedUserIds: [BOT_ID],
+      channel: { id: 'channel-1', kind: 'guild-text', guild: { id: 'guild-2', name: 'Other' } },
+    });
+    const wrongChannel = guildMessage({
+      content: mention,
+      mentionedUserIds: [BOT_ID],
+      channel: { id: 'ticket-logs', kind: 'guild-text', guild: { id: 'guild-1', name: 'Test' } },
+    });
+    const dm = guildMessage({
+      content: mention,
+      mentionedUserIds: [BOT_ID],
+      channel: { id: 'dm-1', kind: 'dm' },
+    });
+    for (const message of [wrongGuild, wrongChannel, dm]) {
+      expect((await bot.handleMessage(message)).outcome).toBe('ignored');
+    }
+    expect(gateway.requests).toHaveLength(0);
+    expect(port.sentMessages).toHaveLength(0);
+  });
+
   it('ignores messages with no trigger: no gateway call, nothing sent', async () => {
     const gateway = new RecordingGateway();
     const { port, bot } = setup(gateway);
@@ -215,6 +245,35 @@ describe('EnthusiaAiDiscordBot message flow', () => {
 });
 
 describe('EnthusiaAiDiscordBot slash flow', () => {
+  it('does not answer /ai ask outside the test channel or guild', async () => {
+    const gateway = new RecordingGateway();
+    const { port, bot } = setup(gateway, testOptions({
+      allowedGuildIds: ['guild-1'],
+      allowedChannelIds: ['channel-1'],
+    }));
+    for (const channel of [
+      { id: 'ticket-logs', kind: 'guild-text' as const, guild: { id: 'guild-1', name: 'Test' } },
+      { id: 'channel-1', kind: 'guild-text' as const, guild: { id: 'guild-2', name: 'Other' } },
+      { id: 'dm', kind: 'dm' as const },
+    ]) {
+      const result = await bot.handleSlashAsk(slashAsk({ channel }));
+      expect(result.outcome).toBe('ignored');
+    }
+    expect(gateway.requests).toHaveLength(0);
+    expect(port.slashResponses).toHaveLength(0);
+  });
+
+  it('accepts scoped /ai ask in the designated test channel', async () => {
+    const gateway = new RecordingGateway();
+    const { port, bot } = setup(gateway, testOptions({
+      allowedGuildIds: ['guild-1'],
+      allowedChannelIds: ['channel-1'],
+    }));
+    expect((await bot.handleSlashAsk(slashAsk())).outcome).toBe('responded');
+    expect(gateway.requests).toHaveLength(1);
+    expect(port.slashResponses).toHaveLength(1);
+  });
+
   it('routes /ai ask through respondToSlashAsk with formatted chunks', async () => {
     const gateway = new RecordingGateway();
     const { port, bot } = setup(gateway);
@@ -229,6 +288,22 @@ describe('EnthusiaAiDiscordBot slash flow', () => {
     expect(port.slashResponses).toHaveLength(1);
     expect(port.slashResponses[0]!.interaction).toBe(interaction);
     expect(port.slashResponses[0]!.chunks).toEqual(['echo: how do I claim land?']);
+  });
+
+  it('defers the slash response before waiting for a slow gateway', async () => {
+    const port = new MockDiscordClientPort();
+    const gateway = new RecordingGateway(async (request) => {
+      expect(port.deferredSlashes).toHaveLength(1);
+      return {
+        text: 'ready', actions: [], sources: [], memoryUpdates: [],
+        escalation: null, traceId: request.traceId ?? 'no-trace',
+      };
+    });
+    const bot = new EnthusiaAiDiscordBot(port, gateway, testOptions(), nullLogger());
+    const interaction = slashAsk({ question: 'slow request' });
+    expect((await bot.handleSlashAsk(interaction)).outcome).toBe('responded');
+    expect(port.deferredSlashes).toEqual([interaction]);
+    expect(port.slashResponses).toHaveLength(1);
   });
 
   it('rate-limits slash invocations too', async () => {
