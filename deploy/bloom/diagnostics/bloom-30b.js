@@ -144,10 +144,19 @@ function requireOneTimeOwnerApproval() {
 }
 function main(){
   if(process.platform!=='linux'||process.arch!=='x64')return idle('Linux x64 required');
-  if(!requireOneTimeOwnerApproval())return idle('Inference approval missing; set panel variable or create one-time approval marker');
   const b=read(BENCH);
-  if(!b || b.length>200000 || !b.includes('enthusia-qwen3-30b-a3b-sustained-smp-profiling') ||
-     !b.includes('shared-host-inference-approval-required'))return idle('Guarded cached-only benchmark missing');
+  const safeBenchmark = b && b.length<=200000 &&
+    b.includes('enthusia-qwen3-30b-a3b-sustained-smp-profiling') &&
+    b.includes('verifyExistingModel') &&
+    b.includes('requireApprovedWipedServer') &&
+    b.includes("'--threads', '4'") &&
+    b.includes("'--parallel', '1'") &&
+    b.includes("'--ctx-size', '2048'") &&
+    b.includes("'--host', '127.0.0.1'") &&
+    !b.includes('downloadModel(') &&
+    !b.includes('MODEL_URL');
+  if(!safeBenchmark)return idle('Guarded cached-only four-thread benchmark missing');
+  if(!requireOneTimeOwnerApproval())return idle('Inference approval missing; set panel variable or create one-time approval marker');
   const file=path.join(ROOT,'bloom-cpu-evidence-'+new Date().toISOString().replace(/[:.]/g,'-')+'.jsonl');
   try { const fd=fs.openSync(file,'wx',0o600); stream=fs.createWriteStream(file,{fd,autoClose:true}); }
   catch{return idle('Cannot create evidence file');}
