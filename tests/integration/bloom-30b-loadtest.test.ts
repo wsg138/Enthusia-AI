@@ -28,6 +28,8 @@ describe('30B-A3B sustained CPU workload for SMP spark comparison', () => {
     expect(source).toContain('existing-model-checksum-mismatch');
     expect(source).toContain('requireApprovedWipedServer();');
     expect(source).toContain('CC19EA3C WIPED FOR ENTHUSIA AI');
+    expect(source).toContain('shared-host-inference-approval-required');
+    expect(source).toContain("ENTHUSIA_BLOOM_INFERENCE_RUN_APPROVED !== '1'");
     expect(source).toContain('await verifyExistingModel()');
     expect(source).not.toContain('huggingface.co');
     expect(source).not.toMatch(/fetch\(MODEL_URL|model-download-http-failed|Downloading approved/);

@@ -283,6 +283,11 @@ async function main() {
     discord: false, minecraft: false, sftp: false, mysql: false,
   };
   try {
+    // A wiped spare split and matching checksums are not an approval to run
+    // a CPU-intensive model on a host that is also serving the live SMP.
+    if (process.env.ENTHUSIA_BLOOM_INFERENCE_RUN_APPROVED !== '1') {
+      throw new Error('shared-host-inference-approval-required');
+    }
     if (process.platform !== 'linux' || process.arch !== 'x64' || ![24, 25].includes(Number(process.versions.node.split('.')[0]))) {
       throw new Error('requires-linux-x64-node24-or-node25');
     }

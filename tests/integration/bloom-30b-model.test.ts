@@ -28,6 +28,8 @@ describe('30B-A3B wiped spare Bloom staging gate', () => {
   it('requires the owner wipe marker and rejects remaining Minecraft server files', () => {
     expect(source).toContain('enthusia-30b-staging-ok.txt');
     expect(source).toContain('CC19EA3C WIPED FOR ENTHUSIA AI');
+    expect(source).toContain('shared-host-inference-approval-required');
+    expect(source).toContain("ENTHUSIA_BLOOM_INFERENCE_RUN_APPROVED !== '1'");
     expect(source).toContain('refusing-to-run-on-uncleared-minecraft-server');
     expect(source).toContain('owner-wipe-confirmation-marker-missing');
     expect(source.indexOf('requireApprovedWipedServer();')).toBeLessThan(source.indexOf('await checkExecutable();'));
