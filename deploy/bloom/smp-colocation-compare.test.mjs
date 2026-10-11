@@ -9,7 +9,10 @@ function window(phase, minute, patch = {}) {
   return {
     phase, startUtc: at(minute), endUtc: at(minute + 1),
     loreItemsSha256: sha, smpBuild: 'Paper 26.2', activityLabel: 'matched-survival',
-    players: 14, loadedChunks: 3000, tps: busy ? 16.8 : 19.98,
+    players: 14, loadedChunks: 3000,
+    entitySnapshotUtc: at(minute), totalEntities: 3000,
+    zombifiedPiglins: 100, largestRegionEntities: 200,
+    tps: busy ? 16.8 : 19.98,
     msptP50: busy ? 40 : 15, msptP95: busy ? 75 : 32,
     msptP99: busy ? 120 : 60, ...patch,
   };
@@ -88,4 +91,48 @@ test('no idle/recovery windows remain explicit gaps', () => {
   const result = compareSmpColocation(data);
   assert.equal(result.assessment, 'OBSERVED_REGRESSION_WITH_CONFOUNDERS');
   assert.equal(result.warnings.length, 2);
+});
+
+test('missing entity observations cannot certify a no-regression result', () => {
+  const data = scenario();
+  data.windows.filter((w) => w.phase === 'inference').forEach((w) => {
+    w.tps = 19.95; w.msptP50 = 16; w.msptP95 = 34; w.msptP99 = 65;
+    delete w.entitySnapshotUtc;
+  });
+  const result = compareSmpColocation(data);
+  assert.equal(result.assessment, 'INCONCLUSIVE');
+  assert.ok(result.warnings.some((w) => w.includes('timestamped entity counts')));
+});
+
+test('piglin farm loading is identified as an independent workload confounder', () => {
+  const data = scenario();
+  data.windows.filter((w) => w.phase === 'inference').forEach((w) => {
+    w.tps = 19.95; w.msptP50 = 16; w.msptP95 = 34; w.msptP99 = 65;
+    w.totalEntities = 4013; w.zombifiedPiglins = 2028; w.largestRegionEntities = 1678;
+  });
+  const result = compareSmpColocation(data);
+  assert.equal(result.assessment, 'INCONCLUSIVE');
+  assert.ok(result.warnings.some((w) => w.includes('piglin populations')));
+  assert.ok(result.warnings.some((w) => w.includes('Largest entity concentrations')));
+});
+
+test('material entity change remains explicitly confounded even when TPS regresses', () => {
+  const data = scenario();
+  data.windows[4].totalEntities = 4013;
+  data.windows[5].totalEntities = 4013;
+  const result = compareSmpColocation(data);
+  assert.equal(result.assessment, 'OBSERVED_REGRESSION_WITH_CONFOUNDERS');
+  assert.ok(result.warnings.some((w) => w.includes('Total entity populations')));
+});
+
+test('entity counts must be consistent with total and timestamped to their window', () => {
+  const invalidCases = [
+    (data) => { data.windows[3].zombifiedPiglins = 4000; },
+    (data) => { data.windows[3].largestRegionEntities = 4000; },
+    (data) => { data.windows[3].entitySnapshotUtc = at(7); },
+  ];
+  for (const mutate of invalidCases) {
+    const data = scenario(); mutate(data);
+    assert.throws(() => compareSmpColocation(data));
+  }
 });
