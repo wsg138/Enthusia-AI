@@ -36,9 +36,10 @@ def snapshot(piglins=1637, total=1800, region_size=1700):
     return msg(8, worldstats)
 
 
-def sparkprofile(piglins=1637, total=1800, region_size=1700):
+def sparkprofile(piglins=1637, total=1800, region_size=1700, threshold=True):
     metadata = v(2, 1791756544569) + v(11, 1791756784726) + v(12, 3586)
-    metadata += msg(5, v(3, 100000) + v(4, 316)) + msg(8, snapshot(piglins, total, region_size))
+    metadata += msg(5, v(3, 100000) + v(4, 316) if threshold else v(2, 1))
+    metadata += msg(8, snapshot(piglins, total, region_size))
     metrics = v(1, 236) + dbl(4, 11.88) + dbl(5, 59.2) + dbl(6, 371.8) + v(7, 21)
     metrics += v(11, 1791756617001) + v(12, 1791756677001)
     window = v(1, 29862610) + msg(2, metrics)
@@ -69,6 +70,12 @@ class SparkAuditTests(unittest.TestCase):
         self.assertEqual(c['qualifyingSlowTicksInCompleteWindows'], 236)
         self.assertEqual(c['tickThresholdMs'], 100)
         self.assertAlmostEqual(c['windows'][0]['tps'], 11.88)
+
+    def test_ordinary_sampler_tick_count_not_called_slow_ticks(self):
+        c = self.capture(sparkprofile(threshold=False), '.sparkprofile')
+        self.assertIsNone(c['tickThresholdMs'])
+        self.assertIsNone(c['qualifyingSlowTicksTotal'])
+        self.assertIsNone(c['windows'][0]['slowTicks'])
 
     def test_health_uses_different_wrapper_without_fabricating_windows(self):
         c = self.capture(sparkhealth(0, 100, 50), '.sparkhealth')
