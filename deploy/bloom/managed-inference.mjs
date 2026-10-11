@@ -30,7 +30,7 @@ function checkedPath(path, sha, label) {
   return { path, sha: sha.toLowerCase() };
 }
 
-async function hashPinnedFile(descriptor, maximum, label) {
+async function hashPinnedFile(descriptor, maximum, label, keepOpen = false) {
   // A path-level stat followed by a separate createReadStream can hash a
   // different inode if a model or executable is replaced between operations.
   // Reject direct symlinks and hash the SAME open file handle whose metadata
@@ -54,6 +54,7 @@ async function hashPinnedFile(descriptor, maximum, label) {
     throw new Error(label + ' is missing, linked or not accessible');
   }
 
+  let validated = false;
   try {
     const opened = await handle.stat();
     const sameObject = (a, b) => a.isFile() && !a.isSymbolicLink() &&
@@ -85,8 +86,10 @@ async function hashPinnedFile(descriptor, maximum, label) {
     if (digest.digest('hex') !== descriptor.sha) {
       throw new Error(label + ' SHA-256 does not match the approved artifact');
     }
+    validated = true;
+    return keepOpen ? handle : undefined;
   } finally {
-    await handle.close();
+    if (!keepOpen || !validated) await handle.close();
   }
 }
 /**
@@ -94,7 +97,11 @@ async function hashPinnedFile(descriptor, maximum, label) {
  * No arbitrary extra CLI flags, remote model URLs, unbounded parallelism,
  * model download, or shell interpreter path can be supplied by a question.
  */
-export async function prepareManagedInference(env, inferencePort) {
+export async function prepareManagedInference(env, inferencePort, options = {}) {
+  const fdLaunch = options.verifiedFdLaunch === true;
+  if (fdLaunch && process.platform !== 'linux') {
+    throw new Error('Verified descriptor launch requires Linux procfs');
+  }
   const model = checkedPath(env.ENTHUSIA_MODEL_PATH, env.ENTHUSIA_MODEL_SHA256, 'Model artifact');
   const binary = checkedPath(env.ENTHUSIA_LLAMA_SERVER_PATH,
     env.ENTHUSIA_LLAMA_SERVER_SHA256, 'Inference executable');
@@ -107,12 +114,32 @@ export async function prepareManagedInference(env, inferencePort) {
   if (!Number.isInteger(inferencePort) || inferencePort < 1024 || inferencePort > 65535) {
     throw new Error('Invalid managed inference port');
   }
-  await hashPinnedFile(model, MAX_MODEL_SIZE, 'Model artifact');
-  await hashPinnedFile(binary, MAX_BINARY_SIZE, 'Inference executable');
+  // The real Linux launcher retains the *verified* open inodes and gives
+  // them fixed child FDs 3 (executable) and 4 (GGUF), not mutable pathnames.
+  // This avoids copying ~19 GB and prevents a post-check rename/symlink swap
+  // from redirecting execve() or llama.cpp's model open().
+  const modelHandle = await hashPinnedFile(model, MAX_MODEL_SIZE, 'Model artifact', fdLaunch);
+  let binaryHandle;
+  try {
+    binaryHandle = await hashPinnedFile(binary, MAX_BINARY_SIZE, 'Inference executable', fdLaunch);
+  } catch (error) {
+    await modelHandle?.close();
+    throw error;
+  }
+  let released = false;
+  const closePinnedFiles = async () => {
+    if (released) return;
+    released = true;
+    await Promise.all([binaryHandle?.close(), modelHandle?.close()]);
+  };
   return {
-    executable: binary.path,
+    executable: fdLaunch ? '/proc/self/fd/3' : binary.path,
+    ...(fdLaunch ? {
+      descriptorFds: [binaryHandle.fd, modelHandle.fd],
+      closePinnedFiles,
+    } : {}),
     args: [
-      '--model', model.path,
+      '--model', fdLaunch ? '/proc/self/fd/4' : model.path,
       '--alias', modelName,
       '--host', '127.0.0.1',
       '--port', String(inferencePort),
