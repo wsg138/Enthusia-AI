@@ -9,7 +9,7 @@ The earlier 13–14-player Qwen3-30B four-thread experiment failed the shared-ho
 1. After the normal SMP restart, confirm exact **remote LoreItems active JAR SHA**, Paper build, SQLite and identity/tracking health. Do not confuse merged source with loaded binary.
 2. Acquire a fresh stable **AI stopped** baseline. Only after owner/provider risk review, compare **AI stopped**, **AI model loaded but idle**, **bounded serial inference**, and **AI stopped/recovery**.
 3. Record exact UTC phase start/end. Separate model file hashing/startup disk activity from sustained inference.
-4. Match SMP player count, loaded chunks, container/hopper and entity workload, other co-hosted processes, server build and LoreItems SHA. Do not equate equal player counts with equivalent workloads.
+4. Match SMP player count, loaded chunks, total entities, per-mob counts (especially zombified piglins), the largest entity region, container/hopper and entity workload, other co-hosted processes, server build and LoreItems SHA. Do not equate equal player counts or TPS with equivalent workloads. **An October 11 comparison missed a concentrated 1,637-piglin farm: entity checks are mandatory before any clean verdict.**
 5. Capture Spark profiles, TPS and per-window MSPT p50/p95/p99, plus independent CPU affinity/throttling, RAM/swap/major faults, disk IO and CPU usage of both containers. Spark only samples the SMP JVM, **not** native llama.cpp.
 6. Stop **only the AI workload** on material SMP degradation. No implicit SMP restart, automatic repeat, CPU pinning changes, production AI rollout, or GPU spending.
 
@@ -41,6 +41,10 @@ Example input *shape* with one deliberately incomplete synthetic window (not a r
       "activityLabel": "matched-survival",
       "players": 14,
       "loadedChunks": 3000,
+      "entitySnapshotUtc": "2026-10-10T00:00:30.000Z",
+      "totalEntities": 2800,
+      "zombifiedPiglins": 120,
+      "largestRegionEntities": 210,
       "tps": 20,
       "msptP50": 15,
       "msptP95": 32,
@@ -53,6 +57,14 @@ Example input *shape* with one deliberately incomplete synthetic window (not a r
 Phases: off, idle, inference, recovery. Provide **at least two OFF and two INFERENCE windows** with a real 80% or greater timed overlap of each INFERENCE window with actual model activity; add IDLE and RECOVERY when available. Include recorded player/activity and loaded-chunk observations, not guesses. Input phases may not overlap in time.
 
 Missing p95/p99 must be omitted, never replaced with zero or estimated from p50. A missing p95 blocks the checker from declaring no clear regression. Version/build mismatch, significantly different load and inadequate overlap also prevent clearance.
+
+### Entity-count evidence gate (added after October 11 farm confounder)
+
+A clean/no-clear-regression assessment additionally requires, for **every OFF and INFERENCE window**, independently observed `totalEntities`, `zombifiedPiglins`, `largestRegionEntities` (the maximum population in a single Spark entity region), and a real `entitySnapshotUtc` timestamp **within that window**. These may be gathered from repeated Spark health/entity snapshots while the server is operating; distinguish per-window snapshots from full-profile aggregates. A single Spark profile's final world-statistics snapshot does **not** establish the entity population across every earlier minute. Never copy that one observation into multiple windows or invent missing observations. Older files remain parseable but cannot receive a clean verdict without these fields.
+
+The checker flags material differences in mean total entities (>200 or 10%), zombified piglins (>50 or 10%), or the largest concentration (>100 or 10%), whichever threshold is greater. Thresholds are safeguards, **not proof of matched workload**. The resulting warning blocks a clean verdict; a concurrent TPS degradation can still be reported as correlation with confounders. Entity counts cover only what the underlying measurement observed (usually loaded entities), not all saved mobs in unloaded chunks.
+
+**Mandatory pre-test check:** Before asking the owner to run another CPU-intensive test, compare recent entity snapshots and refuse to treat near-identical player counts as enough. If a concentrated farm is online, no stress test should be conducted merely to recreate lag. **Do not conduct an unsupervised inference run on live shared hardware.**
 
 Outputs are deliberately conservative:
 - **OBSERVED_REGRESSION_WITH_CONFOUNDERS:** performance degraded during plausibly overlapping inference; not proven AI causality.
