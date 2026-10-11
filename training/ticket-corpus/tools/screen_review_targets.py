@@ -11,12 +11,11 @@ independent semantic and factual review.
 from __future__ import annotations
 
 import argparse
+import json
+import re
 from collections import Counter, defaultdict
 from hashlib import sha256
-import json
 from pathlib import Path
-import re
-import sys
 
 EVIDENCE_CLAIM = re.compile(
     r"\b(?:I(?:'ve| have)? (?:checked|verified|confirmed|found|pulled|"
@@ -65,6 +64,21 @@ ASSERTED_RESULT = re.compile(
     r"(?<!if )the evidence (?:supports?|matches?|shows?|confirms?|indicates?)|"
     r"(?:the|our) (?:records?|logs?) (?:still |also |now |clearly )?"
     r"(?:show|shows|confirms?|indicates?))\b", re.IGNORECASE,
+)
+
+
+TOOL_INTENT = re.compile(
+    r"\b(?:I(?:'ll| will| can| can try to)?\s+"
+    r"(?:check|compare|inspect|review|verify|look up|pull|correlate|trace|query)|"
+    r"let me\s+(?:check|compare|inspect|review|verify|look up|pull|trace|query)|"
+    r"I(?:'m| am)\s+(?:checking|comparing|inspecting|reviewing|verifying|"
+    r"looking up|pulling|tracing|querying))\b",
+    re.IGNORECASE,
+)
+FUTURE_HANDOFF = re.compile(
+    r"\bI(?:'ll| will| can)\s+(?:send|flag|hand|pass|forward|escalate)"
+    r".{0,80}\b(?:staff|moderators?|admins?|team)\b",
+    re.IGNORECASE,
 )
 
 
@@ -155,53 +169,91 @@ def verify_staged(drafts: list, source_index: list, manifest: dict):
     return by_id, by_src, by_entry
 
 
-def flag_case(draft: dict, meta: dict, duplicate_frequency: int) -> dict:
-    answer = draft["expected_answer"]
-    messages = draft["messages"]
-    history = " ".join(
-        m.get("content", "") for m in messages if m.get("role") == "assistant"
+def _trace_signal_flags(
+    checked_answer: str, checked_history: str, answer: str, history: str, flags: set[str]
+) -> None:
+    completed_target = bool(
+        EVIDENCE_CLAIM.search(checked_answer)
+        or ASSERTED_RESULT.search(checked_answer)
+        or SOURCE_FINDING.search(answer)
+        or UNVERIFIED_HANDOFF.search(checked_answer)
     )
-    # Normalize only the screening view. The original record and its reviewed
-    # SHA-256 remain unchanged.
+    completed_context = bool(
+        EVIDENCE_CLAIM.search(checked_history)
+        or ASSERTED_RESULT.search(checked_history)
+        or SOURCE_FINDING.search(history)
+        or UNVERIFIED_HANDOFF.search(checked_history)
+    )
+    target_capability = bool(
+        TOOL_INTENT.search(checked_answer) or FUTURE_HANDOFF.search(checked_answer)
+    )
+    context_capability = bool(
+        TOOL_INTENT.search(checked_history) or FUTURE_HANDOFF.search(checked_history)
+    )
+    if target_capability:
+        flags.add("unverified_tool_capability_promise_in_target")
+    if context_capability:
+        flags.add("unverified_tool_capability_promise_in_context")
+    if (
+        "unverified_tool_result_claim" in flags
+        and not completed_target
+        and not completed_context
+        and not target_capability
+        and not context_capability
+    ):
+        flags.add("inherited_tool_warning_no_lexical_trigger")
+
+
+def _add_repeat_flags(
+    flags: set[str], duplicate_frequency: int, global_duplicate_frequency: int | None
+) -> None:
+    if duplicate_frequency >= 4:
+        flags.add("repeated_target_text_4plus")
+    global_count = duplicate_frequency if global_duplicate_frequency is None else global_duplicate_frequency
+    if global_count >= 4 and duplicate_frequency < 4:
+        flags.add("cross_lane_repeated_target_text_4plus")
+
+
+URGENT_FLAGS = frozenset({
+    "unsupported_verified_result_in_target",
+    "unsupported_verified_result_in_context",
+    "synthetic_artifact_wording_in_target",
+    "synthetic_artifact_wording_in_context",
+    "discretionary_action_promised",
+    "unanchored_source_finding_in_target",
+    "unanchored_source_finding_in_context",
+    "unverified_staff_handoff_in_target",
+    "unverified_staff_handoff_in_context",
+    "sensitive_credential_request_review",
+})
+
+
+def _content_flags(answer: str, history: str, flags: set[str]) -> None:
+    for text, suffix in ((answer, "target"), (history, "context")):
+        checked = text.replace("’", "'").replace("‘", "'")
+        patterns = (
+            (EVIDENCE_CLAIM.search(checked) or ASSERTED_RESULT.search(checked),
+             "unsupported_verified_result"),
+            (ARTIFACT.search(text) or SYNTHETIC_LANGUAGE.search(text),
+             "synthetic_artifact_wording"),
+            (SOURCE_FINDING.search(text), "unanchored_source_finding"),
+            (UNVERIFIED_HANDOFF.search(checked), "unverified_staff_handoff"),
+        )
+        flags.update(f"{name}_in_{suffix}" for matched, name in patterns if matched)
     checked_answer = answer.replace("’", "'").replace("‘", "'")
-    checked_history = history.replace("’", "'").replace("‘", "'")
-    flags = set(draft.get("review_flags", []))
-    if EVIDENCE_CLAIM.search(checked_answer) or ASSERTED_RESULT.search(checked_answer):
-        flags.add("unsupported_verified_result_in_target")
-    if EVIDENCE_CLAIM.search(checked_history) or ASSERTED_RESULT.search(checked_history):
-        flags.add("unsupported_verified_result_in_context")
-    if ARTIFACT.search(answer) or SYNTHETIC_LANGUAGE.search(answer):
-        flags.add("synthetic_artifact_wording_in_target")
-    if ARTIFACT.search(history) or SYNTHETIC_LANGUAGE.search(history):
-        flags.add("synthetic_artifact_wording_in_context")
-    if SOURCE_FINDING.search(answer):
-        flags.add("unanchored_source_finding_in_target")
-    if SOURCE_FINDING.search(history):
-        flags.add("unanchored_source_finding_in_context")
-    if UNVERIFIED_HANDOFF.search(checked_answer):
-        flags.add("unverified_staff_handoff_in_target")
-    if UNVERIFIED_HANDOFF.search(checked_history):
-        flags.add("unverified_staff_handoff_in_context")
     if PROMISE.search(checked_answer):
         flags.add("discretionary_action_promised")
     if SECRETS_REQUEST.search(checked_answer):
         flags.add("sensitive_credential_request_review")
-    if duplicate_frequency >= 4:
-        flags.add("repeated_target_text_4plus")
-    refs = meta.get("source_refs", [])
-    if any(
-        MUTABLE.search(str(ref.get("ref", "")))
-        and not PINNED.search(str(ref.get("ref", "")))
-        for ref in refs if isinstance(ref, dict)
-    ):
-        flags.add("mutable_referenced_source")
-    # Distinguish issue links and private editorial aliases from unpinned
-    # repository paths. An issue existing does NOT verify an incident.
-    # Keep every previously flagged reference pending independent review.
+
+
+def _source_flags(refs: list, flags: set[str]) -> None:
     for ref in refs:
         if not isinstance(ref, dict):
             continue
         value = str(ref.get("ref", ""))
+        if MUTABLE.search(value) and not PINNED.search(value):
+            flags.add("mutable_referenced_source")
         if "@" in value or value.startswith(("private:", "ticket-rewrite-")):
             continue
         if GITHUB_ISSUE_REF.fullmatch(value):
@@ -210,6 +262,9 @@ def flag_case(draft: dict, meta: dict, duplicate_frequency: int) -> dict:
             flags.add("private_rewrite_alias_review")
         else:
             flags.add("nonversioned_ref_review")
+
+
+def _format_flags(answer: str, messages: list, flags: set[str]) -> None:
     if not messages or messages[-1].get("role") != "user":
         flags.add("prompt_not_last_player_turn")
     if not answer.strip():
@@ -217,38 +272,61 @@ def flag_case(draft: dict, meta: dict, duplicate_frequency: int) -> dict:
     if len(answer.split()) >= 130:
         flags.add("long_support_reply_review")
 
-    urgent = {
-        "unsupported_verified_result_in_target",
-        "unsupported_verified_result_in_context",
-        "synthetic_artifact_wording_in_target",
-        "synthetic_artifact_wording_in_context",
-        "discretionary_action_promised",
-        "unanchored_source_finding_in_target",
-        "unanchored_source_finding_in_context",
-        "unverified_staff_handoff_in_target",
-        "unverified_staff_handoff_in_context",
-        "sensitive_credential_request_review",
-    }
-    if flags & urgent:
-        tier = "EVIDENCE_OR_SAFETY_REVIEW"
-    elif flags:
-        tier = "STYLE_OR_PROVENANCE_REVIEW"
-    else:
-        tier = "STANDARD_INDEPENDENT_REVIEW"
+
+def _risk_tier(flags: set[str]) -> str:
+    if flags & URGENT_FLAGS:
+        return "EVIDENCE_OR_SAFETY_REVIEW"
+    return "STYLE_OR_PROVENANCE_REVIEW" if flags else "STANDARD_INDEPENDENT_REVIEW"
+
+
+def flag_case(
+    draft: dict, meta: dict, duplicate_frequency: int,
+    global_duplicate_frequency: int | None = None,
+) -> dict:
+    answer = draft["expected_answer"]
+    messages = draft["messages"]
+    history = " ".join(
+        m.get("content", "") for m in messages if m.get("role") == "assistant"
+    )
+    checked_answer = answer.replace("’", "'").replace("‘", "'")
+    checked_history = history.replace("’", "'").replace("‘", "'")
+    flags = set(draft.get("review_flags", []))
+    _content_flags(answer, history, flags)
+    _trace_signal_flags(checked_answer, checked_history, answer, history, flags)
+    _add_repeat_flags(flags, duplicate_frequency, global_duplicate_frequency)
+    refs = meta.get("source_refs", [])
+    _source_flags(refs, flags)
+    _format_flags(answer, messages, flags)
     return {
         "draft_id": draft["id"], "source_candidate_id": meta["source_candidate_id"],
         "lane": draft["id"][:3], "family_group": draft["family_group"],
-        "risk_tier": tier, "flags": sorted(flags),
-        "source_filename": meta["source_filename"],
-        "source_line": meta["source_line"],
-        "review_status": "PENDING_INDEPENDENT",
-        "rights_clearance": "NOT_VERIFIED",
-        "production_evidence_verified": False,
-        "training_eligible": False,
+        "risk_tier": _risk_tier(flags), "flags": sorted(flags),
+        "source_filename": meta["source_filename"], "source_line": meta["source_line"],
+        "review_status": "PENDING_INDEPENDENT", "rights_clearance": "NOT_VERIFIED",
+        "production_evidence_verified": False, "training_eligible": False,
         "reviewer_notes": "",
-        # Keep prompt and response in the private queue, never stdout/GitHub.
-        "prompt": messages, "proposed_answer": answer,
-        "source_refs": refs,
+        "prompt": messages, "proposed_answer": answer, "source_refs": refs,
+    }
+
+
+def _repeat_summary(freq: Counter, global_freq: Counter) -> dict:
+    lane_sizes = [count for count in freq.values() if count >= 4]
+    global_sizes = [count for count in global_freq.values() if count >= 4]
+    cross_lane = 0
+    for answer_key, count in global_freq.items():
+        if count < 4:
+            continue
+        lane_max = max(
+            (lane_count for (_, key), lane_count in freq.items() if key == answer_key),
+            default=0,
+        )
+        cross_lane += lane_max < 4
+    return {
+        "exact_repeat_groups_4plus": len(lane_sizes),
+        "exact_repeat_rows_4plus": sum(lane_sizes),
+        "largest_exact_repeat_group": max(lane_sizes, default=0),
+        "global_exact_repeat_groups_4plus": len(global_sizes),
+        "cross_lane_exact_repeat_groups_4plus": cross_lane,
     }
 
 
@@ -265,10 +343,19 @@ def screen(staging: Path, output: Path):
         (row["id"][:3], NORMALIZE.sub(" ", row["expected_answer"].strip().lower()))
         for row in drafts
     )
+    global_freq = Counter(
+        NORMALIZE.sub(" ", row["expected_answer"].strip().lower())
+        for row in drafts
+    )
     cases = []
     for rid, draft in sorted(by_id.items()):
         answer_key = NORMALIZE.sub(" ", draft["expected_answer"].strip().lower())
-        cases.append(flag_case(draft, by_src[rid], freq[(rid[:3], answer_key)]))
+        cases.append(flag_case(
+            draft,
+            by_src[rid],
+            freq[(rid[:3], answer_key)],
+            global_freq[answer_key],
+        ))
     tiers = {
         "EVIDENCE_OR_SAFETY_REVIEW": 0,
         "STYLE_OR_PROVENANCE_REVIEW": 1,
@@ -312,6 +399,7 @@ def screen(staging: Path, output: Path):
         "drafts": len(cases), "unique_families": len(family_counts),
         "risk_tiers": dict(tier_counts),
         "flag_counts": dict(sorted(flag_counts.items())),
+        **_repeat_summary(freq, global_freq),
         "manual_sample_size": len(selected),
         "manual_sample_families": len({c["family_group"] for c in selected}),
         "all_review_statuses": "PENDING_INDEPENDENT",
