@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "status": "benchmark_before_lock",
+  "candidates": [
+    {
+      "id": "Qwen/Qwen3.5-35B-A3B",
+      "role": "primary_candidate",
+      "total_parameters_billion": 35,
+      "activated_parameters_billion": 3,
+      "license": "Apache-2.0",
+      "notes": [
+        "Primary local/runtime and domain-SFT candidate.",
+        "Use the post-trained checkpoint as the default LoRA/QLoRA target so Enthusia training preserves general instruction and agent behavior.",
+        "Keep the Base checkpoint as an experimental alternative only if evaluation shows a clear reason to retrain instruction behavior.",
+        "Current GGUF Q4_K_M baseline is 21.2 GB and is being benchmarked locally with llama.cpp.",
+        "Benchmark tool use, support QA, RAM, CPU impact, and quantization before final lock."
+      ],
+      "serving_reference": "ggml-org/Qwen3.5-35B-A3B-GGUF",
+      "locked": false,
+      "training_target": "Qwen/Qwen3.5-35B-A3B",
+      "base_checkpoint": "Qwen/Qwen3.5-35B-A3B-Base"
+    },
+    {
+      "id": "Qwen/Qwen3-30B-A3B",
+      "role": "fallback_candidate",
+      "total_parameters_billion": 30.5,
+      "activated_parameters_billion": 3.3,
+      "license": "Apache-2.0",
+      "notes": [
+        "Established MoE candidate already anticipated by the master specification.",
+        "Strong local serving ecosystem and lower total parameter footprint than Qwen3.5-35B-A3B.",
+        "Retain as fallback if Qwen3.5 training/serving support or quality/cost is worse."
+      ],
+      "serving_reference": "Qwen/Qwen3-30B-A3B",
+      "locked": false,
+      "training_target": "Qwen/Qwen3-30B-A3B",
+      "base_checkpoint": "Qwen/Qwen3-30B-A3B-Base"
+    }
+  ],
+  "selection_gate": {
+    "must_compare": [
+      "baseline Enthusia golden-set accuracy",
+      "tool-call/schema adherence",
+      "stale-truth behavior",
+      "hallucination rate",
+      "escalation behavior",
+      "RAM footprint",
+      "CPU and memory-bandwidth impact on shared dedicated host",
+      "tokens per second at planned quantization",
+      "fine-tune VRAM/cost feasibility within USD 25"
+    ],
+    "gpu_rental_budget_usd": 25,
+    "paid_training_allowed_now": false,
+    "default_sft_strategy": "LoRA/QLoRA on the post-trained checkpoint; Base remains an evaluation-only alternative unless explicitly selected."
+  }
+}

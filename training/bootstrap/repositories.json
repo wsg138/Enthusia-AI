@@ -1,0 +1,578 @@
+{
+  "schema_version": 1,
+  "generated_from_owner": "wsg138",
+  "purpose": "Authoritative source inventory for RAG grounding, synthetic-data generation, and training preparation. Raw mutable facts from these repositories are not intended to be memorized directly into model weights.",
+  "repositories": [
+    {
+      "owner": "wsg138",
+      "name": "enthusia-site",
+      "default_branch": "main",
+      "role": "public_docs",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "wsg138",
+      "name": "CustomEnchants",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": false,
+      "use_for_rag": false,
+      "use_for_synthetic_grounding": false,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Legacy CustomEnchantsPlus project not present in current Enthusia production snapshot; repository paths reference another network context."
+    },
+    {
+      "owner": "wsg138",
+      "name": "ItemShops",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "wsg138",
+      "name": "EnthusiaCommend",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "wsg138",
+      "name": "EnthusiaTags",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "wsg138",
+      "name": "EnthusiaTeleport",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "wsg138",
+      "name": "FasterSleep",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "wsg138",
+      "name": "MaceGuard",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "wsg138",
+      "name": "PlayTimePlugin",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "wsg138",
+      "name": "EnthusiaCurrency",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "wsg138",
+      "name": "EnthusiaDonor",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "BadgersMC",
+      "name": "LumaGuilds",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Canonical upstream verified against current Enthusia production; replaces stale wsg138 fork for current-source grounding."
+    },
+    {
+      "owner": "wsg138",
+      "name": "Enthusia-case-review",
+      "default_branch": "main",
+      "role": "staff_system",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "wsg138",
+      "name": "WarzoneDuels",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "wsg138",
+      "name": "PearlGlitchBlocker",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "wsg138",
+      "name": "PieCloak",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "wsg138",
+      "name": "EnthusiaEvents",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "wsg138",
+      "name": "EnthusiaAutoClicker",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "wsg138",
+      "name": "EnthusiaKOTH",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "wsg138",
+      "name": "EnthusiaDoctor",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": false,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Enthusia development/staff diagnostics project not present in current production plugin snapshot; retain for development RAG only until deployment is verified."
+    },
+    {
+      "owner": "wsg138",
+      "name": "EnthusiaMarketMapper",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": false,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Private experimental Enthusia project not present in current production plugin snapshot; retain for development RAG only."
+    },
+    {
+      "owner": "BadgersMC",
+      "name": "EnthusiaMarket",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Canonical upstream release v1.0.52 matches the current production JAR byte-for-byte; replaces stale wsg138 fork."
+    },
+    {
+      "owner": "wsg138",
+      "name": "StartupGuardian",
+      "default_branch": "main",
+      "role": "infrastructure",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "wsg138",
+      "name": "EnthusiaToiletFlush",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": false,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Enthusia restart system repository not present in the current captured production plugin snapshot; retain for development RAG until live deployment is verified."
+    },
+    {
+      "owner": "wsg138",
+      "name": "EnthusiaVotes",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "wsg138",
+      "name": "EnthusiaStaff",
+      "default_branch": "main",
+      "role": "staff_system",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "wsg138",
+      "name": "EnthusiaDonorNPCs",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "wsg138",
+      "name": "EnthusiaStaff-Staging",
+      "default_branch": "main",
+      "role": "staging_reference",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": false,
+      "direct_sft": false,
+      "production_authority": "non_production_reference"
+    },
+    {
+      "owner": "wsg138",
+      "name": "EnthusiaLoreItems",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "wsg138",
+      "name": "Enthusia-Server",
+      "default_branch": "main",
+      "role": "network_configuration",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "wsg138",
+      "name": "ClaimVector",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": false,
+      "use_for_rag": false,
+      "use_for_synthetic_grounding": false,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Client mod for Lifesteal.net; unrelated to Enthusia."
+    },
+    {
+      "owner": "wsg138",
+      "name": "EnthusiaSentinel-Docs",
+      "default_branch": "main",
+      "role": "infrastructure_docs",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "wsg138",
+      "name": "gatekeeper",
+      "default_branch": "main",
+      "role": "infrastructure",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "wsg138",
+      "name": "Enthusia-RoseChat",
+      "default_branch": "master",
+      "role": "chat_system",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": false,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Current chat-system source is useful for runtime investigation, but upstream-derived documentation/support links make broad synthetic SFT grounding unsafe; use RAG/live config instead."
+    },
+    {
+      "owner": "wsg138",
+      "name": "enthusia-support-bot",
+      "default_branch": "main",
+      "role": "support_system",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "FainNeito",
+      "name": "Enthusia-Express",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Canonical upstream build matches the current production JAR byte-for-byte; replaces stale wsg138 fork."
+    },
+    {
+      "owner": "wsg138",
+      "name": "EnthusiaSentinel-Sim",
+      "default_branch": "main",
+      "role": "infrastructure_test",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": false,
+      "direct_sft": false,
+      "production_authority": "non_production_reference"
+    },
+    {
+      "owner": "wsg138",
+      "name": "EnthusiaFrontier",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "wsg138",
+      "name": "AI-Moderation-API",
+      "default_branch": "main",
+      "role": "moderation_system",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": false,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Separate moderation sibling system; keep available for staff/development RAG but do not use its implementation/repository docs as support-model SFT grounding."
+    },
+    {
+      "owner": "wsg138",
+      "name": "Enthusia-AI",
+      "default_branch": "main",
+      "role": "ai_system",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification"
+    },
+    {
+      "owner": "BadgersMC",
+      "name": "EnthusiaAdvancements",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Canonical ecosystem source identified by the live production plugin audit; current deployment still requires live/hash verification when answering volatile runtime questions."
+    },
+    {
+      "owner": "BadgersMC",
+      "name": "EnthusiaBiomes",
+      "default_branch": "master",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Canonical ecosystem source identified by the live production plugin audit; current deployment still requires live/hash verification when answering volatile runtime questions."
+    },
+    {
+      "owner": "BadgersMC",
+      "name": "EnthusiaGiveaway",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Canonical ecosystem source identified by the live production plugin audit; current deployment still requires live/hash verification when answering volatile runtime questions."
+    },
+    {
+      "owner": "BadgersMC",
+      "name": "LumaTrivia",
+      "default_branch": "main",
+      "role": "minecraft_plugin",
+      "include": true,
+      "use_for_rag": true,
+      "use_for_synthetic_grounding": true,
+      "direct_sft": false,
+      "production_authority": "requires_deployment_verification",
+      "policy_note": "Canonical ecosystem source identified by the live production plugin audit; current deployment still requires live/hash verification when answering volatile runtime questions."
+    }
+  ],
+  "unresolved_sources": [
+    {
+      "plugin": "EnthusiaDisplay",
+      "production_artifact": "EnthusiaDisplay-0.1.8-test.jar",
+      "main_class": "net.enthusia.display.EnthusiaDisplayPlugin",
+      "status": "source_unresolved",
+      "include_in_github_collection": false,
+      "use_for_rag": false,
+      "use_for_synthetic_grounding": false,
+      "reason": "No accessible canonical repository was found under wsg138, BadgersMC, FainNeito, or NotBorlyn, and local/global source search did not resolve the plugin. Use verified live deployment/config evidence only until provenance is resolved."
+    },
+    {
+      "plugin": "EnthusiaMapShields",
+      "production_artifact": "EnthusiaMapShields-0.1.4.jar",
+      "maven_coordinates": "info.enthusia:EnthusiaMapShields:0.1.4",
+      "main_class": "info.enthusia.mapshields.infrastructure.EnthusiaMapShieldsPlugin",
+      "status": "source_unresolved",
+      "include_in_github_collection": false,
+      "use_for_rag": false,
+      "use_for_synthetic_grounding": false,
+      "reason": "No accessible canonical repository was found under wsg138, BadgersMC, FainNeito, or NotBorlyn, and local/global source search did not resolve the plugin. Use verified live deployment/config evidence only until provenance is resolved."
+    }
+  ],
+  "excluded_repositories": [
+    {
+      "name": "school-dev-test",
+      "reason": "unrelated school/test work"
+    },
+    {
+      "name": "desktop-setup-handoff",
+      "reason": "personal workstation handoff, not server product truth"
+    },
+    {
+      "name": "the-quest-log",
+      "reason": "not currently identified as authoritative Enthusia product source"
+    },
+    {
+      "name": "Cart-Montage-Catalogue",
+      "reason": "media catalogue, not support/product truth"
+    },
+    {
+      "name": "EnthusiaWallpapers",
+      "reason": "media assets"
+    },
+    {
+      "name": "bedrock-afk-bots-pi",
+      "reason": "not currently approved as authoritative server-support source"
+    },
+    {
+      "name": "DiaryKeeper",
+      "reason": "not currently approved as authoritative server-support source"
+    },
+    {
+      "name": "PistonEventProbe",
+      "reason": "diagnostic/probe repository; add later if a specific feature requires it"
+    },
+    {
+      "name": "AnarchyExploitFixes",
+      "reason": "not currently approved as authoritative Enthusia support source"
+    },
+    {
+      "name": "WarzoneRotator",
+      "reason": "archived"
+    },
+    {
+      "name": "ClaimVector",
+      "reason": "Client mod for Lifesteal.net; unrelated to Enthusia."
+    },
+    {
+      "name": "CustomEnchants",
+      "reason": "Legacy CustomEnchantsPlus project not present in current Enthusia production snapshot; repository paths reference another network context."
+    }
+  ]
+}
