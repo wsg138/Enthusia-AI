@@ -1,0 +1,27 @@
+name: Spark binary audit validation
+
+on:
+  pull_request:
+    paths:
+      - "deploy/bloom/spark_report_audit.py"
+      - "deploy/bloom/test_spark_report_audit.py"
+      - "deploy/bloom/SPARK-BINARY-AUDIT.md"
+      - ".github/workflows/spark-binary-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  parser-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify protobuf decoding, population and corruption safeguards
+        run: python -m unittest discover -s deploy/bloom -p "test_spark_report_audit.py" -v
+      - name: Compile parser
+        run: python -m py_compile deploy/bloom/spark_report_audit.py
