@@ -45,6 +45,12 @@ const summarize = (rows) => {
     medianWindowP99Ms: quantile('msptP99'),
     meanPlayers: rounded(average('players')),
     meanLoadedChunks: rounded(average('loadedChunks')),
+    meanTotalEntities: rows.every((row) => row.totalEntities != null)
+      ? rounded(average('totalEntities')) : null,
+    meanZombifiedPiglins: rows.every((row) => row.zombifiedPiglins != null)
+      ? rounded(average('zombifiedPiglins')) : null,
+    meanLargestRegionEntities: rows.every((row) => row.largestRegionEntities != null)
+      ? rounded(average('largestRegionEntities')) : null,
   };
 };
 
@@ -73,6 +79,22 @@ export function compareSmpColocation(input) {
     }
     number(row.players, label + '.players', 0, 10000);
     number(row.loadedChunks, label + '.loadedChunks', 0, 1000000);
+    // Require timed entity observations before treating separate tests as matched.
+    // Counts are optional for legacy inputs, but their absence blocks clearance.
+    for (const field of ['totalEntities', 'zombifiedPiglins', 'largestRegionEntities']) {
+      if (row[field] != null) number(row[field], label + '.' + field, 0, 1000000);
+    }
+    if (row.totalEntities != null &&
+        ((row.zombifiedPiglins != null && row.zombifiedPiglins > row.totalEntities) ||
+         (row.largestRegionEntities != null && row.largestRegionEntities > row.totalEntities))) {
+      throw new Error(label + ' entity subset exceeds totalEntities');
+    }
+    if (row.entitySnapshotUtc != null) {
+      const observedAt = timestamp(row.entitySnapshotUtc, label + '.entitySnapshotUtc');
+      if (observedAt < start || observedAt > end) {
+        throw new Error(label + ' entitySnapshotUtc must fall inside its own window');
+      }
+    }
     number(row.tps, label + '.tps', 0, 20.1);
     number(row.msptP50, label + '.msptP50', 0, 60000);
     if (row.msptP95 != null) number(row.msptP95, label + '.msptP95', row.msptP50, 60000);
@@ -116,6 +138,24 @@ export function compareSmpColocation(input) {
         Math.max(100, off.meanLoadedChunks * 0.25)) {
       warnings.push('Loaded chunk counts differ by more than 100 or 25%');
     }
+    const matched = [...baseline, ...inference];
+    const entityFields = ['totalEntities', 'zombifiedPiglins', 'largestRegionEntities'];
+    if (matched.some((row) => entityFields.some((field) => row[field] == null) ||
+        row.entitySnapshotUtc == null)) {
+      warnings.push('Missing timestamped entity counts or largest region; cannot clear a matched comparison');
+    } else {
+      const substantial = (left, right, minimum, ratio) =>
+        Math.abs(left - right) > Math.max(minimum, Math.max(left, right) * ratio);
+      if (substantial(off.meanTotalEntities, on.meanTotalEntities, 200, 0.1)) {
+        warnings.push('Total entity populations differ materially across comparison windows');
+      }
+      if (substantial(off.meanZombifiedPiglins, on.meanZombifiedPiglins, 50, 0.1)) {
+        warnings.push('Zombified piglin populations differ materially across comparison windows');
+      }
+      if (substantial(off.meanLargestRegionEntities, on.meanLargestRegionEntities, 100, 0.1)) {
+        warnings.push('Largest entity concentrations differ materially across comparison windows');
+      }
+    }
     if (off.medianWindowP95Ms === null || on.medianWindowP95Ms === null) {
       warnings.push('p95 MSPT unavailable; cannot clear all metrics');
     }
@@ -127,6 +167,12 @@ export function compareSmpColocation(input) {
     medianWindowP50Ms: rounded(on.medianWindowP50Ms - off.medianWindowP50Ms),
     medianWindowP95Ms: on.medianWindowP95Ms == null || off.medianWindowP95Ms == null
       ? null : rounded(on.medianWindowP95Ms - off.medianWindowP95Ms),
+    meanTotalEntities: on.meanTotalEntities == null || off.meanTotalEntities == null
+      ? null : rounded(on.meanTotalEntities - off.meanTotalEntities),
+    meanZombifiedPiglins: on.meanZombifiedPiglins == null || off.meanZombifiedPiglins == null
+      ? null : rounded(on.meanZombifiedPiglins - off.meanZombifiedPiglins),
+    meanLargestRegionEntities: on.meanLargestRegionEntities == null || off.meanLargestRegionEntities == null
+      ? null : rounded(on.meanLargestRegionEntities - off.meanLargestRegionEntities),
   } : null;
   const disqualifying = warnings.filter((w) =>
     w !== 'Missing AI-loaded/idle window' && w !== 'Missing recovery window');
@@ -153,7 +199,7 @@ export function compareSmpColocation(input) {
       end: new Date(loadTo).toISOString(),
     },
     warnings,
-    caveat: 'These are medians of window percentiles, NOT pooled tick percentiles. Spark does not sample the AI container. Correlation is not CPU attribution and this is never a production-safety certification.',
+    caveat: 'These are medians of window percentiles, NOT pooled tick percentiles. Entity counts require independently timestamped per-window measurements, not a single whole-profile snapshot. Spark does not sample the AI container. Correlation is not CPU attribution and this is never a production-safety certification.',
   };
 }
 
