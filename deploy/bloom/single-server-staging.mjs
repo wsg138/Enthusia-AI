@@ -319,11 +319,13 @@ export async function runSingleServer(plan, env = process.env) {
       (plan.managedIndexer && await portOccupied(plan.indexerPort))) {
     throw new Error('One or more requested local service ports are already occupied');
   }
-  // Hash checking must succeed BEFORE starting any child service.
-  const model = plan.managedInference
-    ? await prepareManagedInference(env, plan.inferencePort)
-    : null;
+  // Prepare child configuration before opening verified model descriptors.
   const envs = makeStagingEnvironments(plan, env);
+  // Hash checking succeeds BEFORE any child starts. For real Linux managed
+  // inference, verified executable+GGUF FDs remain held through spawn().
+  const model = plan.managedInference
+    ? await prepareManagedInference(env, plan.inferencePort, { verifiedFdLaunch: true })
+    : null;
   const children = [];
   let stopping = false;
   let stopReason = 'stopped';
@@ -357,12 +359,21 @@ export async function runSingleServer(plan, env = process.env) {
 
   try {
     if (model) {
-      // The binary and model hashes were checked above. Never pass the API
-      // key in argv; llama.cpp reads LLAMA_API_KEY from the child environment.
-      const child = spawn(model.executable, model.args, {
-        cwd: plan.root, env: envs.inference, windowsHide: true,
-        stdio: ['ignore', 'inherit', 'inherit'],
-      });
+      // Launch from the verified inode FDs, not from a re-resolved path:
+      // child FD 3 executes the pinned binary; FD 4 is the GGUF opened by
+      // llama.cpp. No model/binary pathname reaches the child. The API key
+      // stays in the child environment, never argv or logs.
+      let child;
+      try {
+        child = spawn(model.executable, model.args, {
+          cwd: plan.root, env: envs.inference, windowsHide: true,
+          stdio: ['ignore', 'inherit', 'inherit', ...model.descriptorFds],
+        });
+      } finally {
+        // POSIX spawn duplicates these descriptors into the child before it
+        // returns. Do not keep a second full-inference file handle in parent.
+        await model.closePinnedFiles();
+      }
       children.push({ name: 'inference', child });
       child.on('error', () => {
         if (!stopping) { stopReason = 'inference launch failed'; notifyExit(); }
@@ -402,6 +413,7 @@ export async function runSingleServer(plan, env = process.env) {
     if (stopReason.includes('unexpected') || stopReason.includes('failed')) throw new Error(stopReason);
   } finally {
     stopping = true;
+    await model?.closePinnedFiles?.();
     await stopAll(children);
     process.off('SIGTERM', onSigTerm);
     process.off('SIGINT', onSigInt);
