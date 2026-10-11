@@ -6,8 +6,8 @@
  * a child can be spawned. Real model artifacts are NOT in the Git repository.
  */
 import { createHash } from 'node:crypto';
-import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { lstat, open } from 'node:fs/promises';
 import { isAbsolute } from 'node:path';
 
 const SHA256 = /^[a-f0-9]{64}$/i;
@@ -31,31 +31,64 @@ function checkedPath(path, sha, label) {
 }
 
 async function hashPinnedFile(descriptor, maximum, label) {
-  let before;
+  // A path-level stat followed by a separate createReadStream can hash a
+  // different inode if a model or executable is replaced between operations.
+  // Reject direct symlinks and hash the SAME open file handle whose metadata
+  // is checked before/after reading. Linux O_NOFOLLOW also closes the narrow
+  // lstat-to-open symlink replacement window.
+  let pathBefore;
   try {
-    before = await stat(descriptor.path);
+    pathBefore = await lstat(descriptor.path);
   } catch {
     throw new Error(label + ' is missing or not accessible');
   }
-  if (!before.isFile() || before.size < 1 || before.size > maximum) {
-    throw new Error(label + ' is not an allowed regular file size');
+  if (!pathBefore.isFile() || pathBefore.isSymbolicLink() ||
+      pathBefore.size < 1 || pathBefore.size > maximum) {
+    throw new Error(label + ' is not an allowed regular non-symlink file size');
   }
-  const hash = createHash('sha256');
+
+  let handle;
   try {
-    for await (const block of createReadStream(descriptor.path)) hash.update(block);
+    handle = await open(descriptor.path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
   } catch {
-    throw new Error(label + ' could not be read');
+    throw new Error(label + ' is missing, linked or not accessible');
   }
-  const after = await stat(descriptor.path);
-  if (!after.isFile() || before.size !== after.size || before.mtimeMs !== after.mtimeMs ||
-      before.ino !== after.ino) {
-    throw new Error(label + ' changed during verification');
-  }
-  if (hash.digest('hex') !== descriptor.sha) {
-    throw new Error(label + ' SHA-256 does not match the approved artifact');
+
+  try {
+    const opened = await handle.stat();
+    const sameObject = (a, b) => a.isFile() && !a.isSymbolicLink() &&
+      a.dev === b.dev && a.ino === b.ino && a.size === b.size &&
+      a.mtimeMs === b.mtimeMs && a.ctimeMs === b.ctimeMs;
+    if (!sameObject(opened, pathBefore)) {
+      throw new Error(label + ' changed during verification');
+    }
+    const digest = createHash('sha256');
+    // Keep the file descriptor open while hashing; never reopen by pathname.
+    try {
+      for await (const chunk of handle.createReadStream({ autoClose: false })) {
+        digest.update(chunk);
+      }
+    } catch {
+      throw new Error(label + ' could not be read');
+    }
+    let afterRead;
+    let pathAfter;
+    try {
+      afterRead = await handle.stat();
+      pathAfter = await lstat(descriptor.path);
+    } catch {
+      throw new Error(label + ' changed during verification');
+    }
+    if (!sameObject(afterRead, opened) || !sameObject(pathAfter, opened)) {
+      throw new Error(label + ' changed during verification');
+    }
+    if (digest.digest('hex') !== descriptor.sha) {
+      throw new Error(label + ' SHA-256 does not match the approved artifact');
+    }
+  } finally {
+    await handle.close();
   }
 }
-
 /**
  * Real model runtime args come only from a bounded, explicit allowlist.
  * No arbitrary extra CLI flags, remote model URLs, unbounded parallelism,
