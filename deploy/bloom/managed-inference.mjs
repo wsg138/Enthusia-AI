@@ -64,11 +64,21 @@ async function hashPinnedFile(descriptor, maximum, label) {
     }
     const digest = createHash('sha256');
     // Keep the file descriptor open while hashing; never reopen by pathname.
-    for await (const chunk of handle.createReadStream({ autoClose: false })) {
-      digest.update(chunk);
+    try {
+      for await (const chunk of handle.createReadStream({ autoClose: false })) {
+        digest.update(chunk);
+      }
+    } catch {
+      throw new Error(label + ' could not be read');
     }
-    const afterRead = await handle.stat();
-    const pathAfter = await lstat(descriptor.path);
+    let afterRead;
+    let pathAfter;
+    try {
+      afterRead = await handle.stat();
+      pathAfter = await lstat(descriptor.path);
+    } catch {
+      throw new Error(label + ' changed during verification');
+    }
     if (!sameObject(afterRead, opened) || !sameObject(pathAfter, opened)) {
       throw new Error(label + ' changed during verification');
     }
