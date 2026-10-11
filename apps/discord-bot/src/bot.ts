@@ -90,13 +90,14 @@ export class EnthusiaAiDiscordBot {
     await this.port.login();
     await this.port.registerSlashCommands();
     this.port.onMessage((message) => {
-      void this.handleMessage(message).catch((error: unknown) => {
-        this.logger.error({ error: String(error) }, 'unhandled error in message handler');
+      void this.handleMessage(message).catch(() => {
+        // Subscriber errors may embed private Discord messages or credentials.
+        this.logger.error({ category: 'message_handler_failure' }, 'unhandled error in message handler');
       });
     });
     this.port.onSlashAsk((interaction) => {
-      void this.handleSlashAsk(interaction).catch((error: unknown) => {
-        this.logger.error({ error: String(error) }, 'unhandled error in slash handler');
+      void this.handleSlashAsk(interaction).catch(() => {
+        this.logger.error({ category: 'slash_handler_failure' }, 'unhandled error in slash handler');
       });
     });
     this.started = true;
