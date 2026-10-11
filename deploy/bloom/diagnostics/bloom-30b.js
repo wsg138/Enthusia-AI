@@ -7,7 +7,7 @@ const {spawn} = require('node:child_process');
 const ROOT = process.cwd();
 const BENCH = path.join(ROOT, 'bloom-30b-bench.cjs');
 const LIMIT = 1200;
-let child, stream, timer, samples = 0, finished = false, last = null, previousPid = null;
+let child, stream, timer, samples = 0, finished = false, stopping = false, last = null, previousPid = null;
 const read = p => { try { return fs.readFileSync(p,'utf8').trim(); } catch { return null; } };
 function pairs(p) {
   const s = read(p), out = {};
@@ -105,11 +105,13 @@ function sample() {
   if(samples===LIMIT){console.log('[cpu-monitor] max 20 minutes reached; stopping samples');clearInterval(timer);}
 }
 function stop(signal) {
-  if(finished)return;
+  if(stopping)return;
+  stopping=true;
   console.log('[cpu-monitor] '+new Date().toISOString()+' stopping on '+signal);
   if(child && child.exitCode===null)child.kill('SIGTERM');
   end();
-  const t=setTimeout(()=>process.exit(0),4000);t.unref();
+  if (!child || child.exitCode !== null) process.exit(0);
+  const t=setTimeout(()=>process.exit(0),2500);t.unref();
 }
 function end() {
   if(finished)return;
