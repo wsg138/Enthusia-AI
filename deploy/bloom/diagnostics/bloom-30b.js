@@ -123,9 +123,28 @@ function end() {
 process.on('SIGINT',()=>stop('SIGINT'));
 process.on('SIGTERM',()=>stop('SIGTERM'));
 function idle(message) {console.log('[cpu-monitor] '+message+'. No inference started; manually STOP.');setInterval(()=>{},60000);}
+// The approved test may be enabled by a panel environment setting OR a one-run owner marker.
+// The owner marker is consumed atomically before model launch, preventing restart-loop replay.
+function requireOneTimeOwnerApproval() {
+  if (process.env.ENTHUSIA_BLOOM_INFERENCE_RUN_APPROVED === '1') return true;
+  const marker = path.join(ROOT, 'bloom-cpu-one-run-approval.txt');
+  const today = new Date().toISOString().slice(0,10);
+  const expected = 'APPROVE ONE ENTHUSIA AI TEST CC19EA3C '+today;
+  try {
+    const stat = fs.lstatSync(marker);
+    if(!stat.isFile() || stat.isSymbolicLink() || stat.size>110) return false;
+    if(fs.readFileSync(marker,'utf8').trim()!==expected) return false;
+    // Preserve a consumed record but never allow it to authorize another launch.
+    const consumed=path.join(ROOT, 'bloom-cpu-approval-used-'+Date.now()+'.txt');
+    fs.renameSync(marker,consumed);
+    process.env.ENTHUSIA_BLOOM_INFERENCE_RUN_APPROVED='1';
+    console.log('[cpu-monitor] one-time owner approval accepted and consumed (UTC '+today+')');
+    return true;
+  } catch {return false;}
+}
 function main(){
   if(process.platform!=='linux'||process.arch!=='x64')return idle('Linux x64 required');
-  if(process.env.ENTHUSIA_BLOOM_INFERENCE_RUN_APPROVED!=='1')return idle('Inference approval setting missing');
+  if(!requireOneTimeOwnerApproval())return idle('Inference approval missing; set panel variable or create one-time approval marker');
   const b=read(BENCH);
   if(!b || b.length>200000 || !b.includes('enthusia-qwen3-30b-a3b-sustained-smp-profiling') ||
      !b.includes('shared-host-inference-approval-required'))return idle('Guarded cached-only benchmark missing');
