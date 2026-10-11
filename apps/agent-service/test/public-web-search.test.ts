@@ -80,7 +80,7 @@ describe('staging-only public web search — no secrets, SSRF, or unsourced asse
     expect(r.error?.code).toBe('WEB_SEARCH_UNAVAILABLE');
     expect(JSON.stringify(r)).not.toContain('synthetic-secret');
   });
-  it('blocks redirects, excessive response sizes and enforces hourly search cap', async () => {
+  it('enforces the hourly public search budget', async () => {
     let calls = 0;
     const tool = new PublicWebSearchTool({
       apiKey: key,

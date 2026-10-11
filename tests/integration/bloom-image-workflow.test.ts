@@ -45,7 +45,10 @@ describe('Bloom Linux image CI review policy', () => {
     expect(workflow).toContain('docker cp "$cid":/usr/local/bin/llama-server');
     expect(workflow).toContain('sha256sum llama-server > llama-server.sha256');
     expect(workflow).toContain('cp deploy/bloom/check-bin.js bloom-native-check/check-bin.js');
-    expect(workflow).toContain('actions/upload-artifact@v4');
+    expect(workflow).toContain('actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02');
+    expect(workflow).toContain('ref: ${{ github.event.pull_request.head.sha || github.sha }}');
+    expect(workflow).toContain('actions/checkout@11d5960a326750d5838078e36cf38b85af677262');
+    expect(workflow).not.toMatch(/actions\/(?:checkout|upload-artifact)@v\d+/);
     expect(workflow).toContain('retention-days: 5');
     expect(workflow).not.toContain('docker login');
     expect(workflow).not.toContain('gh release');

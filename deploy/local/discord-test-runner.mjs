@@ -178,7 +178,7 @@ function portInUse(port) {
     const s = net.connect({ host: '127.0.0.1', port });
     s.once('connect', () => { s.destroy(); resolveDone(true); });
     s.once('error', () => { s.destroy(); resolveDone(false); });
-    s.setTimeout(1300, () => { s.destroy(); resolveDone(false); });
+    s.setTimeout(1300, () => { s.destroy(); resolveDone(true); });
   });
 }
 

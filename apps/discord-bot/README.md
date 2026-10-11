@@ -64,8 +64,8 @@ Enthusia guild. Keep credentials separate. Existing test guild
 `ENTHUSIA_DISCORD_SLASH_GUILD_ID` should be used for fast test-only registration;
 leave all auto-response channel ID lists empty until a dedicated AI test
 channel is approved. The full-message mode requests privileged Member and Message Content intents;
-the initial local test instead enables slash-only mode using just the Guilds
-intent. The privileged intents can remain off until message features are needed. Production deployment is independent of a merge.
+the reviewed staging supervisor can use slash-only mode with just the Guilds
+intent; the local test runner instead enables scoped mentions and slash commands. The privileged intents can remain off until message features are needed. Production deployment is independent of a merge.
 
 ## Owner test Discord local launch (Qwen3 8B)
 
@@ -86,8 +86,10 @@ the monorepo, and starts `deploy/local/discord-test-runner.mjs`. The test
 runner only starts when it sees the expected guild and exactly one
 `#ai-testing` text channel; it never modifies channels or ticket records.
 It scopes all user responses to that guild and channel. It enables
-`ENTHUSIA_DISCORD_SLASH_ONLY=true` so Discord needs only the `Guilds` intent;
-normal chat messages, mentions, and automatic channel triggers are ignored.
+`ENTHUSIA_DISCORD_SLASH_ONLY=false` and `ENTHUSIA_DISCORD_MENTION_ONLY=true`;
+scoped explicit mentions and `/ai ask` work in the one approved channel,
+but automatic chat-channel triggers are ignored. The runner requests privileged
+message content access for mention text; do not enable it for a live production bot.
 Use `/ai ask` in `#ai-testing` as the first smoke test. Slash interactions
 outside the allowed test channel are intentionally ignored and may time out.
 

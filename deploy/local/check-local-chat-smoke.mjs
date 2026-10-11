@@ -168,7 +168,8 @@ try {
   }
   if (publicDocs && (!String(payload.text ?? '').includes('github.com/wsg138/PieCloak/blob/') ||
       !String(payload.text ?? '').includes('documented settings') ||
-      !Array.isArray(payload.sources) || payload.sources.length !== 1)) {
+      !Array.isArray(payload.sources) || payload.sources.length !== 1 ||
+      payload.outcome !== 'answered')) {
     throw new Error('The public-source answer lacks a verified GitHub commit/source.');
   }
   console.log(publicDocs || warzone

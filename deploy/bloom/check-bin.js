@@ -43,9 +43,13 @@ async function check() {
       cwd: root, env: {}, shell: false, stdio: 'ignore', timeout: 5000,
     });
     passed = result.status === 0 && !result.error;
-    reason = passed ? 'binary-runs' : (result.error?.code === 'ENOENT'
-      ? 'missing-binary-dependency' : result.error?.code === 'EACCES'
-        ? 'execution-permission-denied' : result.signal ? 'binary-timeout' : 'binary-exited-nonzero');
+    const code = result.error?.code;
+    reason = passed ? 'binary-runs'
+      : code === 'ETIMEDOUT' ? 'binary-timeout'
+      : code === 'ENOENT' ? 'missing-binary-dependency'
+      : code === 'EACCES' || code === 'EPERM' ? 'execution-permission-denied'
+      : result.signal ? 'binary-killed-by-signal'
+      : 'binary-exited-nonzero';
   } catch (error) {
     const allowed = ['invalid-hash-file', 'invalid-file-size', 'checksum-mismatch'];
     reason = allowed.includes(error?.message) ? error.message : 'missing-or-unreadable-file';

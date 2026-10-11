@@ -142,9 +142,15 @@ async function main(): Promise<void> {
     ],
     {
       ...(publicDocs !== undefined && warzoneDocs !== undefined ? {
-        publicSourceResolver: async (request: import('@enthusia/agent-core').ResolvedChatRequest) =>
-          (await indexedDocs?.resolve(request)) ??
-          (await publicDocs.resolve(request)) ?? (await warzoneDocs.resolve(request)),
+        publicSourceResolver: async (request: import('@enthusia/agent-core').ResolvedChatRequest) => {
+          const indexed = await indexedDocs?.resolve(request);
+          if (indexed?.outcome === 'answered') return indexed;
+          // An unavailable or stale sidecar must not eclipse separately
+          // source-verified public GitHub pilots. Never turn an unverified
+          // indexer result into a verified claim merely by falling back.
+          return (await publicDocs.resolve(request)) ??
+            (await warzoneDocs.resolve(request)) ?? indexed ?? null;
+        },
       } : {}),
       ...(familiarity.onVerifiedTopicHelp !== undefined
         ? { onVerifiedTopicHelp: familiarity.onVerifiedTopicHelp }

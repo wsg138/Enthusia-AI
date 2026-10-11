@@ -112,6 +112,8 @@ export function assembleResponse(args: AssembleArgs): AgentResponse {
       memoryUpdates: [],
       escalation: null,
       traceId: request.traceId,
+      // Capability explanations are program-defined, not claims about live server state.
+      outcome: 'answered',
     };
   }
 

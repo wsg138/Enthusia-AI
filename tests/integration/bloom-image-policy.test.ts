@@ -31,7 +31,7 @@ describe('single-container Bloom staging image policy (static only)', () => {
 
   it('does not bake models or local secrets into the image', () => {
     for (const pattern of [
-      '.git', '**/.env', '**/.env.*', '**/*.pem', '**/*.key',
+      '.git', '**/.env', '**/.env.*', '**/.npmrc', '**/*.pem', '**/*.key',
       '**/*.gguf', '**/*.safetensors', '**/node_modules/**',
     ]) expect(ignores).toContain(pattern);
     expect(dockerfile).not.toContain('COPY models/');

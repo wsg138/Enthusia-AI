@@ -5,6 +5,8 @@
 **/.git
 **/.git/**
 **/.env
+**/.npmrc
+.npmrc
 **/.env.*
 **/.secrets/**
 **/*credentials.json

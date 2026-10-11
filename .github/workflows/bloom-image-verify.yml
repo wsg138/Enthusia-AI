@@ -40,8 +40,10 @@ jobs:
     timeout-minutes: 35
     steps:
       - name: Checkout exact PR commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          # On PR runs build the submitted HEAD, not GitHub's generated merge ref.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
 
       - name: Build CPU-only staging image (never publish)
@@ -99,7 +101,7 @@ jobs:
           test -s bloom-native-check/llama-server.sha256
 
       - name: Retain diagnostic binary for approved test server only
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: enthusia-linux-llama-bloom-diagnostic
           path: bloom-native-check/

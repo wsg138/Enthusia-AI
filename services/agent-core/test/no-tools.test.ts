@@ -12,6 +12,7 @@ describe('zero-tool agent behavior', () => {
     const orchestrator = new AgentOrchestrator({ reasoner, registry: mockRegistry([]).registry });
     const response = await orchestrator.handleChat(makeRequest('What can you do?'));
     expect(response.text).toContain('connected, verified sources');
+    expect(response.outcome).toBe('answered');
     expect(response.escalation).toBeNull();
     expect(reasoner.snapshots).toHaveLength(0);
   });
@@ -25,9 +26,22 @@ describe('zero-tool agent behavior', () => {
     const orchestrator = new AgentOrchestrator({ reasoner, registry: mockRegistry([]).registry });
     const response = await orchestrator.handleChat(makeRequest('What is the server IP?'));
     expect(response.text).toContain('could not verify');
+    expect(response.outcome).toBe('unverified');
     expect(response.sources).toEqual([]);
     expect(response.escalation).toBeNull();
     expect(reasoner.snapshots).toHaveLength(0);
+  });
+
+  it('marks a factual request without any checkable claims as unverified', async () => {
+    const reasoner = new MockReasoner({
+      classification: simpleClassification({ claims: [] }),
+      plan: [], decisions: [],
+    });
+    const orchestrator = new AgentOrchestrator({ reasoner, registry: mockRegistry([]).registry });
+    const response = await orchestrator.handleChat(makeRequest('What is the current server TPS?'));
+    expect(response.text).toContain('could not verify');
+    expect(response.outcome).toBe('unverified');
+    expect(response.sources).toEqual([]);
   });
 
   it('reports unexpected errors internally without claiming it notified staff', async () => {

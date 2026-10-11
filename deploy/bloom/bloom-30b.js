@@ -342,9 +342,21 @@ async function main() {
 }
 
 if (require.main === module) {
+  // The stock Bloom egg was observed restarting one-shot Node scripts when
+  // they exit. Hold the completed result WITHOUT keeping inference alive,
+  // until an operator explicitly stops this diagnostic server.
   main().catch(() => {
     console.error('[qwen-30b] Unexpected diagnostic error.');
     process.exitCode = 1;
+  }).finally(() => {
+    console.log('[qwen-30b] Diagnostic finished; model stopped. Manually STOP this Bloom server.');
+    const hold = setInterval(() => {}, 60_000);
+    const stop = () => {
+      clearInterval(hold);
+      process.exit(process.exitCode ?? 0);
+    };
+    process.once('SIGTERM', stop);
+    process.once('SIGINT', stop);
   });
 }
 

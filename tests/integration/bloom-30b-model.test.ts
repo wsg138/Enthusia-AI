@@ -42,6 +42,9 @@ describe('30B-A3B wiped spare Bloom staging gate', () => {
     expect(source).toContain("stopAtFraction = 0.80");
     expect(source).toContain('memoryLimit < 36_000_000_000 || memoryLimit > 65_000_000_000');
     expect(source).toContain('bloom-30b-report.json');
+    expect(source).toContain('Diagnostic finished; model stopped. Manually STOP this Bloom server.');
+    expect(source).toContain('const hold = setInterval(() => {}, 60_000);');
+    expect(source).toContain("process.once('SIGTERM', stop);");
     expect(source).toContain("discord: false, minecraft: false, sftp: false, mysql: false");
     expect(source).not.toContain("'--host', '0.0.0.0'");
   });
