@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm, symlink, rename } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -148,4 +148,32 @@ describe('managed llama.cpp single Bloom model preflight (synthetic, never launc
       'explicit shared-host run approval',
     );
   });
+  it.runIf(process.platform !== 'win32')(
+    'rejects symlinked model/binary even when target checksums match', async () => {
+      const env = await fixtures();
+      const modelLink = env.ENTHUSIA_MODEL_PATH + '.link';
+      const binaryLink = env.ENTHUSIA_LLAMA_SERVER_PATH + '.link';
+      await symlink(env.ENTHUSIA_MODEL_PATH, modelLink);
+      await symlink(env.ENTHUSIA_LLAMA_SERVER_PATH, binaryLink);
+      await expect(prepareManagedInference({
+        ...env, ENTHUSIA_MODEL_PATH: modelLink,
+      }, 15123)).rejects.toThrow('non-symlink');
+      await expect(prepareManagedInference({
+        ...env, ENTHUSIA_LLAMA_SERVER_PATH: binaryLink,
+      }, 15123)).rejects.toThrow('non-symlink');
+    },
+  );
+
+  it('does not trust previously verified files after a replacement', async () => {
+    const env = await fixtures();
+    const first = await prepareManagedInference(env, 15123);
+    expect(first.executable).toBe(env.ENTHUSIA_LLAMA_SERVER_PATH);
+    const replacement = env.ENTHUSIA_LLAMA_SERVER_PATH + '.new';
+    await writeFile(replacement, 'different executable bytes');
+    await rm(env.ENTHUSIA_LLAMA_SERVER_PATH);
+    await rename(replacement, env.ENTHUSIA_LLAMA_SERVER_PATH);
+    await expect(prepareManagedInference(env, 15123))
+      .rejects.toThrow('Inference executable SHA-256');
+  });
+
 });
