@@ -50,6 +50,12 @@ node ./node_modules/vitest/vitest.mjs run tests/integration/bloom-single-staging
 Do not create a Bloom server, change its egg/image, start inference on the live shared host, grant SFTP or production access, or migrate the bot until the owner separately approves the rollout and available host capacity is verified. No urgency to reset or copy the existing bot token into chat.
 
 
+## Verified model/binary file integrity — staging hardening
+
+The managed supervisor rejects **direct symlinks** for its pinned GGUF and `llama-server` executable. It opens each file without following a final symlink (where supported), reads and SHA-256-hashes that same open file descriptor, and checks the file identity, size and metadata before and after the read. If any verification fails, it does not start child services. Synthetic tests cover symlink rejection and file replacement.
+
+**This is not an arbitrary-filesystem attacker containment guarantee.** There remains a pathname-to-spawn/use interval after hash verification, and parent-directory symlinks or a same-user process with write access to model/binary directories can still create replacement races. Before a live release, ensure the inference **executable and its parent directories** are immutable to the nonprivileged runtime (for example, installed root-owned in a reviewed container image); mount approved models with restrictive permissions and avoid parallel file replacement during launch. Keep the separate operator-approved CPU/co-location run gate. A digest alone never authorizes execution.
+
 ## Managed inference implementation — 2026-10-08
 
 The supervisor now also supports `--managed-inference` for a **single process tree**:
