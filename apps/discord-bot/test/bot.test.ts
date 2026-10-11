@@ -242,6 +242,29 @@ describe('EnthusiaAiDiscordBot message flow', () => {
     await bot.stop();
     expect(port.destroyed).toBe(true);
   });
+
+  it('never serializes raw unexpected message or slash exceptions into logs', async () => {
+    const sensitive = 'TEST_ONLY_FAKE_DISCORD_TOKEN_DO_NOT_LOG';
+    const events: unknown[] = [];
+    const logger = Object.assign(nullLogger(), {
+      error: (fields: unknown): void => { events.push(fields); },
+    });
+    const port = new MockDiscordClientPort();
+    const bot = new EnthusiaAiDiscordBot(port, new RecordingGateway(), testOptions(), logger);
+    bot.handleMessage = async () => { throw new Error('message payload ' + sensitive); };
+    bot.handleSlashAsk = async () => { throw new Error('slash payload ' + sensitive); };
+    await bot.start();
+    await port.emitMessage(guildMessage());
+    await port.emitSlashAsk(slashAsk());
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(events).toHaveLength(2);
+    expect(events).toEqual([
+      { category: 'message_handler_failure' },
+      { category: 'slash_handler_failure' },
+    ]);
+    expect(JSON.stringify(events)).not.toContain(sensitive);
+    await bot.stop();
+  });
 });
 
 describe('EnthusiaAiDiscordBot slash flow', () => {
