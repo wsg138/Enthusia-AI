@@ -19,7 +19,7 @@ describe('30B-A3B wiped spare Bloom staging gate', () => {
     expect(benchmark.MODEL_NAME).toBe('Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf');
     expect(benchmark.MODEL_SHA256).toBe('0155f4523b0c2e3cb541abdc4b5b1845e7b74af9ae8ae8dde9f4d09783371c86');
     expect(benchmark.MODEL_URL).toBe(
-      'https://huggingface.co/second-state/Qwen3-30B-A3B-Instruct-2507-GGUF/resolve/main/Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf?download=true',
+      'https://huggingface.co/second-state/Qwen3-30B-A3B-Instruct-2507-GGUF/resolve/4c0288493521636a522e36c9b2c43815fb119ec9/Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf?download=true',
     );
     expect(source).toContain('const MAX_MODEL_BYTES = 19_500_000_000;');
     expect(source).toContain('const MIN_MODEL_BYTES = 18_000_000_000;');
