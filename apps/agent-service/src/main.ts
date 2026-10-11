@@ -142,8 +142,8 @@ async function main(): Promise<void> {
         logger.info('agent service stopped');
         process.exit(0);
       },
-      (error: unknown) => {
-        logger.error({ error }, 'agent service shutdown failed');
+      () => {
+        logger.error({ category: 'shutdown_failure' }, 'agent service shutdown failed');
         process.exit(1);
       },
     );
@@ -151,15 +151,17 @@ async function main(): Promise<void> {
 
   process.on('SIGINT', () => shutdown('SIGINT'));
   process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('unhandledRejection', (reason: unknown) => {
-    logger.error({ reason }, 'unhandled promise rejection');
+  process.on('unhandledRejection', () => {
+    logger.error({ category: 'unhandled_rejection' }, 'unhandled promise rejection');
   });
 
   logger.info({ port: service.port }, 'agent service listening');
 }
 
-void main().catch((error: unknown) => {
+void main().catch(() => {
+  // Errors from config, network clients and backends may include credentials.
+  // Do not dump raw error objects/stacks during startup.
   // eslint-disable-next-line no-console
-  console.error('agent service failed to start:', error);
+  console.error('agent service failed to start (error details suppressed)');
   process.exit(1);
 });
