@@ -37,16 +37,20 @@ export interface DiscordBotOptions {
   useMockGateway: boolean;
   /** HTTP timeout for gateway calls, in milliseconds. */
   gatewayTimeoutMs: number;
+  /** Use only Guilds intent, slash commands; do not read ordinary messages. */
+  slashOnly: boolean;
+  /** Test-only: accept explicit @mentions only (no automatic channel replies). */
+  mentionOnly: boolean;
+  /** Optional safety scope for test deployments; empty means standard behavior. */
+  allowedGuildIds: string[];
+  /** Optional channel allowlist for ALL response triggers, including slash. */
+  allowedChannelIds: string[];
   /** Configured AI/help channels: every message here is a trigger (§18.1). */
   aiChannelIds: string[];
   /** Staff-only AI channels: staff members get a STAFF visibility ceiling here. */
   staffChannelIds: string[];
   /** Configured test channel(s): every message here is a trigger. */
   testChannelIds: string[];
-  /** Optional hard allowlist. When configured, rejects all other guilds, including DMs. */
-  allowedGuildIds?: string[];
-  /** Optional hard allowlist for message and slash interaction channels. */
-  allowedChannelIds?: string[];
   /** Discord role IDs that mark an actor as staff (role context mapping). */
   staffRoleIds: string[];
   /** Default visibility ceiling for responses (§17). */
@@ -99,11 +103,13 @@ export function resolveDiscordBotOptions(env: NodeJS.ProcessEnv = process.env): 
       : {}),
     useMockGateway: envBool(env['ENTHUSIA_DISCORD_USE_MOCK_GATEWAY'], false),
     gatewayTimeoutMs: envInt(env['ENTHUSIA_DISCORD_GATEWAY_TIMEOUT_MS'], 30_000),
+    slashOnly: envBool(env['ENTHUSIA_DISCORD_SLASH_ONLY'], false),
+    mentionOnly: envBool(env['ENTHUSIA_DISCORD_MENTION_ONLY'], false),
+    allowedGuildIds: commaSeparatedList(env['ENTHUSIA_DISCORD_ALLOWED_GUILD_IDS']),
+    allowedChannelIds: commaSeparatedList(env['ENTHUSIA_DISCORD_ALLOWED_CHANNEL_IDS']),
     aiChannelIds: commaSeparatedList(env['ENTHUSIA_DISCORD_AI_CHANNELS']),
     staffChannelIds: commaSeparatedList(env['ENTHUSIA_DISCORD_STAFF_CHANNELS']),
     testChannelIds: commaSeparatedList(env['ENTHUSIA_DISCORD_TEST_CHANNELS']),
-    allowedGuildIds: commaSeparatedList(env['ENTHUSIA_DISCORD_ALLOWED_GUILD_IDS']),
-    allowedChannelIds: commaSeparatedList(env['ENTHUSIA_DISCORD_ALLOWED_CHANNEL_IDS']),
     staffRoleIds: commaSeparatedList(env['ENTHUSIA_DISCORD_STAFF_ROLES']),
     defaultVisibilityCeiling: Visibility.PUBLIC,
     perUserRateLimit: {

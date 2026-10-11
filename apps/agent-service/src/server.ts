@@ -455,7 +455,10 @@ function listen(server: http.Server, port: number): Promise<void> {
     };
     server.once('error', onError);
     server.once('listening', onListening);
-    server.listen(port);
+    // Opt-in local-only bind; production's existing default remains unchanged.
+    const host = process.env['ENTHUSIA_LOCAL_BIND_HOST'];
+    if (host) server.listen(port, host);
+    else server.listen(port);
   });
 }
 

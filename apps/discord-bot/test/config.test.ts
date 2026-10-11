@@ -13,6 +13,7 @@ describe('resolveDiscordBotOptions', () => {
     expect(options.botName).toBe('Enthusia AI');
     expect(options.gatewayBaseUrl).toBe('http://127.0.0.1:4100');
     expect(options.useMockGateway).toBe(false);
+    expect(options.slashOnly).toBe(false);
     expect(options.aiChannelIds).toEqual([]);
     expect(options.testChannelIds).toEqual([]);
     expect(options.allowedGuildIds).toEqual([]);
@@ -57,6 +58,13 @@ describe('resolveDiscordBotOptions', () => {
     expect(options.perUserRateLimit.maxRequests).toBe(10);
     expect(options.botName).toBe('TestBot');
     expect(options.slashCommandGuildId).toBe('guild-9');
+  });
+
+  it('allows the isolated Discord client to wait longer than a slow local model', () => {
+    const options = resolveDiscordBotOptions({
+      ENTHUSIA_DISCORD_GATEWAY_TIMEOUT_MS: '130000',
+    });
+    expect(options.gatewayTimeoutMs).toBe(130000);
   });
 
   it('falls back to defaults on invalid numbers', () => {

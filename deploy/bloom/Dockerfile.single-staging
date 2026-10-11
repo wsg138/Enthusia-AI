@@ -1,0 +1,67 @@
+# Enthusia AI SINGLE-PANEL STAGING image candidate — NOT built/deployed.
+# Usage after operator review:
+#   docker build -f deploy/bloom/Dockerfile.single-staging \
+#     --build-arg LLAMA_CPP_COMMIT=<approved 40-hex commit> .
+#
+# IMPORTANT: This stage does NOT contain model weights, tokens or private data.
+# Production must pin BOTH base image digests and independently scan the result.
+#
+# This file is deliberately independent of the old five-role W21 egg.
+# CPU and memory limits MUST be enforced by Bloom/Pterodactyl allocation.
+
+FROM node:24-bookworm AS app-build
+WORKDIR /src/enthusia-ai
+RUN apt-get update && apt-get install --no-install-recommends -y \
+    python3 make g++ ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+COPY . .
+RUN npm ci --no-audit --no-fund && npm run build
+
+FROM debian:bookworm-slim AS inference-build
+ARG LLAMA_CPP_COMMIT
+RUN apt-get update && apt-get install --no-install-recommends -y \
+    git ca-certificates cmake ninja-build build-essential \
+ && rm -rf /var/lib/apt/lists/*
+RUN test -n "${LLAMA_CPP_COMMIT}" \
+ && printf '%s' "${LLAMA_CPP_COMMIT}" | grep -Eq '^[0-9a-fA-F]{40}$' \
+ && git init /src/llama.cpp \
+ && cd /src/llama.cpp \
+ && git remote add origin https://github.com/ggml-org/llama.cpp.git \
+ && git fetch --depth 1 origin "${LLAMA_CPP_COMMIT}" \
+ && git checkout --detach FETCH_HEAD
+RUN cmake -S /src/llama.cpp -B /src/llama.cpp/build -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DGGML_NATIVE=OFF \
+    -DGGML_CUDA=OFF \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DLLAMA_CURL=OFF \
+    -DLLAMA_BUILD_TESTS=OFF \
+    -DLLAMA_BUILD_EXAMPLES=OFF \
+    -DLLAMA_BUILD_SERVER=ON \
+    -DLLAMA_BUILD_UI=OFF \
+ && cmake --build /src/llama.cpp/build --target llama-server --parallel 2
+
+FROM node:24-bookworm-slim AS staging-runtime
+RUN apt-get update && apt-get install --no-install-recommends -y \
+    ca-certificates libgomp1 \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /home/container
+COPY --from=app-build /src/enthusia-ai /home/container
+COPY --from=inference-build /src/llama.cpp/build/bin/llama-server /usr/local/bin/llama-server
+RUN mkdir -p /home/container/models /home/container/data \
+ && chown -R node:node /home/container
+# Official Node images already include the non-root 'node' user (UID 1000).
+# Creating a second user with that UID fails in the existing base image.
+USER node
+
+# The model, its hash, and the compiled executable hash are supplied
+# through an operator-approved manifest/Pterodactyl environment. NEVER
+# place bot or SFTP credentials in Docker build arguments or image layers.
+ENV NODE_ENV=development \
+    ENTHUSIA_BLOOM_STAGING=1 \
+    ENTHUSIA_LLAMA_SERVER_PATH=/usr/local/bin/llama-server \
+    ENTHUSIA_INFERENCE_BASE_URL=http://127.0.0.1:11434
+
+# Safe default: NO Discord login, SFTP, ticket, moderation or SMP access.
+# This is not an importable finished Bloom egg or production CMD.
+CMD ["node", "deploy/bloom/single-server-staging.mjs", "--managed-inference", "--without-discord"]

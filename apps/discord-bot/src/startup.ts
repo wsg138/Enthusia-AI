@@ -56,7 +56,12 @@ export async function startBotFromEnv(env: NodeJS.ProcessEnv = process.env): Pro
 
   const gateway = createGatewayClient(options, logger);
   const port = new DiscordJsClientAdapter(
-    { token, ...(options.slashCommandGuildId ? { slashCommandGuildId: options.slashCommandGuildId } : {}) },
+    {
+      token,
+      slashOnly: options.slashOnly,
+    mentionOnly: options.mentionOnly,
+      ...(options.slashCommandGuildId ? { slashCommandGuildId: options.slashCommandGuildId } : {}),
+    },
     logger,
   );
   const bot = new EnthusiaAiDiscordBot(port, gateway, options, logger);

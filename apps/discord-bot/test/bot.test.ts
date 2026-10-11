@@ -186,6 +186,23 @@ describe('EnthusiaAiDiscordBot message flow', () => {
     expect(sent).toContain('could not reach the AI');
   });
 
+  it('uses understandable, distinct fallback messages for timeouts and rate limits', async () => {
+    const { ToolTimeoutError, RateLimitError } = await import('@enthusia/contracts');
+    for (const [error, fragment] of [
+      [new ToolTimeoutError('ai-gateway', 130000), 'longer than expected'],
+      [new RateLimitError('rate limited'), 'handling too many requests'],
+    ] as const) {
+      const { port, bot } = setup(new RecordingGateway(() => { throw error; }));
+      const result = await bot.handleMessage(guildMessage({
+        content: `<@${BOT_ID}> Can you explain Warzones?`,
+        mentionedUserIds: [BOT_ID],
+      }));
+      expect(result.outcome).toBe('gateway-error');
+      expect(port.sentMessages[0]?.message.content).toContain(fragment);
+      expect(port.sentMessages[0]?.message.content).not.toContain('could not reach the AI');
+    }
+  });
+
   it('splits long responses into ordered reply chunks', async () => {
     const longText = 'paragraph one.\n\n' + 'x'.repeat(5000);
     const gateway = new RecordingGateway((request) => ({

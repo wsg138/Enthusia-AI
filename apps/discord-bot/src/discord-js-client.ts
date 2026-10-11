@@ -34,6 +34,7 @@ import type {
   DiscordClientPort,
   DiscordMemberInfo,
   DiscordMessageRef,
+  DiscordRichResponse,
   DiscordRoleInfo,
   DiscordSlashAskRef,
   OutgoingDiscordMessage,
@@ -45,6 +46,10 @@ export interface DiscordJsClientOptions {
   token: string;
   /** Register `/ai` for one guild (fast) instead of globally (slow). */
   slashCommandGuildId?: string;
+  /** Test-only slash command mode requiring no privileged gateway intents. */
+  slashOnly?: boolean;
+  /** Read only messages explicitly mentioning this application; no privileged MessageContent intent. */
+  mentionOnly?: boolean;
 }
 
 export const AI_COMMAND_NAME = 'ai';
@@ -72,8 +77,8 @@ export function buildAiSlashCommand(): { name: string; definition: unknown } {
 }
 
 /**
- * Upsert only the /ai command without replacing any unrelated commands.
- * Safe even if other services register commands for this application.
+ * Upsert only the /ai command. Avoid a bulk PUT which would delete unrelated
+ * commands registered by another component of the Discord application.
  */
 export async function upsertAiSlashCommand(
   rest: Pick<REST, 'post'>,
@@ -244,6 +249,43 @@ export function normalizeSlashAsk(
   };
 }
 
+/**
+ * Discord.js may fulfill login() before it emits ClientReady. Slash-command
+ * registration needs the application identity supplied by that event.
+ *
+ * Listener cleanup and a bounded timeout prevent hanging if Discord never
+ * reaches the ready state. No Discord REST calls happen in this helper.
+ */
+export interface DiscordReadySignal {
+  isReady(): boolean;
+  on(event: typeof Events.ClientReady, listener: () => void): unknown;
+  off(event: typeof Events.ClientReady, listener: () => void): unknown;
+}
+
+export async function waitForDiscordClientReady(
+  client: DiscordReadySignal,
+  timeoutMs = 30_000,
+): Promise<void> {
+  if (client.isReady()) return;
+  await new Promise<void>((resolveReady, rejectReady) => {
+    const cleanup = (): void => {
+      clearTimeout(timer);
+      client.off(Events.ClientReady, onReady);
+    };
+    const onReady = (): void => {
+      cleanup();
+      resolveReady();
+    };
+    const timer = setTimeout(() => {
+      cleanup();
+      rejectReady(new Error('Discord gateway did not become ready within the startup timeout'));
+    }, timeoutMs);
+    client.on(Events.ClientReady, onReady);
+    // Handle a ready transition occurring during listener installation.
+    if (client.isReady()) onReady();
+  });
+}
+
 export class DiscordJsClientAdapter implements DiscordClientPort {
   private readonly client: Client;
   private readonly rest: REST;
@@ -255,19 +297,24 @@ export class DiscordJsClientAdapter implements DiscordClientPort {
    * can defer/edit/follow-up. WeakMap: no lifetime beyond the interaction.
    */
   private readonly rawInteractions = new WeakMap<DiscordSlashAskRef, ChatInputCommandInteraction>();
+  private readonly rawMessages = new WeakMap<DiscordMessageRef, Message>();
 
   constructor(
     private readonly options: DiscordJsClientOptions,
     private readonly logger: EnthusiaLogger,
   ) {
     this.client = new Client({
-      intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        // Privileged intent: required to read message content.
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers,
-      ],
+      intents: options.slashOnly
+        ? [GatewayIntentBits.Guilds]
+        : options.mentionOnly
+        ? [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
+        : [
+          GatewayIntentBits.Guilds,
+          GatewayIntentBits.GuildMessages,
+          // Privileged intents used only by full message/role context mode.
+          GatewayIntentBits.MessageContent,
+          GatewayIntentBits.GuildMembers,
+        ],
     });
     this.rest = new REST({ version: '10' }).setToken(options.token);
 
@@ -276,11 +323,12 @@ export class DiscordJsClientAdapter implements DiscordClientPort {
       this.logger.info({ botUserId: this.readyUserId }, 'Discord client ready');
     });
     this.client.on(Events.MessageCreate, (message) => {
-      if (this.messageHandler === null) {
+      if (this.options.slashOnly || this.messageHandler === null) {
         return;
       }
       try {
         const normalized = normalizeMessage(message);
+        this.rawMessages.set(normalized, message);
         void Promise.resolve(this.messageHandler(normalized)).catch((error: unknown) => {
           this.logger.error({ error: String(error) }, 'message handler failed');
         });
@@ -313,6 +361,14 @@ export class DiscordJsClientAdapter implements DiscordClientPort {
 
   async login(): Promise<void> {
     await this.client.login(this.options.token);
+    await waitForDiscordClientReady(this.client);
+    // Ready means Discord has authenticated the bot and assigned its user ID.
+    // Retain the existing ClientReady listener's ID, but recover defensively
+    // if the client was already ready when login resolved.
+    this.readyUserId = this.client.user?.id ?? this.readyUserId;
+    if (this.readyUserId === null) {
+      throw new Error('Discord client ready without a bot application identity');
+    }
   }
 
   onMessage(handler: (message: DiscordMessageRef) => void | Promise<void>): void {
@@ -330,6 +386,7 @@ export class DiscordJsClientAdapter implements DiscordClientPort {
     }
     const sent = await channel.send({
       content: message.content,
+      allowedMentions: { parse: [] },
       ...(message.replyToMessageId !== undefined
         ? { reply: { messageReference: message.replyToMessageId } }
         : {}),
@@ -337,6 +394,30 @@ export class DiscordJsClientAdapter implements DiscordClientPort {
     return sent.id;
   }
 
+
+  async sendRichMessage(channelId: Snowflake, payload: DiscordRichResponse, replyToMessageId?: Snowflake): Promise<Snowflake> {
+    const channel = await this.client.channels.fetch(channelId);
+    if (!channel || !channel.isSendable()) throw new Error('target channel is not sendable');
+    const sent = await channel.send({
+      content: payload.content ?? '',
+      embeds: [payload.embed],
+      allowedMentions: { parse: [], repliedUser: false },
+      ...(replyToMessageId ? { reply: { messageReference: replyToMessageId } } : {}),
+    });
+    return sent.id;
+  }
+
+  async addMessageReaction(message: DiscordMessageRef, emoji: string): Promise<void> {
+    const raw = this.rawMessages.get(message);
+    if (!raw) throw new Error('incoming message is not available for reaction');
+    await raw.react(emoji);
+  }
+
+  async removeMessageReaction(message: DiscordMessageRef, emoji: string): Promise<void> {
+    const raw = this.rawMessages.get(message);
+    if (!raw || !this.readyUserId) return;
+    await raw.reactions.resolve(emoji)?.users.remove(this.readyUserId);
+  }
   async deferSlashAsk(interaction: DiscordSlashAskRef): Promise<void> {
     const raw = this.rawInteractions.get(interaction);
     if (!raw) throw new Error('slash interaction is missing its raw Discord interaction');
@@ -355,6 +436,17 @@ export class DiscordJsClientAdapter implements DiscordClientPort {
     for (const chunk of rest) {
       await raw.followUp(chunk);
     }
+  }
+
+  async respondToSlashAskRich(interaction: DiscordSlashAskRef, payload: DiscordRichResponse): Promise<void> {
+    const raw = this.rawInteractions.get(interaction);
+    if (!raw) throw new Error('slash interaction is missing its raw Discord interaction');
+    if (!raw.deferred && !raw.replied) await raw.deferReply();
+    await raw.editReply({
+      content: payload.content ?? '',
+      embeds: [payload.embed],
+      allowedMentions: { parse: [] },
+    });
   }
 
   async registerSlashCommands(): Promise<void> {
