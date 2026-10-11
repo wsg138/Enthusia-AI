@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, writeFile, rm, symlink, rename } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm, symlink, rename, copyFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -175,5 +175,48 @@ describe('managed llama.cpp single Bloom model preflight (synthetic, never launc
     await expect(prepareManagedInference(env, 15123))
       .rejects.toThrow('Inference executable SHA-256');
   });
+
+  it.runIf(process.platform === 'linux')(
+    'executes and reads the original verified inodes after both paths are replaced', async () => {
+      const env = await fixtures();
+      // GNU cat is a harmless real ELF fixture. Never start llama-server here.
+      await copyFile('/usr/bin/cat', env.ENTHUSIA_LLAMA_SERVER_PATH);
+      const binaryBytes = await readFile(env.ENTHUSIA_LLAMA_SERVER_PATH);
+      env.ENTHUSIA_LLAMA_SERVER_SHA256 =
+        createHash('sha256').update(binaryBytes).digest('hex');
+
+      const cfg = await prepareManagedInference(env, 15123, { verifiedFdLaunch: true });
+      expect(cfg.executable).toBe('/proc/self/fd/3');
+      expect(cfg.args).toContain('/proc/self/fd/4');
+      expect(cfg.descriptorFds).toHaveLength(2);
+      const originalText = 'synthetic model bytes, NOT a real GGUF';
+
+      try {
+        const forgedExecutable = env.ENTHUSIA_LLAMA_SERVER_PATH + '.replacement';
+        const forgedModel = env.ENTHUSIA_MODEL_PATH + '.replacement';
+        await writeFile(forgedExecutable, '#!/bin/sh\necho WRONG_INODE\n', { mode: 0o755 });
+        await writeFile(forgedModel, 'FORGED_MODEL_DATA');
+        await rm(env.ENTHUSIA_LLAMA_SERVER_PATH);
+        await rm(env.ENTHUSIA_MODEL_PATH);
+        await rename(forgedExecutable, env.ENTHUSIA_LLAMA_SERVER_PATH);
+        await rename(forgedModel, env.ENTHUSIA_MODEL_PATH);
+
+        // Child FDs 3/4 originate from already-verified handles, not either
+        // now-forged path. SpawnSync duplicates the FDs into the process.
+        const child = spawnSync(cfg.executable, ['/proc/self/fd/4'], {
+          stdio: ['ignore', 'pipe', 'pipe', ...cfg.descriptorFds!],
+          encoding: 'utf8',
+          timeout: 8000,
+        });
+        expect(child.status).toBe(0);
+        expect(child.stdout).toBe(originalText);
+        expect(child.stdout).not.toContain('FORGED');
+        expect(child.stdout).not.toContain('WRONG_INODE');
+      } finally {
+        await cfg.closePinnedFiles?.();
+        await cfg.closePinnedFiles?.(); // shutdown cleanup must be idempotent
+      }
+    },
+  );
 
 });
