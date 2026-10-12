@@ -82,19 +82,16 @@ def _utc(epoch_millis):
     return datetime.fromtimestamp(epoch_millis / 1000, timezone.utc).isoformat().replace('+00:00', 'Z')
 
 
-def _stats(root):
+def _stats(root, kind):
     # Spark Profile: SamplerData.metadata[1].platformStatistics[8]
     # Spark Health: HealthData.platformStatistics[1][3]
-    has_profile = 2 in root or 7 in root
     outer = _msg(_get(root, 1, 2))
-    if has_profile:
+    if kind == 'profile':
         platform = _msg(_get(outer, 8, 2))
         snap_ms = _get(outer, 11, 0) or _get(outer, 2, 0)
-        kind = 'profile'
     else:
         platform = _msg(_get(outer, 3, 2))
         snap_ms = _get(outer, 5, 0)
-        kind = 'health'
     world_data = _msg(_get(platform, 8, 2))
     return kind, outer, world_data, snap_ms
 
@@ -161,13 +158,84 @@ def _windows(root, slow_sampler=False):
     return sorted(windows, key=lambda row: row['startUtc'] or '')
 
 
+def _health_counter(row, field):
+    """Proto3 omitted int32 values are zero; reject negative or invalid counters."""
+    value = _get(row, field, 0, 0)
+    # Nonnegative int32 is limited to 2^31-1. Negative protobuf int32
+    # values are encoded as sign-extended 10-byte unsigned varints, so they
+    # always exceed this bound and must never be shown as huge player counts.
+    if value < 0 or value > (1 << 31) - 1:
+        raise ValueError(f'Health minute contains negative or invalid int32 counter {field}')
+    return value
+
+
+def _health_double(row, field):
+    """Proto3 omitted double values are zero; wire type must still be valid."""
+    import math
+    raw = _get(row, field, 1)
+    value = 0.0 if raw is None else _double(raw)
+    if not math.isfinite(value) or value < 0:
+        raise ValueError(f'Health minute contains invalid statistic {field}')
+    return value
+
+
+def _health_minutes(root):
+    """Decode HealthData.timeWindowStatistics, not an aggregate entity snapshot.
+
+    Spark's HealthData stores WindowStatistics inside a protobuf map at field 2.
+    Per-minute total entities and loaded chunks are timed fields, but *mob type*
+    populations from PlatformStatistics.world are capture-wide snapshots only.
+    """
+    minutes = []
+    for wire, raw in root.get(2, []):
+        if wire != 2:
+            raise ValueError('Invalid health minute map encoding')
+        entry = _msg(raw)
+        if 2 not in entry:
+            raise ValueError('Health minute is missing WindowStatistics')
+        row = _msg(_get(entry, 2, 2))
+        start = _get(row, 11, 0)
+        end = _get(row, 12, 0)
+        if start is None or end is None or start <= 0 or end <= start:
+            raise ValueError('Health minute lacks a valid UTC interval')
+        if end - start > 5 * 60 * 1000:
+            raise ValueError('Health minute interval is unexpectedly long')
+
+        tps = _health_double(row, 4)
+        median = _health_double(row, 5)
+        maximum = _health_double(row, 6)
+        if tps > 20.1 or maximum < median:
+            raise ValueError('Health minute TPS/MSPT fields are inconsistent')
+        minutes.append({
+            'startUtc': _utc(start), 'endUtc': _utc(end),
+            'ticks': _health_counter(row, 1), 'tps': tps,
+            'medianMspt': median, 'maxTickMs': maximum,
+            'players': _health_counter(row, 7), 'totalEntities': _health_counter(row, 8),
+            'blockEntities': _health_counter(row, 9), 'loadedChunks': _health_counter(row, 10),
+        })
+        if len(minutes) > 10000:
+            raise ValueError('Health minute history exceeds supported bound')
+    minutes.sort(key=lambda row: row['startUtc'])
+    for prior, following in zip(minutes, minutes[1:]):
+        # Real Spark minute buckets can overlap by 1ms from sampling jitter.
+        # Reject meaningful duplicated intervals, not boundary noise.
+        end = datetime.fromisoformat(prior['endUtc'].replace('Z', '+00:00'))
+        start = datetime.fromisoformat(following['startUtc'].replace('Z', '+00:00'))
+        if (end - start).total_seconds() > 0.01:
+            raise ValueError('Health minute history contains overlapping windows')
+    return minutes
+
+
 def read_capture(path):
     path = Path(path)
     size = path.stat().st_size
     if size < 1 or size > MAX_BYTES:
         raise ValueError(f'Input file must be 1..{MAX_BYTES} bytes')
+    if path.suffix not in ('.sparkprofile', '.sparkhealth'):
+        raise ValueError('Expected .sparkprofile or .sparkhealth')
+    kind = 'profile' if path.suffix == '.sparkprofile' else 'health'
     root = _msg(memoryview(path.read_bytes()))
-    kind, meta, world_data, stamp = _stats(root)
+    kind, meta, world_data, stamp = _stats(root, kind)
     result = {'file': path.name, 'type': kind, 'capturedAtUtc': _utc(stamp) if stamp else None,
               'entities': _entities(world_data),
               'caveat': 'Entity/region counts are a capture-wide snapshot, NOT independently timed observations for each profile window.'}
@@ -182,6 +250,8 @@ def read_capture(path):
         # Sum only qualified windows. Missing slowTicks is not equivalent to zero.
         result['qualifyingSlowTicksTotal'] = _get(aggregator, 4, 0) if result['tickThresholdMs'] is not None else None
         result['qualifyingSlowTicksInCompleteWindows'] = sum(w['slowTicks'] for w in result['windows'] if w['slowTicks'] is not None) if result['tickThresholdMs'] is not None else None
+    else:
+        result['healthMinuteHistory'] = _health_minutes(root)
     return result
 
 
@@ -221,6 +291,31 @@ def markdown(capture, comparison=None):
                 return f'{v:.{decimals}f}' if v is not None else 'n/a'
             lines.append(f"| {w['startUtc'] or 'unknown'} | {fmt(w['tps'],2)} | {fmt(w['medianMspt'])} ms | {fmt(w['maxTickMs'])} ms | {w['players'] if w['players'] is not None else 'n/a'} | {w['slowTicks'] if w['slowTicks'] is not None else 'n/a'} |")
         lines += ['']
+    if capture['type'] == 'health' and capture.get('healthMinuteHistory'):
+        minutes = capture['healthMinuteHistory']
+        worst = min(minutes, key=lambda row: row['tps'])
+        lines += [
+            '## Recorded health history (minute windows)', '',
+            f"**Worst recorded minute:** {worst['startUtc']} — TPS {worst['tps']:.2f}, "
+            f"median MSPT {worst['medianMspt']:.1f} ms, worst tick {worst['maxTickMs']:.1f} ms.",
+            '',
+            '| UTC minute | TPS | Median MSPT | Worst tick | Players | Loaded chunks | Total entities | Block entities |',
+            '|---|---:|---:|---:|---:|---:|---:|---:|',
+        ]
+        for row in minutes:
+            lines.append(
+                f"| {row['startUtc']} | {row['tps']:.2f} | "
+                f"{row['medianMspt']:.1f} ms | {row['maxTickMs']:.1f} ms | "
+                f"{row['players']} | {row['loadedChunks']} | {row['totalEntities']} | {row['blockEntities']} |"
+            )
+        lines += [
+            '',
+            '**Measurement limit:** per-minute entity totals and loaded chunks are timed, '
+            'but the mob types and densest-region snapshot above are capture-wide. '
+            'No per-minute piglin count, p95, or Java main-thread call-stack attribution '
+            'is available from these minute rows.',
+            '',
+        ]
     if comparison:
         lines += ['## Differences between capture-wide snapshots', '']
         if comparison['entityLoadDifferences']:
