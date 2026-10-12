@@ -211,3 +211,56 @@ test('persistent degradation after inference prevents a favorable verdict', () =
   assert.equal(result.assessment, 'INCONCLUSIVE');
   assert.ok(result.warnings.some((warning) => warning.includes('Recovery window remains')));
 });
+
+function quietExtendedScenario() {
+  const data = scenario();
+  data.workload.endUtc = at(8);
+  data.windows = [
+    window('off', 0), window('off', 1), window('idle', 2), window('idle', 3),
+    window('inference', 4), window('inference', 5),
+    window('inference', 6), window('inference', 7), window('recovery', 8),
+  ];
+  for (const row of data.windows.filter((w) => w.phase === 'inference')) {
+    row.tps = 19.95; row.msptP50 = 16; row.msptP95 = 34;
+    row.msptP99 = 65; row.msptMax = 120;
+  }
+  return data;
+}
+test('a single bad TPS minute cannot disappear inside a four-minute mean', () => {
+  const data = quietExtendedScenario();
+  data.windows.find((w) => w.phase === 'inference' && w.startUtc === at(6)).tps = 19;
+  const result = compareSmpColocation(data);
+  assert.ok(result.differences.meanTps > -0.5);
+  assert.equal(result.assessment, 'INCONCLUSIVE');
+  assert.ok(result.warnings.some((w) => w.includes('mean TPS hides it')));
+});
+test('one piglin surge is a workload confounder even if mean counts look matched', () => {
+  const data = quietExtendedScenario();
+  data.windows.find((w) => w.phase === 'inference' && w.startUtc === at(6)).zombifiedPiglins = 300;
+  const result = compareSmpColocation(data);
+  assert.equal(result.differences.meanZombifiedPiglins, 50);
+  assert.equal(result.assessment, 'INCONCLUSIVE');
+  assert.ok(result.warnings.some((w) => w.includes('Zombified piglin population changed materially in an INFERENCE window')));
+});
+test('one player and chunk loading burst cannot average away', () => {
+  const data = quietExtendedScenario();
+  const surge = data.windows.find((w) => w.phase === 'inference' && w.startUtc === at(6));
+  surge.players = 18; surge.loadedChunks = 4300;
+  const result = compareSmpColocation(data);
+  assert.equal(result.assessment, 'INCONCLUSIVE');
+  assert.ok(result.warnings.some((w) => w.includes('Player counts changed materially in an INFERENCE window')));
+  assert.ok(result.warnings.some((w) => w.includes('Loaded chunk counts changed materially in an INFERENCE window')));
+});
+test('unstable OFF baselines cannot be used to certify matched inference', () => {
+  const data = quietExtendedScenario();
+  const off = data.windows.filter((w) => w.phase === 'off');
+  off[0].zombifiedPiglins = 100;
+  off[1].zombifiedPiglins = 300;
+  for (const row of data.windows.filter((w) => w.phase === 'inference')) {
+    row.zombifiedPiglins = 200;
+  }
+  const result = compareSmpColocation(data);
+  assert.equal(result.differences.meanZombifiedPiglins, 0);
+  assert.equal(result.assessment, 'INCONCLUSIVE');
+  assert.ok(result.warnings.some((w) => w.includes('Zombified piglin population changed materially during OFF baseline')));
+});
