@@ -62,6 +62,7 @@ export function inspectReport(report, label) {
   if (!permitted.length) throw new Error(label + ' process and cgroup CPU sets disagree');
 
   const topology = new Map();
+  const siblingsByCpu = new Map();
   let invalidOrMissingTopology = false;
   if (!Array.isArray(report.logicalCpuTopology) ||
       report.logicalCpuTopology.length > MAX_CPUS) invalidOrMissingTopology = true;
@@ -75,16 +76,31 @@ export function inspectReport(report, label) {
     if (topology.has(row.cpu) && topology.get(row.cpu) !== key) invalidOrMissingTopology = true;
     topology.set(row.cpu, key);
     try {
-      if (typeof row.siblings !== 'string' ||
-          !parseCpuList(row.siblings, label + '.siblings').includes(row.cpu)) {
+      if (typeof row.siblings !== 'string') {
         invalidOrMissingTopology = true;
+      } else {
+        const siblings = parseCpuList(row.siblings, label + '.siblings');
+        siblingsByCpu.set(row.cpu, siblings);
+        if (!siblings.includes(row.cpu)) invalidOrMissingTopology = true;
       }
     } catch { invalidOrMissingTopology = true; }
+  }
+  for (const [cpu, siblings] of siblingsByCpu) {
+    for (const sibling of siblings) {
+      // For visible SMT siblings, both topology and reciprocal membership
+      // must agree before claiming full physical core separation.
+      if (topology.has(sibling) && topology.get(sibling) !== topology.get(cpu)) {
+        invalidOrMissingTopology = true;
+      }
+      if (siblingsByCpu.has(sibling) && !siblingsByCpu.get(sibling).includes(cpu)) {
+        invalidOrMissingTopology = true;
+      }
+    }
   }
   if (permitted.some(cpu => !topology.has(cpu))) invalidOrMissingTopology = true;
 
   return {
-    at, permitted, logicalCpuCount: permitted.length, topology,
+    at, permitted, logicalCpuCount: permitted.length, topology, siblingsByCpu,
     topologyComplete: !invalidOrMissingTopology,
     configuredCpuSet: report.cgroupConfiguredCpus ?? null,
     cpuQuotaPeriod: report.cpuQuotaPeriod ?? null,
@@ -104,6 +120,9 @@ export function compareBloomAffinity({smp, ai, samePhysicalHostConfirmed = false
   const sharedLogicalCpus = intersection(game.permitted, model.permitted);
   const topologyDisagrees = [...game.topology].some(([cpu, core]) =>
     model.topology.has(cpu) && model.topology.get(cpu) !== core);
+  const siblingsDisagree = [...game.siblingsByCpu].some(([cpu, siblings]) =>
+    model.siblingsByCpu.has(cpu) &&
+    siblings.join(',') !== model.siblingsByCpu.get(cpu).join(','));
   const coreIds = r => new Set(r.permitted.map(cpu => r.topology.get(cpu)).filter(Boolean));
   const smpCores = coreIds(game);
   const aiCores = coreIds(model);
@@ -117,7 +136,8 @@ export function compareBloomAffinity({smp, ai, samePhysicalHostConfirmed = false
   if (Math.abs(game.at - model.at) > MAX_SKEW_MS) {
     warnings.push('Probe timestamps differ by more than 15 minutes; may represent different host allocation states');
   }
-  if (!game.topologyComplete || !model.topologyComplete || topologyDisagrees) {
+  if (!game.topologyComplete || !model.topologyComplete ||
+      topologyDisagrees || siblingsDisagree) {
     warnings.push('Incomplete, inconsistent or contradictory CPU topology; SMT/physical core separation cannot be established');
   }
 
@@ -132,7 +152,8 @@ export function compareBloomAffinity({smp, ai, samePhysicalHostConfirmed = false
     smpAllowedLogicalCpus: game.permitted,
     aiAllowedLogicalCpus: model.permitted,
     sharedAllowedLogicalCpus: sharedLogicalCpus,
-    sharedObservedPhysicalCoreKeys: game.topologyComplete && model.topologyComplete && !topologyDisagrees
+    sharedObservedPhysicalCoreKeys: game.topologyComplete && model.topologyComplete &&
+        !topologyDisagrees && !siblingsDisagree
       ? sharedPhysicalCoreKeys : null,
     secondsBetweenReports,
     warnings,
