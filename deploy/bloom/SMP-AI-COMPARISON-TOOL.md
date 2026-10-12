@@ -48,15 +48,20 @@ Example input *shape* with one deliberately incomplete synthetic window (not a r
       "tps": 20,
       "msptP50": 15,
       "msptP95": 32,
-      "msptP99": 60
+      "msptP99": 60,
+      "msptMax": 120
     }
   ]
 }
 ~~~
 
-Phases: off, idle, inference, recovery. Provide **at least two OFF and two INFERENCE windows** with a real 80% or greater timed overlap of each INFERENCE window with actual model activity; add IDLE and RECOVERY when available. Include recorded player/activity and loaded-chunk observations, not guesses. Input phases may not overlap in time.
+Phases: off, idle, inference, recovery. Provide **at least two OFF and two INFERENCE windows** with a real 80% or greater timed overlap of each INFERENCE window with actual model activity. For a *favorable* result, IDLE and RECOVERY windows are required and must occur in **OFF → IDLE → INFERENCE → RECOVERY** order. All windows must have observed worst-tick `msptMax`, p95 and p99 as well as p50. Keep raw source links and exact UTC interval boundaries. Include recorded player/activity and loaded-chunk observations, not guesses. Input phases may not overlap in time.
 
-Missing p95/p99 must be omitted, never replaced with zero or estimated from p50. A missing p95 blocks the checker from declaring no clear regression. Version/build mismatch, significantly different load and inadequate overlap also prevent clearance.
+`msptMax` is the **actual maximum single tick duration** observed in that window, not an estimate from its p99, a rolling health sample, or a number copied across windows. The utility checks `msptMax >= msptP99` (or the highest available percentile). There must be an independently attributable source window for each observation.
+
+Missing p95/p99/worst-tick observations must be omitted, never replaced with zero or estimated from p50. Any missing p95, p99 or `msptMax` in an OFF or INFERENCE window prevents the favorable label; the same applies to missing recovery percentile/tail observations. Version/build mismatch, significantly different load and inadequate overlap also prevent clearance.
+
+**Tail-risk gate:** medians across many 60-second windows can conceal one very bad minute. Before reporting `NO_CLEAR_REGRESSION_IN_MATCHED_WINDOWS`, the checker compares *every* INFERENCE window with the highest OFF p50/p95 (10ms tolerance), p99 (20ms tolerance), and worst tick (over twice the highest OFF worst tick **and** more than 100ms higher). These are conservative screening thresholds, **not statistical significance tests** or a claim about which plugin/CPU caused a spike. Sustained slow RECOVERY windows, reversed phases, or a missing IDLE/RECOVERY phase also block the favorable label. A clear regression can still be reported with confounders and incomplete phases; an unfavorable or inconclusive result is never proof of CPU scheduling as the root cause.
 
 ### Entity-count evidence gate (added after October 11 farm confounder)
 
@@ -71,7 +76,13 @@ Outputs are deliberately conservative:
 - **NO_CLEAR_REGRESSION_IN_MATCHED_WINDOWS:** this restricted dataset did not exceed the checker thresholds; never equivalent to safe production co-location.
 - **INCONCLUSIVE:** source/timing/workload/statistical evidence insufficient.
 
-MSPT summaries are **medians of per-window percentiles, not pooled tick percentiles**. They cannot be treated as a single raw p95/p99 distribution. Large tick samples, inclusive stacked Spark timings and rolling-five-minute history must be reviewed separately.
+MSPT summaries are **medians of per-window percentiles, not pooled tick percentiles**. They cannot be treated as a single raw p95/p99 distribution. The added `maxWorstTickMs` summary is the **maximum of observed per-window maximum ticks**, not a percentile; it helps avoid hiding rare stalls. Large tick samples, inclusive stacked Spark timings and rolling-five-minute history must be reviewed separately.
+
+### Independent main-thread evidence (Bloom support follow-up)
+
+Bloom support requested focused evidence for ticks over 100ms, ideally from the Java main thread instead of attributing delays to an asynchronous native stack. In an **AI-OFF** observation window, an authorized owner can capture a bounded `/spark profiler --only-ticks-over 100 --timeout 300` (use a Java/main-thread sampler when available) and preserve the profiler URL, exact UTC timestamps and matching player/entity/chunk/LoreItems diagnostics. If there are no ticks over 100ms, preserve that negative observation; do **not** turn it into a claim of zero plugin overhead. Longer 15–20-minute baseline profiles may help Bloom examine recurring patterns, but cannot replace timestamped per-window stats or justify starting co-located inference.
+
+Never run competing profilers simultaneously, attempt to recreate severe lag by loading the farm, assume `taskset` reserves SMP cores, or resume the four-thread Bloom 30B load test just to produce a worse trace. Controlled inference remains a separate owner/provider-approved phase after the LoreItems deployed SHA and SMP-only stability are verified.
 
 ## Remaining gates
 
