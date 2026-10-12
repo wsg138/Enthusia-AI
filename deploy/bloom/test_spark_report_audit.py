@@ -113,17 +113,47 @@ class SparkAuditTests(unittest.TestCase):
         self.assertEqual(slow['loadedChunks'], 10380)
         self.assertEqual(recovered['players'], 19)
         self.assertEqual(recovered['loadedChunks'], 9000)
+        self.assertEqual(slow['blockEntities'], 7900)
         self.assertEqual(c['entities']['mobs']['zombified_piglin'], 601)
         text = markdown(c)
         self.assertIn('Worst recorded minute', text)
         self.assertIn('13.10', text)
         self.assertIn('No per-minute piglin count', text)
+        self.assertIn('| Block entities |', text)
+        self.assertIn('| 23 | 10380 | 2903 | 7900 |', text)
         self.assertNotIn('| UTC window |', text)
 
+    def test_omitted_zero_valued_proto3_fields_are_decoded_as_zero(self):
+        start = 1791756600000
+        # Proto3 elides zero counters and double fields on the wire.
+        empty_row = v(11, start) + v(12, start + 60000)
+        health = sparkhealth() + msg(2, v(1, 0) + msg(2, empty_row))
+        row = self.capture(health, '.sparkhealth')['healthMinuteHistory'][0]
+        self.assertEqual(row['ticks'], 0)
+        self.assertEqual(row['players'], 0)
+        self.assertEqual(row['loadedChunks'], 0)
+        self.assertEqual(row['tps'], 0.0)
+        self.assertEqual(row['medianMspt'], 0.0)
+        self.assertEqual(row['maxTickMs'], 0.0)
+
+    def test_negative_int32_counts_and_out_of_range_counters_are_rejected(self):
+        start = 1791756600000
+        for value in ((1 << 64) - 1, 1 << 33):
+            # Duplicate proto field is ambiguous; use a row with exactly one
+            # players field to test signed counter conversion.
+            clean = (v(1, 1000) + dbl(4, 19.8) + dbl(5, 21.0)
+                     + dbl(6, 45.0) + v(7, value)
+                     + v(11, start) + v(12, start + 60000))
+            health = sparkhealth() + msg(2, v(1, 0) + msg(2, clean))
+            with self.assertRaisesRegex(ValueError, 'counter'):
+                self.capture(health, '.sparkhealth')
+
     def test_malformed_health_minute_cannot_pretend_it_is_valid(self):
-        bad_row = v(11, 1791756600000) + v(12, 1791756660000)
+        # TPS is a double (wire 1); giving it the integer encoding must fail.
+        bad_row = (v(11, 1791756600000) + v(12, 1791756660000)
+                   + v(4, 20))
         malformed = sparkhealth() + msg(2, v(1, 0) + msg(2, bad_row))
-        with self.assertRaisesRegex(ValueError, 'missing floating point'):
+        with self.assertRaisesRegex(ValueError, 'wire'):
             self.capture(malformed, '.sparkhealth')
 
     def test_health_minutes_with_overlapping_windows_fail_closed(self):
