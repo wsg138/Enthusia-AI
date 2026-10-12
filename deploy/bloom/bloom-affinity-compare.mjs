@@ -123,6 +123,16 @@ export function compareBloomAffinity({smp, ai, samePhysicalHostConfirmed = false
   const siblingsDisagree = [...game.siblingsByCpu].some(([cpu, siblings]) =>
     model.siblingsByCpu.has(cpu) &&
     siblings.join(',') !== model.siblingsByCpu.get(cpu).join(','));
+  // Partial probes can show disjoint *rows* while their SMT sibling lists
+  // actually link the two permitted CPU sets. Validate cross-report links
+  // even when no logical CPU ID has a row in both reports.
+  const crossSiblingsConflict = (left, right) =>
+    [...left.siblingsByCpu].some(([cpu, siblings]) =>
+      siblings.some(sibling => right.topology.has(sibling) &&
+        (left.topology.get(cpu) !== right.topology.get(sibling) ||
+         !right.siblingsByCpu.get(sibling)?.includes(cpu))));
+  const crossSiblingDisagrees =
+    crossSiblingsConflict(game, model) || crossSiblingsConflict(model, game);
   const coreIds = r => new Set(r.permitted.map(cpu => r.topology.get(cpu)).filter(Boolean));
   const smpCores = coreIds(game);
   const aiCores = coreIds(model);
@@ -137,7 +147,7 @@ export function compareBloomAffinity({smp, ai, samePhysicalHostConfirmed = false
     warnings.push('Probe timestamps differ by more than 15 minutes; may represent different host allocation states');
   }
   if (!game.topologyComplete || !model.topologyComplete ||
-      topologyDisagrees || siblingsDisagree) {
+      topologyDisagrees || siblingsDisagree || crossSiblingDisagrees) {
     warnings.push('Incomplete, inconsistent or contradictory CPU topology; SMT/physical core separation cannot be established');
   }
 
@@ -153,7 +163,7 @@ export function compareBloomAffinity({smp, ai, samePhysicalHostConfirmed = false
     aiAllowedLogicalCpus: model.permitted,
     sharedAllowedLogicalCpus: sharedLogicalCpus,
     sharedObservedPhysicalCoreKeys: game.topologyComplete && model.topologyComplete &&
-        !topologyDisagrees && !siblingsDisagree
+        !topologyDisagrees && !siblingsDisagree && !crossSiblingDisagrees
       ? sharedPhysicalCoreKeys : null,
     secondsBetweenReports,
     warnings,
