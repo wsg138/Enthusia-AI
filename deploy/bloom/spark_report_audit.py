@@ -162,7 +162,7 @@ def _health_counter(row, field):
     """Proto3 omitted int32 values are zero; reject negative or invalid counters."""
     value = _get(row, field, 0, 0)
     max_signed = (1 << 31) - 1
-    if max_signed < value <= (1 << 64) - (1 << 31):
+    if max_signed < value < (1 << 64) - (1 << 31):
         raise ValueError(f'Health minute contains invalid int32 counter {field}')
     if value > (1 << 64) - (1 << 31):
         value -= 1 << 64  # negative int32 encoded as 10-byte varint
