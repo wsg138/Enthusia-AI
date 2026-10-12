@@ -11,6 +11,12 @@ python deploy/bloom/spark_report_audit.py /path/to/health.sparkhealth --json
 python -m unittest discover -s deploy/bloom -p "test_spark_report_audit.py" -v
 ```
 
+### Health-file one-minute history
+
+When a `.sparkhealth` file carries `HealthData.timeWindowStatistics`, the tool decodes its one-minute rows directly from the original binary, preserving **UTC start/end, TPS, median MSPT, highest tick, player count, total entities, loaded chunks and block entities**. It also reports the lowest TPS minute. This works even when the latest console `/spark tps` has already recovered to 20 TPS. The formatter does **not** attribute Java stacks from a health file.
+
+**Do not fabricate precision:** the Spark world snapshot's zombified-piglin count and densest entity region are not one-minute observations, and health minute rows do not contain p95/p99 tick percentiles. If a health file lacks minute history, the tool reports no minute rows rather than pretending it measured a stable hour. The converter never fills the stricter AI OFF/INFERENCE matching input with stale piglin or missing p95 numbers.
+
 Reports include:
 
 - UTC capture timestamp and, for profiles, full timed windows with TPS, median MSPT, longest tick, player count and selected ticks from **thresholded** samplers.
