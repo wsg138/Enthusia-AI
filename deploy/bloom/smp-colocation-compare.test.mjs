@@ -14,7 +14,7 @@ function window(phase, minute, patch = {}) {
     zombifiedPiglins: 100, largestRegionEntities: 200,
     tps: busy ? 16.8 : 19.98,
     msptP50: busy ? 40 : 15, msptP95: busy ? 75 : 32,
-    msptP99: busy ? 120 : 60, ...patch,
+    msptP99: busy ? 120 : 60, msptMax: busy ? 170 : 110, ...patch,
   };
 }
 function scenario() {
@@ -79,6 +79,7 @@ test('rejects malformed inputs instead of deriving a misleading comparison', () 
     (d) => { d.windows[0].loreItemsSha256 = 'not-a-sha'; },
     (d) => { d.windows[0].msptP95 = 4; },
     (d) => { d.workload.endUtc = d.workload.startUtc; },
+    (d) => { d.windows[0].msptMax = d.windows[0].msptP99 - 1; },
   ];
   for (const mutate of invalidCases) {
     const data = scenario(); mutate(data);
@@ -90,7 +91,8 @@ test('no idle/recovery windows remain explicit gaps', () => {
   data.windows = data.windows.filter((w) => ['off', 'inference'].includes(w.phase));
   const result = compareSmpColocation(data);
   assert.equal(result.assessment, 'OBSERVED_REGRESSION_WITH_CONFOUNDERS');
-  assert.equal(result.warnings.length, 2);
+  assert.ok(result.warnings.some((warning) => warning.includes('Missing AI-loaded/idle')));
+  assert.ok(result.warnings.some((warning) => warning.includes('Missing recovery window')));
 });
 
 test('missing entity observations cannot certify a no-regression result', () => {
@@ -135,4 +137,75 @@ test('entity counts must be consistent with total and timestamped to their windo
     const data = scenario(); mutate(data);
     assert.throws(() => compareSmpColocation(data));
   }
+});
+
+test('no-clear assessment requires observed p99 and worst tick, not only median MSPT', () => {
+  const data = scenario();
+  for (const row of data.windows.filter((w) => w.phase === 'inference')) {
+    row.tps = 19.95; row.msptP50 = 16; row.msptP95 = 34;
+    delete row.msptP99;
+    delete row.msptMax;
+  }
+  const result = compareSmpColocation(data);
+  assert.equal(result.assessment, 'INCONCLUSIVE');
+  assert.ok(result.warnings.some((warning) => warning.includes('worst tick')));
+});
+
+test('one bad inference window cannot be concealed by three quiet inference windows', () => {
+  const data = scenario();
+  data.workload.endUtc = at(8);
+  data.windows = [
+    window('off', 0), window('off', 1), window('idle', 2), window('idle', 3),
+    window('inference', 4), window('inference', 5),
+    window('inference', 6), window('inference', 7), window('recovery', 8),
+  ];
+  for (const row of data.windows.filter((w) => w.phase === 'inference')) {
+    row.tps = 19.95; row.msptP50 = 16; row.msptP95 = 34;
+    row.msptP99 = 65; row.msptMax = 120;
+  }
+  const spike = data.windows.find((row) => row.phase === 'inference' && row.startUtc === at(6));
+  spike.msptP95 = 90; spike.msptP99 = 170; spike.msptMax = 900;
+  const result = compareSmpColocation(data);
+  assert.equal(result.differences.medianWindowP95Ms, 2);
+  assert.equal(result.assessment, 'INCONCLUSIVE');
+  assert.ok(result.warnings.some((warning) => warning.includes('aggregated medians hide spikes')));
+  assert.ok(result.warnings.some((warning) => warning.includes('worst tick materially exceeds')));
+});
+
+test('missing idle or recovery phase prevents the clean label', () => {
+  const data = scenario();
+  for (const row of data.windows.filter((w) => w.phase === 'inference')) {
+    row.tps = 19.95; row.msptP50 = 16; row.msptP95 = 34; row.msptP99 = 65;
+  }
+  data.windows = data.windows.filter((row) => row.phase !== 'idle' && row.phase !== 'recovery');
+  const result = compareSmpColocation(data);
+  assert.equal(result.assessment, 'INCONCLUSIVE');
+  assert.ok(result.warnings.some((warning) => warning.includes('Missing recovery')));
+});
+
+test('a recovery phase recorded before inference is not valid recovery evidence', () => {
+  const data = scenario();
+  for (const row of data.windows.filter((w) => w.phase === 'inference')) {
+    row.tps = 19.95; row.msptP50 = 16; row.msptP95 = 34; row.msptP99 = 65;
+  }
+  const fakeRecovery = data.windows.find((row) => row.phase === 'recovery');
+  fakeRecovery.startUtc = at(2); fakeRecovery.endUtc = at(3);
+  const idle = data.windows.find((row) => row.phase === 'idle' && row.startUtc === at(2));
+  idle.startUtc = at(6); idle.endUtc = at(7);
+  const result = compareSmpColocation(data);
+  assert.equal(result.assessment, 'INCONCLUSIVE');
+  assert.ok(result.warnings.some((warning) => warning.includes('in UTC order')));
+});
+
+test('persistent degradation after inference prevents a favorable verdict', () => {
+  const data = scenario();
+  for (const row of data.windows.filter((w) => w.phase === 'inference')) {
+    row.tps = 19.95; row.msptP50 = 16; row.msptP95 = 34; row.msptP99 = 65;
+  }
+  const row = data.windows.find((w) => w.phase === 'recovery');
+  row.tps = 18.0; row.msptP50 = 36; row.msptP95 = 65;
+  row.msptP99 = 100; row.msptMax = 250;
+  const result = compareSmpColocation(data);
+  assert.equal(result.assessment, 'INCONCLUSIVE');
+  assert.ok(result.warnings.some((warning) => warning.includes('Recovery window remains')));
 });
