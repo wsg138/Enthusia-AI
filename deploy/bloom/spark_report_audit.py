@@ -161,13 +161,11 @@ def _windows(root, slow_sampler=False):
 def _health_counter(row, field):
     """Proto3 omitted int32 values are zero; reject negative or invalid counters."""
     value = _get(row, field, 0, 0)
-    max_signed = (1 << 31) - 1
-    if max_signed < value < (1 << 64) - (1 << 31):
-        raise ValueError(f'Health minute contains invalid int32 counter {field}')
-    if value > (1 << 64) - (1 << 31):
-        value -= 1 << 64  # negative int32 encoded as 10-byte varint
-    if value < 0 or value > max_signed:
-        raise ValueError(f'Health minute contains negative or invalid counter {field}')
+    # Nonnegative int32 is limited to 2^31-1. Negative protobuf int32
+    # values are encoded as sign-extended 10-byte unsigned varints, so they
+    # always exceed this bound and must never be shown as huge player counts.
+    if value < 0 or value > (1 << 31) - 1:
+        raise ValueError(f'Health minute contains negative or invalid int32 counter {field}')
     return value
 
 
