@@ -15,7 +15,7 @@ import {
   type AgentResponse,
   type ChatRequest,
 } from '@enthusia/contracts';
-import { ExternalServiceError, ToolTimeoutError, ValidationError } from '@enthusia/contracts';
+import { EnthusiaError, ExternalServiceError, RateLimitError, ToolTimeoutError, ValidationError } from '@enthusia/contracts';
 import type { EnthusiaLogger } from '@enthusia/logging';
 
 import type { DiscordBotOptions } from './config.js';
@@ -37,6 +37,7 @@ function toAgentResponse(data: {
     context?: Record<string, unknown> | undefined;
   } | null;
   traceId: string;
+  outcome?: 'answered' | 'unverified' | 'error' | undefined;
 }): AgentResponse {
   return {
     text: data.text,
@@ -59,6 +60,7 @@ function toAgentResponse(data: {
             ...(data.escalation.context === undefined ? {} : { context: data.escalation.context }),
           },
     traceId: data.traceId,
+    ...(data.outcome !== undefined ? { outcome: data.outcome } : {}),
   };
 }
 
@@ -116,6 +118,16 @@ export class HttpAiGatewayClient implements AiGatewayClient {
         signal: controller.signal,
       });
       if (!response.ok) {
+        this.logger?.warn({ traceId, gatewayStatus: response.status }, 'AI Gateway returned a failed HTTP status');
+        if (response.status === 429) {
+          const rawRetry = Number(response.headers.get('retry-after'));
+          const retryAfter = Number.isInteger(rawRetry) && rawRetry > 0 && rawRetry <= 300
+            ? rawRetry : undefined;
+          throw new RateLimitError('AI Gateway is busy. Please try again shortly.', retryAfter, { traceId });
+        }
+        if (response.status === 504) {
+          throw new ToolTimeoutError('ai-gateway', this.timeoutMs, { traceId });
+        }
         throw new ExternalServiceError('ai-gateway', `AI Gateway responded with HTTP ${response.status}`, {
           traceId,
           detail: { status: response.status },
@@ -131,7 +143,7 @@ export class HttpAiGatewayClient implements AiGatewayClient {
       }
       return toAgentResponse(parsed.data);
     } catch (error) {
-      if (error instanceof ExternalServiceError || error instanceof ValidationError) {
+      if (error instanceof EnthusiaError) {
         throw error;
       }
       if (error instanceof Error && error.name === 'AbortError') {

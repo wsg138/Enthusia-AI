@@ -4,6 +4,39 @@
 templates and documentation. Applying them to the panel is a manual,
 user-approved step owned by a future deployment run.
 
+> **2026-10-08 staging update:** The owner's target is **one** Bloom Pterodactyl
+> server for the complete Enthusia AI stack, not one Pterodactyl server per
+> service role. The files below are the earlier multi-server W21 template and
+> must **not** be imported as the final configuration. New
+> [single-server staging guide](SINGLE-SERVER-STAGING.md) and
+> `single-server-staging.mjs` have been added and tested with Agent + Gateway.
+> A SHA-256-validated managed inference launch path and an **unbuilt** Node 24 +
+> llama.cpp staging Dockerfile now exist. Actual model/host validation, the
+> persistent indexer, importable single-server egg and owner-approved live
+> SFTP are not yet completed or deployed.
+>
+> See [issue #119](https://github.com/wsg138/Enthusia-AI/issues/119).
+
+## New single-server review candidate (NOT DEPLOYABLE)
+
+The desired **one** Bloom Pterodactyl server has an intentionally disabled PTDL_v2 egg
+design at [`egg-single-server-STAGING-CANDIDATE.json`](egg-single-server-STAGING-CANDIDATE.json).
+It uses a future custom Node 24 + llama.cpp runtime image rather than the old five-role Node 22
+egg. The reference image is **unpublished**, and its installation script **exits unsuccessfully**
+by design. This JSON has not been imported into the Bloom panel or verified against the
+host's exact Pterodactyl version.
+
+It specifies one launcher, `--managed-inference --managed-indexer --without-discord`,
+with a pinned GGUF/binary hash, conservative CPU context limits, a hidden public-source
+credential, and persistent local knowledge storage. No SFTP or production Discord secrets.
+This is a review artifact; **do not import or try to deploy it** until a real image is
+built/pinned/scanned, model resources are benchmarked, the host is approved, and the
+installation gate is deliberately replaced under a reviewed rollout.
+
+It is based on the [Pterodactyl generic Node.js PTDL_v2 egg structure](https://github.com/pterodactyl/generic-eggs/blob/main/nodejs/egg-node-js-generic.json);
+that format reference is not evidence of compatibility with Bloom's panel. See
+[SINGLE-SERVER-STAGING.md](SINGLE-SERVER-STAGING.md) for blockers.
+
 ## Files
 
 | File | Purpose |

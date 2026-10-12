@@ -27,12 +27,14 @@ import type { EnthusiaLogger } from '@enthusia/logging';
 import type { DiscordBotOptions } from './config.js';
 import { extractMessageContext, extractSlashAskContext } from './context.js';
 import { formatAgentResponse } from './formatting.js';
+import { formatRichAgentResponse } from './rich-formatting.js';
 import type { AiGatewayClient } from './gateway-client.js';
 import { channelIsAllowed, decideSlashTrigger, decideTrigger, type TriggerDecision } from './policy.js';
 import { DiscordRateLimitPolicy } from './rate-limit.js';
 import type {
   DiscordClientPort,
   DiscordMessageRef,
+  DiscordRichResponse,
   DiscordSlashAskRef,
   Snowflake,
 } from './types.js';
@@ -43,7 +45,9 @@ export type HandleOutcome =
   | 'ignored'
   | 'rate-limited'
   | 'greeted'
-  | 'gateway-error';
+  | 'gateway-error'
+  | 'agent-error'
+  | 'unverified';
 
 export interface HandleResult {
   outcome: HandleOutcome;
@@ -56,7 +60,7 @@ export interface HandleResult {
 const FALLBACK_GATEWAY_ERROR =
   'Sorry — I could not reach the AI right now. Please try again in a moment.';
 const FALLBACK_UNEXPECTED_ERROR =
-  'Sorry — something went wrong on my end. The team has been notified via logs; please try again.';
+  'Sorry — something went wrong on my end. Please try again in a moment.';
 
 function greetingFor(displayName: string | undefined, botName: string): string {
   const who = displayName ? ` ${displayName}` : '';
@@ -119,34 +123,62 @@ export class EnthusiaAiDiscordBot {
 
   /** Full pipeline for an incoming message. Exposed for tests. */
   async handleMessage(message: DiscordMessageRef): Promise<HandleResult> {
+    if (this.options.slashOnly) {
+      return { outcome: 'ignored', reason: 'slash-command-only test mode' };
+    }
+    if (!this.inAllowedScope(message.channel.guild?.id, message.channel.id)) {
+      return { outcome: 'ignored', reason: 'outside allowed test guild/channel' };
+    }
     const decision = decideTrigger(message, this.port.botUserId, this.options);
     const trigger = decision.trigger;
-    if (trigger === null) {
+    if (trigger === null || (this.options.mentionOnly && trigger !== 'mention')) {
       this.logger.debug({ reason: decision.reason, messageId: message.id }, 'message ignored');
       return { outcome: 'ignored', reason: decision.reason };
     }
-    return this.respondToTrigger(
-      decision,
-      message.author.id,
-      message.author.displayName ?? message.author.username,
-      () => extractMessageContext(message, trigger, this.options),
-      (chunks) =>
-        this.port.sendMessage(message.channel.id, {
-          content: chunks[0] as string,
-          replyToMessageId: message.id,
-        }).then(() => this.sendRemainingChunks(message.channel.id, chunks.slice(1))),
-    );
+    // The original message gets best-effort status reactions. A failed
+    // reaction (missing permission, deleted message) must never block Q&A.
+    await this.tryReaction(message, '👀', true);
+    let result: HandleResult | undefined;
+    try {
+      result = await this.respondToTrigger(
+        decision,
+        message.author.id,
+        message.author.displayName ?? message.author.username,
+        () => extractMessageContext(message, trigger, this.options),
+        (chunks) =>
+          this.port.sendMessage(message.channel.id, {
+            content: chunks[0] as string,
+            replyToMessageId: message.id,
+          }).then(() => this.sendRemainingChunks(message.channel.id, chunks.slice(1))),
+        {
+          ...(this.port.sendRichMessage ? {
+            sendRich: (card: DiscordRichResponse) =>
+              this.port.sendRichMessage!(message.channel.id, card, message.id),
+          } : {}),
+          onGatewayStart: async () => {
+            await this.tryReaction(message, '👀', false);
+            await this.tryReaction(message, '🤔', true);
+          },
+        },
+      );
+      return result;
+    } finally {
+      await this.tryReaction(message, '👀', false);
+      await this.tryReaction(message, '🤔', false);
+      await this.tryReaction(message,
+        result?.outcome === 'responded' || result?.outcome === 'greeted' ? '✅'
+          : result?.outcome === 'unverified' ? '⚠️' : '❌', true);
+    }
   }
 
   /** Full pipeline for a `/ai ask` invocation. Exposed for tests. */
   async handleSlashAsk(interaction: DiscordSlashAskRef): Promise<HandleResult> {
-    if (!channelIsAllowed(interaction.channel, this.options)) {
-      // Fail closed without acknowledging an out-of-scope interaction.
-      // Discord may display a timeout; no channel content is sent.
+    if (!channelIsAllowed(interaction.channel, this.options) ||
+        !this.inAllowedScope(interaction.channel.guild?.id, interaction.channel.id)) {
+      // Fail closed without acknowledging out-of-scope slash interactions.
       return { outcome: 'ignored', reason: 'outside configured guild/channel allowlist' };
     }
-    // Discord requires acknowledgement within a few seconds. Defer before
-    // model/tool work, never after waiting for the gateway round-trip.
+    // Defer quickly before inference, but never acknowledge unauthorized users.
     await this.port.deferSlashAsk?.(interaction);
     const decision = decideSlashTrigger(interaction.question);
     return this.respondToTrigger(
@@ -155,7 +187,22 @@ export class EnthusiaAiDiscordBot {
       interaction.user.displayName ?? interaction.user.username,
       () => extractSlashAskContext(interaction, this.options),
       (chunks) => this.port.respondToSlashAsk(interaction, chunks),
+      {
+        ...(this.port.respondToSlashAskRich ? {
+          sendRich: (card: DiscordRichResponse) => this.port.respondToSlashAskRich!(interaction, card),
+        } : {}),
+      },
     );
+  }
+
+  private inAllowedScope(guildId: string | undefined, channelId: string): boolean {
+    const allowedGuilds = this.options.allowedGuildIds;
+    if (allowedGuilds.length > 0 && (guildId === undefined || !allowedGuilds.includes(guildId))) {
+      return false;
+    }
+    const channels = this.options.allowedChannelIds;
+    if (channels.length > 0 && !channels.includes(channelId)) return false;
+    return true;
   }
 
   /**
@@ -168,6 +215,10 @@ export class EnthusiaAiDiscordBot {
     displayName: string | undefined,
     extractContext: () => ReturnType<typeof extractMessageContext>,
     sendChunks: (chunks: string[]) => Promise<unknown>,
+    rich?: {
+      sendRich?: (card: DiscordRichResponse) => Promise<unknown>;
+      onGatewayStart?: () => Promise<void>;
+    },
   ): Promise<HandleResult> {
     const traceId = newTraceId();
     const log = this.logger.withTraceId(traceId);
@@ -210,6 +261,7 @@ export class EnthusiaAiDiscordBot {
     }
 
     // 4. Gateway round-trip.
+    await rich?.onGatewayStart?.();
     let response: AgentResponse;
     try {
       log.info(
@@ -231,8 +283,30 @@ export class EnthusiaAiDiscordBot {
       { userId, chunks: chunks.length, responseTraceId: response.traceId },
       'sending AgentResponse to Discord',
     );
-    await sendChunks(chunks);
-    return { outcome: 'responded', traceId };
+    const card = rich?.sendRich ? formatRichAgentResponse(response) : null;
+    if (card && rich?.sendRich) {
+      try {
+        await rich.sendRich(card);
+      } catch {
+        // Lack of Embed Links permission or an unsupported Discord surface
+        // must not prevent a valid, already-verified answer.
+        log.warn('rich response unavailable; falling back to plain text');
+        await sendChunks(chunks);
+      }
+    } else {
+      await sendChunks(chunks);
+    }
+    return { outcome: response.outcome === 'error' ? 'agent-error'
+      : response.outcome === 'unverified' ? 'unverified' : 'responded', traceId };
+  }
+
+  private async tryReaction(message: DiscordMessageRef, emoji: string, add: boolean): Promise<void> {
+    try {
+      if (add) await this.port.addMessageReaction?.(message, emoji);
+      else await this.port.removeMessageReaction?.(message, emoji);
+    } catch {
+      this.logger.debug({ messageId: message.id, emoji }, 'message status reaction unavailable');
+    }
   }
 
   private async sendRemainingChunks(channelId: Snowflake, chunks: string[]): Promise<void> {
@@ -253,7 +327,12 @@ export class EnthusiaAiDiscordBot {
         { code: error.code, statusCode: error.statusCode },
         `AI Gateway error: ${error.message}`,
       );
-      await sendChunks([FALLBACK_GATEWAY_ERROR]);
+      const notice = error.code === 'TOOL_TIMEOUT'
+        ? 'That took longer than expected. Please try again in a moment.'
+        : error.code === 'RATE_LIMITED'
+          ? 'The AI is handling too many requests right now. Please wait a moment and try again.'
+          : FALLBACK_GATEWAY_ERROR;
+      await sendChunks([notice]);
     } else {
       log.error({ error: String(error) }, 'unexpected error calling AI Gateway');
       await sendChunks([FALLBACK_UNEXPECTED_ERROR]);

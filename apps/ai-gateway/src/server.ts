@@ -506,10 +506,14 @@ export async function startGateway(deps: GatewayDeps, port?: number): Promise<Ru
       reject(err);
     };
     server.on('error', onError);
-    server.listen(listenPort, () => {
+    const onListening = (): void => {
       server.off('error', onError);
       resolve();
-    });
+    };
+    // Local test runner opts into loopback; normal deployment behavior is unchanged.
+    const host = process.env['ENTHUSIA_LOCAL_BIND_HOST'];
+    if (host) server.listen(listenPort, host, onListening);
+    else server.listen(listenPort, onListening);
   });
   const address = server.address();
   const actualPort =

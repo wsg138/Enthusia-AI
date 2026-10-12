@@ -12,4 +12,12 @@ export default tseslint.config(
       'no-console': 'warn',
     },
   },
+  {
+    // Bloom generic Node egg executes these .js scripts as CommonJS.
+    // Do not weaken import rules for the ESM application workspaces.
+    files: ['deploy/bloom/*.js'],
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
 );

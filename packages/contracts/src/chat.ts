@@ -80,6 +80,8 @@ export interface AgentResponse {
   /** Set when the request was escalated instead of answered directly. */
   escalation: Escalation | null;
   traceId: string;
+  /** Result for surface UX: answered, unverified, or an internal processing error. */
+  outcome?: 'answered' | 'unverified' | 'error';
 }
 
 const actorSchema = z.object({
@@ -131,4 +133,5 @@ export const agentResponseSchema = z.object({
     })
     .nullable(),
   traceId: z.string().min(1),
+  outcome: z.enum(['answered', 'unverified', 'error']).optional(),
 });
