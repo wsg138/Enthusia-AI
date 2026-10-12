@@ -117,3 +117,34 @@ test('two reports with inconsistent sibling maps are inconclusive', () => {
   assert.equal(result.classification, 'INSUFFICIENT_EVIDENCE');
   assert.equal(result.sharedObservedPhysicalCoreKeys, null);
 });
+
+test('cross-report SMT siblings cannot claim separate physical cores using partial rows', () => {
+  const smp = probe('0');
+  smp.logicalCpuTopology = [{cpu: 0, socket: 0, core: 0, siblings: '0,16'}];
+  const ai = probe('16');
+  ai.logicalCpuTopology = [{cpu: 16, socket: 0, core: 5, siblings: '16'}];
+  const result = compare(smp, ai);
+  assert.equal(result.classification, 'INSUFFICIENT_EVIDENCE');
+  assert.equal(result.sharedObservedPhysicalCoreKeys, null);
+  assert.ok(result.warnings.some(w => w.includes('contradictory CPU topology')));
+});
+
+test('cross-report SMT sibling links must be reciprocated even with matching core IDs', () => {
+  const smp = probe('0');
+  smp.logicalCpuTopology = [{cpu: 0, socket: 0, core: 0, siblings: '0,16'}];
+  const ai = probe('16');
+  ai.logicalCpuTopology = [{cpu: 16, socket: 0, core: 0, siblings: '16'}];
+  const result = compare(smp, ai);
+  assert.equal(result.classification, 'INSUFFICIENT_EVIDENCE');
+  assert.equal(result.sharedObservedPhysicalCoreKeys, null);
+});
+
+test('consistent reciprocal partial SMP/AI rows detect a shared physical SMT core', () => {
+  const smp = probe('0');
+  smp.logicalCpuTopology = [{cpu: 0, socket: 0, core: 0, siblings: '0,16'}];
+  const ai = probe('16');
+  ai.logicalCpuTopology = [{cpu: 16, socket: 0, core: 0, siblings: '0,16'}];
+  const result = compare(smp, ai);
+  assert.equal(result.classification, 'DISJOINT_LOGICAL_CPUS_SHARED_PHYSICAL_CORES');
+  assert.deepEqual(result.sharedObservedPhysicalCoreKeys, ['0:0']);
+});
