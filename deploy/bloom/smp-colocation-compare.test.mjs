@@ -190,8 +190,10 @@ test('a recovery phase recorded before inference is not valid recovery evidence'
   }
   const fakeRecovery = data.windows.find((row) => row.phase === 'recovery');
   fakeRecovery.startUtc = at(2); fakeRecovery.endUtc = at(3);
+  fakeRecovery.entitySnapshotUtc = at(2);
   const idle = data.windows.find((row) => row.phase === 'idle' && row.startUtc === at(2));
   idle.startUtc = at(6); idle.endUtc = at(7);
+  idle.entitySnapshotUtc = at(6);
   const result = compareSmpColocation(data);
   assert.equal(result.assessment, 'INCONCLUSIVE');
   assert.ok(result.warnings.some((warning) => warning.includes('in UTC order')));
