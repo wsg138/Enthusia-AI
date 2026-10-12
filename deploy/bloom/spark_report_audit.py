@@ -158,6 +158,29 @@ def _windows(root, slow_sampler=False):
     return sorted(windows, key=lambda row: row['startUtc'] or '')
 
 
+def _health_counter(row, field):
+    """Proto3 omitted int32 values are zero; reject negative or invalid counters."""
+    value = _get(row, field, 0, 0)
+    max_signed = (1 << 31) - 1
+    if max_signed < value <= (1 << 64) - (1 << 31):
+        raise ValueError(f'Health minute contains invalid int32 counter {field}')
+    if value > (1 << 64) - (1 << 31):
+        value -= 1 << 64  # negative int32 encoded as 10-byte varint
+    if value < 0 or value > max_signed:
+        raise ValueError(f'Health minute contains negative or invalid counter {field}')
+    return value
+
+
+def _health_double(row, field):
+    """Proto3 omitted double values are zero; wire type must still be valid."""
+    import math
+    raw = _get(row, field, 1)
+    value = 0.0 if raw is None else _double(raw)
+    if not math.isfinite(value) or value < 0:
+        raise ValueError(f'Health minute contains invalid statistic {field}')
+    return value
+
+
 def _health_minutes(root):
     """Decode HealthData.timeWindowStatistics, not an aggregate entity snapshot.
 
@@ -165,7 +188,6 @@ def _health_minutes(root):
     Per-minute total entities and loaded chunks are timed fields, but *mob type*
     populations from PlatformStatistics.world are capture-wide snapshots only.
     """
-    import math
     minutes = []
     for wire, raw in root.get(2, []):
         if wire != 2:
@@ -181,13 +203,13 @@ def _health_minutes(root):
         if end - start > 5 * 60 * 1000:
             raise ValueError('Health minute interval is unexpectedly long')
 
-        def integral(field):
+        def _health_counter(row, field):
             value = _get(row, field, 0)
             if value is None or value < 0:
                 raise ValueError(f'Health minute missing valid integer field {field}')
             return value
 
-        def floating(field):
+        def _health_double(row, field):
             data = _get(row, field, 1)
             if data is None:
                 raise ValueError(f'Health minute missing floating point field {field}')
@@ -196,17 +218,17 @@ def _health_minutes(root):
                 raise ValueError(f'Health minute contains invalid statistic {field}')
             return value
 
-        tps = floating(4)
-        median = floating(5)
-        maximum = floating(6)
+        tps = _health_double(row, 4)
+        median = _health_double(row, 5)
+        maximum = _health_double(row, 6)
         if tps > 20.1 or maximum < median:
             raise ValueError('Health minute TPS/MSPT fields are inconsistent')
         minutes.append({
             'startUtc': _utc(start), 'endUtc': _utc(end),
-            'ticks': integral(1), 'tps': tps,
+            'ticks': _health_counter(row, 1), 'tps': tps,
             'medianMspt': median, 'maxTickMs': maximum,
-            'players': integral(7), 'totalEntities': integral(8),
-            'blockEntities': integral(9), 'loadedChunks': integral(10),
+            'players': _health_counter(row, 7), 'totalEntities': _health_counter(row, 8),
+            'blockEntities': _health_counter(row, 9), 'loadedChunks': _health_counter(row, 10),
         })
         if len(minutes) > 10000:
             raise ValueError('Health minute history exceeds supported bound')
@@ -294,14 +316,14 @@ def markdown(capture, comparison=None):
             f"**Worst recorded minute:** {worst['startUtc']} — TPS {worst['tps']:.2f}, "
             f"median MSPT {worst['medianMspt']:.1f} ms, worst tick {worst['maxTickMs']:.1f} ms.",
             '',
-            '| UTC minute | TPS | Median MSPT | Worst tick | Players | Loaded chunks | Total entities |',
-            '|---|---:|---:|---:|---:|---:|---:|',
+            '| UTC minute | TPS | Median MSPT | Worst tick | Players | Loaded chunks | Total entities | Block entities |',
+            '|---|---:|---:|---:|---:|---:|---:|---:|',
         ]
         for row in minutes:
             lines.append(
                 f"| {row['startUtc']} | {row['tps']:.2f} | "
                 f"{row['medianMspt']:.1f} ms | {row['maxTickMs']:.1f} ms | "
-                f"{row['players']} | {row['loadedChunks']} | {row['totalEntities']} |"
+                f"{row['players']} | {row['loadedChunks']} | {row['totalEntities']} | {row['blockEntities']} |"
             )
         lines += [
             '',
