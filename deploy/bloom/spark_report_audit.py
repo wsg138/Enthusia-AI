@@ -203,21 +203,6 @@ def _health_minutes(root):
         if end - start > 5 * 60 * 1000:
             raise ValueError('Health minute interval is unexpectedly long')
 
-        def _health_counter(row, field):
-            value = _get(row, field, 0)
-            if value is None or value < 0:
-                raise ValueError(f'Health minute missing valid integer field {field}')
-            return value
-
-        def _health_double(row, field):
-            data = _get(row, field, 1)
-            if data is None:
-                raise ValueError(f'Health minute missing floating point field {field}')
-            value = _double(data)
-            if not math.isfinite(value) or value < 0:
-                raise ValueError(f'Health minute contains invalid statistic {field}')
-            return value
-
         tps = _health_double(row, 4)
         median = _health_double(row, 5)
         maximum = _health_double(row, 6)
