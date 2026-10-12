@@ -1,0 +1,23 @@
+name: Bloom affinity offline comparison
+on:
+  pull_request:
+    paths:
+      - 'deploy/bloom/bloom-affinity-compare.mjs'
+      - 'deploy/bloom/bloom-affinity-compare.test.mjs'
+      - 'deploy/bloom/BLOOM-AFFINITY-COMPARISON-TOOL.md'
+      - '.github/workflows/bloom-affinity-compare.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-affinity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check SMT, CPU sets and fail-closed input handling
+        run: node --test deploy/bloom/bloom-affinity-compare.test.mjs
