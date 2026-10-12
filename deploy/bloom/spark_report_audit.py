@@ -82,19 +82,16 @@ def _utc(epoch_millis):
     return datetime.fromtimestamp(epoch_millis / 1000, timezone.utc).isoformat().replace('+00:00', 'Z')
 
 
-def _stats(root):
+def _stats(root, kind):
     # Spark Profile: SamplerData.metadata[1].platformStatistics[8]
     # Spark Health: HealthData.platformStatistics[1][3]
-    has_profile = 2 in root or 7 in root
     outer = _msg(_get(root, 1, 2))
-    if has_profile:
+    if kind == 'profile':
         platform = _msg(_get(outer, 8, 2))
         snap_ms = _get(outer, 11, 0) or _get(outer, 2, 0)
-        kind = 'profile'
     else:
         platform = _msg(_get(outer, 3, 2))
         snap_ms = _get(outer, 5, 0)
-        kind = 'health'
     world_data = _msg(_get(platform, 8, 2))
     return kind, outer, world_data, snap_ms
 
@@ -225,8 +222,11 @@ def read_capture(path):
     size = path.stat().st_size
     if size < 1 or size > MAX_BYTES:
         raise ValueError(f'Input file must be 1..{MAX_BYTES} bytes')
+    if path.suffix not in ('.sparkprofile', '.sparkhealth'):
+        raise ValueError('Expected .sparkprofile or .sparkhealth')
+    kind = 'profile' if path.suffix == '.sparkprofile' else 'health'
     root = _msg(memoryview(path.read_bytes()))
-    kind, meta, world_data, stamp = _stats(root)
+    kind, meta, world_data, stamp = _stats(root, kind)
     result = {'file': path.name, 'type': kind, 'capturedAtUtc': _utc(stamp) if stamp else None,
               'entities': _entities(world_data),
               'caveat': 'Entity/region counts are a capture-wide snapshot, NOT independently timed observations for each profile window.'}
