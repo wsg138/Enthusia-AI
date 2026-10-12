@@ -212,7 +212,11 @@ def _health_minutes(root):
             raise ValueError('Health minute history exceeds supported bound')
     minutes.sort(key=lambda row: row['startUtc'])
     for prior, following in zip(minutes, minutes[1:]):
-        if prior['endUtc'] > following['startUtc']:
+        # Real Spark minute buckets can overlap by 1ms from sampling jitter.
+        # Reject meaningful duplicated intervals, not boundary noise.
+        end = datetime.fromisoformat(prior['endUtc'].replace('Z', '+00:00'))
+        start = datetime.fromisoformat(following['startUtc'].replace('Z', '+00:00'))
+        if (end - start).total_seconds() > 0.01:
             raise ValueError('Health minute history contains overlapping windows')
     return minutes
 
