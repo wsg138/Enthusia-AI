@@ -43,6 +43,8 @@ const summarize = (rows) => {
     medianWindowP50Ms: quantile('msptP50'),
     medianWindowP95Ms: quantile('msptP95'),
     medianWindowP99Ms: quantile('msptP99'),
+    maxWorstTickMs: rows.every((row) => row.msptMax != null)
+      ? rounded(Math.max(...rows.map((row) => row.msptMax))) : null,
     meanPlayers: rounded(average('players')),
     meanLoadedChunks: rounded(average('loadedChunks')),
     meanTotalEntities: rows.every((row) => row.totalEntities != null)
@@ -99,6 +101,8 @@ export function compareSmpColocation(input) {
     number(row.msptP50, label + '.msptP50', 0, 60000);
     if (row.msptP95 != null) number(row.msptP95, label + '.msptP95', row.msptP50, 60000);
     if (row.msptP99 != null) number(row.msptP99, label + '.msptP99', row.msptP95 ?? row.msptP50, 60000);
+    if (row.msptMax != null) number(row.msptMax, label + '.msptMax',
+      row.msptP99 ?? row.msptP95 ?? row.msptP50, 60000);
     return { ...row, start, end, overlap: overlap(start, end, loadFrom, loadTo) / (end - start) };
   });
   const chronological = [...windows].sort((a, b) => a.start - b.start);
@@ -159,12 +163,53 @@ export function compareSmpColocation(input) {
     if (off.medianWindowP95Ms === null || on.medianWindowP95Ms === null) {
       warnings.push('p95 MSPT unavailable; cannot clear all metrics');
     }
+    if (matched.some((row) => row.msptP99 == null || row.msptMax == null)) {
+      warnings.push('Missing per-window p99 MSPT or worst tick; cannot clear tail risk');
+    } else {
+      const highOffP50 = Math.max(...baseline.map((row) => row.msptP50));
+      const highOffP95 = Math.max(...baseline.map((row) => row.msptP95));
+      const highOffP99 = Math.max(...baseline.map((row) => row.msptP99));
+      const highOffMax = Math.max(...baseline.map((row) => row.msptMax));
+      if (inference.some((row) => row.msptP50 > highOffP50 + 10 ||
+          row.msptP95 > highOffP95 + 10 || row.msptP99 > highOffP99 + 20)) {
+        warnings.push('One or more inference windows have worse MSPT tails than OFF; aggregated medians hide spikes');
+      }
+      if (inference.some((row) => row.msptMax > Math.max(highOffMax * 2, highOffMax + 100))) {
+        warnings.push('Inference worst tick materially exceeds OFF worst tick');
+      }
+    }
   }
   if (!idle.length) warnings.push('Missing AI-loaded/idle window');
   if (!recovery.length) warnings.push('Missing recovery window');
+  if (off && on && idle.length && recovery.length) {
+    const lastOffEnd = Math.max(...baseline.map((row) => row.end));
+    const firstIdleStart = Math.min(...idle.map((row) => row.start));
+    const lastIdleEnd = Math.max(...idle.map((row) => row.end));
+    const firstInferenceStart = Math.min(...inference.map((row) => row.start));
+    const lastInferenceEnd = Math.max(...inference.map((row) => row.end));
+    const firstRecoveryStart = Math.min(...recovery.map((row) => row.start));
+    if (lastOffEnd > firstIdleStart || lastIdleEnd > firstInferenceStart ||
+        lastInferenceEnd > firstRecoveryStart) {
+      warnings.push('Clean comparison requires OFF, then IDLE, then INFERENCE, then RECOVERY in UTC order');
+    }
+    const offHighP50 = Math.max(...baseline.map((row) => row.msptP50));
+    const offHighP95 = baseline.every((row) => row.msptP95 != null)
+      ? Math.max(...baseline.map((row) => row.msptP95)) : null;
+    if (recovery.some((row) => row.tps < off.meanTps - 0.5 ||
+        row.msptP50 > offHighP50 + 10 ||
+        (offHighP95 != null && row.msptP95 != null && row.msptP95 > offHighP95 + 10))) {
+      warnings.push('Recovery window remains materially slower than OFF baseline');
+    }
+    if (recovery.some((row) => row.msptP95 == null || row.msptP99 == null ||
+        row.msptMax == null)) {
+      warnings.push('Missing recovery MSPT p95/p99 or worst-tick observations');
+    }
+  }
   const differences = off && on ? {
     meanTps: rounded(on.meanTps - off.meanTps),
     medianWindowP50Ms: rounded(on.medianWindowP50Ms - off.medianWindowP50Ms),
+    maxWorstTickMs: on.maxWorstTickMs == null || off.maxWorstTickMs == null
+      ? null : rounded(on.maxWorstTickMs - off.maxWorstTickMs),
     medianWindowP95Ms: on.medianWindowP95Ms == null || off.medianWindowP95Ms == null
       ? null : rounded(on.medianWindowP95Ms - off.medianWindowP95Ms),
     meanTotalEntities: on.meanTotalEntities == null || off.meanTotalEntities == null
@@ -174,8 +219,6 @@ export function compareSmpColocation(input) {
     meanLargestRegionEntities: on.meanLargestRegionEntities == null || off.meanLargestRegionEntities == null
       ? null : rounded(on.meanLargestRegionEntities - off.meanLargestRegionEntities),
   } : null;
-  const disqualifying = warnings.filter((w) =>
-    w !== 'Missing AI-loaded/idle window' && w !== 'Missing recovery window');
   let assessment = 'INCONCLUSIVE';
   if (differences && baseline.length >= 2 && inference.length >= 2 &&
       !warnings.some((w) => w.includes('overlaps inference') ||
@@ -183,7 +226,7 @@ export function compareSmpColocation(input) {
     if (differences.meanTps < -0.5 || differences.medianWindowP50Ms > 10 ||
         (differences.medianWindowP95Ms != null && differences.medianWindowP95Ms > 10)) {
       assessment = 'OBSERVED_REGRESSION_WITH_CONFOUNDERS';
-    } else if (!disqualifying.length) {
+    } else if (!warnings.length) {
       assessment = 'NO_CLEAR_REGRESSION_IN_MATCHED_WINDOWS';
     }
   }
