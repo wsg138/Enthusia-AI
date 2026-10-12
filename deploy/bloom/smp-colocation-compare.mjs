@@ -128,6 +128,29 @@ export function compareSmpColocation(input) {
     warnings.push('An INFERENCE window has less than 80% verified AI workload overlap');
   }
   if (off && on) {
+    const substantial = (left, right, minimum, ratio) =>
+      Math.abs(left - right) > Math.max(minimum, Math.max(left, right) * ratio);
+    const compareWindowEnvelope = (field, label, minimum, ratio) => {
+      const observedOff = baseline.map((row) => row[field]);
+      const offLow = Math.min(...observedOff);
+      const offHigh = Math.max(...observedOff);
+      if (substantial(offLow, offHigh, minimum, ratio)) {
+        warnings.push(label + ' changed materially during OFF baseline; no stable workload');
+      }
+      if (inference.some((row) =>
+        (row[field] < offLow && substantial(row[field], offLow, minimum, ratio)) ||
+        (row[field] > offHigh && substantial(row[field], offHigh, minimum, ratio)))) {
+        warnings.push(label + ' changed materially in an INFERENCE window compared with OFF');
+      }
+    };
+    const minOffTps = Math.min(...baseline.map((row) => row.tps));
+    const maxOffTps = Math.max(...baseline.map((row) => row.tps));
+    if (maxOffTps - minOffTps > 0.5) {
+      warnings.push('OFF baseline itself varies by over 0.5 TPS');
+    }
+    if (inference.some((row) => row.tps < minOffTps - 0.5)) {
+      warnings.push('One INFERENCE window loses more than 0.5 TPS against OFF, even if mean TPS hides it');
+    }
     if (new Set([...baseline, ...inference].map((row) =>
       row.loreItemsSha256 + '/' + row.smpBuild)).size !== 1) {
       warnings.push('Different LoreItems JAR SHA or SMP build between OFF and INFERENCE');
@@ -142,14 +165,17 @@ export function compareSmpColocation(input) {
         Math.max(100, off.meanLoadedChunks * 0.25)) {
       warnings.push('Loaded chunk counts differ by more than 100 or 25%');
     }
+    compareWindowEnvelope('players', 'Player counts', 1, 0.1);
+    compareWindowEnvelope('loadedChunks', 'Loaded chunk counts', 100, 0.25);
     const matched = [...baseline, ...inference];
     const entityFields = ['totalEntities', 'zombifiedPiglins', 'largestRegionEntities'];
     if (matched.some((row) => entityFields.some((field) => row[field] == null) ||
         row.entitySnapshotUtc == null)) {
       warnings.push('Missing timestamped entity counts or largest region; cannot clear a matched comparison');
     } else {
-      const substantial = (left, right, minimum, ratio) =>
-        Math.abs(left - right) > Math.max(minimum, Math.max(left, right) * ratio);
+      compareWindowEnvelope('totalEntities', 'Total entity population', 200, 0.1);
+      compareWindowEnvelope('zombifiedPiglins', 'Zombified piglin population', 50, 0.1);
+      compareWindowEnvelope('largestRegionEntities', 'Largest entity concentration', 100, 0.1);
       if (substantial(off.meanTotalEntities, on.meanTotalEntities, 200, 0.1)) {
         warnings.push('Total entity populations differ materially across comparison windows');
       }
