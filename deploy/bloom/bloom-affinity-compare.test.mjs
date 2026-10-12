@@ -100,3 +100,20 @@ test('a read-only host SMP report need not include AI-specific modelStarted mark
   const result = compare(smp, probe('2-3'));
   assert.equal(result.classification, 'DISJOINT_OBSERVED_CORE_SETS_NOT_RESERVED');
 });
+
+test('inconsistent SMT sibling membership cannot certify core isolation', () => {
+  const game = probe('0-1');
+  game.logicalCpuTopology[0].siblings = '0,15';
+  const result = compare(game, probe('2-3'));
+  assert.equal(result.classification, 'INSUFFICIENT_EVIDENCE');
+  assert.ok(result.warnings.some(w => w.includes('contradictory CPU topology')));
+});
+
+test('two reports with inconsistent sibling maps are inconclusive', () => {
+  const ai = probe('2-3');
+  ai.logicalCpuTopology[0].siblings = '0';
+  ai.logicalCpuTopology[16].siblings = '16';
+  const result = compare(probe('0-1'), ai);
+  assert.equal(result.classification, 'INSUFFICIENT_EVIDENCE');
+  assert.equal(result.sharedObservedPhysicalCoreKeys, null);
+});
